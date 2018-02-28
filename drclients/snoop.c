@@ -98,8 +98,13 @@ void check_for_exit(){
 }
 
 
-void check_for_new_code(){
-  
+void check_for_new_code(volatile void * file){
+
+  volatile code_info_t * cinfo = (code_info_t *)(file + START_CODE_DATA);
+  if(cinfo->control == DUMP_ONE){
+    printf("%s,%llu,%d,%s\n",cinfo->module,cinfo->module_start,cinfo->rel_addr,cinfo->code);
+    while(!__sync_bool_compare_and_swap(&cinfo->control,DUMP_ONE,IDLE)){}
+  }
 }
 
 void check_for_new_times(){
@@ -114,13 +119,15 @@ int main(int argc, char *argv[])
   assert(files);
   num_files = 0;
 
-  void * per_thread_file[MAX_THREADS];
-  
   int i = 0;
 
   while(1){
     get_new_file();
+    for(i = 0; i < num_files; i++){
+      check_for_new_code(per_thread_file[i]);
+    }
     check_for_exit();
+
   }
 
   return 0;

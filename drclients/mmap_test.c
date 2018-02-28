@@ -70,21 +70,42 @@ thread_init(void * drcontext){
   strcpy(files->modules[files->num_modules],data->filename);
   files->num_modules++;
  
+  //create the file and memory map it
+  create_memory_map_file(data,TOTAL_SIZE);
+  memset(data->data,0,TOTAL_SIZE);
+
   DR_ASSERT(__sync_bool_compare_and_swap(&files->control,DR_CONTROL,DUMP_ONE));
 
   while(files->control != IDLE){}
 
   dr_mutex_unlock(mutex);  
  
-  //create the file and memory map it
-  create_memory_map_file(data,TOTAL_SIZE);
-  memset(data->data,0,TOTAL_SIZE);
   
 }
 
 
 static dr_emit_flags_t
 bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace, bool translating){
+
+  instr_t * first;
+  instr_t * last;
+
+  first = instrlist_first(bb);
+  last = instrlist_last(bb);
+
+  mmap_file_t * file = dr_get_tls_field(drcontext);
+  volatile code_info_t * cinfo = (code_info_t *)(file->data + START_CODE_DATA);
+  volatile bookkeep_t * bk = (bookkeep_t *)(file->data + START_BK_DATA);
+
+  //we cannot store more than the buffer size
+  if(bk->num_bbs >= NUM_BBS){
+    return DR_EMIT_DEFAULT;
+  }
+
+ 
+  insert_code(drcontext, cinfo, bb);
+  bk->num_bbs++;
+
   return DR_EMIT_DEFAULT;
  
 }
