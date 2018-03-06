@@ -1,9 +1,9 @@
-#ifndef CMODEL_MMAP
-#define CMODEL_MMAP
+#ifndef TIMING_MMAP
+#define TIMING_MMAP
 
 #include <stdint.h> /* for data type definitions */
 #include <string.h> /* may be for memset */
-
+#include "common.h"
 /*
   store the names of files that will have data in FILENAME_FILES 
   (2 files per thread, one for code and time). The snooping application 
@@ -13,19 +13,8 @@
   also have access to it.
  */
 
-/*
-  control values - this determines who gets control of the data and what to do with it
- */
-#define IDLE       0
-#define DR_CONTROL 1
-#define DUMP_ONE   2
-#define DUMP_ALL   3
-#define EXIT       4
 
-#define MAX_MODULE_SIZE 128
-#define MAX_CODE_SIZE 1024
-
-#define FILENAMES_FILE "names.txt"
+#define FILENAMES_FILE "/tmp/names.txt"
 
 #define MAX_THREADS 16
 
@@ -58,6 +47,8 @@ typedef struct{
   uint32_t nowtime;
   uint32_t num_bbs;
   uint32_t overhead;
+  uint32_t arch;
+  mmap_file_t * mmap_raw_file;
 } bookkeep_t;
 
 typedef struct{
@@ -66,26 +57,32 @@ typedef struct{
   void * module_start;
 } bb_metadata_t;
 
+typedef char query_t;
+
+typedef struct{
+  uint32_t count;
+  uint32_t average;
+}timing_t;
 
 #define NUM_BBS 40000
-#define TIME_SLOTS 16
+#define TIME_SLOTS 96
 #define BK_SLOTS 16
 
-#define TOTAL_SIZE  sizeof(code_info_t) + sizeof(uint32_t) * ( BK_SLOTS + NUM_BBS * TIME_SLOTS ) 
+#define QUERY_SIZE sizeof(char) * MAX_QUERY_SIZE
+#define TOTAL_SIZE  QUERY_SIZE + sizeof(code_info_t) + sizeof(uint32_t) * ( BK_SLOTS + NUM_BBS * TIME_SLOTS ) 
 #define BB_DATA_SIZE sizeof(uint32_t) * TIME_SLOTS 
 
-#define START_CODE_DATA 0
-#define START_BK_DATA sizeof(code_info_t)
-#define START_BB_DATA sizeof(code_info_t) + sizeof(uint32_t) * BK_SLOTS
+#define START_QUERY 0
+#define START_CODE_DATA QUERY_SIZE
+#define START_BK_DATA QUERY_SIZE + sizeof(code_info_t)
+#define START_BB_DATA QUERY_SIZE + sizeof(code_info_t) + sizeof(uint32_t) * BK_SLOTS
 
 #define METADATA_SLOTS sizeof(bb_metadata_t) / sizeof(uint32_t)
+#define TIMING_SLOTS (TIME_SLOTS - METADATA_SLOTS)/(sizeof(timing_t)/sizeof(uint32_t))
 
 typedef struct{
   bb_metadata_t meta;
-  uint32_t times[TIME_SLOTS - METADATA_SLOTS];
+  timing_t times[TIMING_SLOTS];
 }bb_data_t;
-
-
-
 
 #endif
