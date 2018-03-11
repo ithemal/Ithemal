@@ -15,6 +15,8 @@ typedef struct {
   char compiler[MAX_STRING_SIZE];
   char flags[MAX_STRING_SIZE];
   uint32_t mode;
+  uint32_t code_format;
+  code_embedding_t embedding_func;
 } client_arg_t;
 
 client_arg_t client_args;
@@ -32,6 +34,7 @@ void * mutex;
     DR_ASSERT(__sync_bool_compare_and_swap(&C,ST,EN));			\
     while(C != IDLE);							\
   }									\
+
 
 void post_cleancall();
 
@@ -100,12 +103,12 @@ thread_init(void * drcontext){
     }
   }
 
-  dr_printf("thread %d initialized..\n",dr_get_thread_id(drcontext));
+  //dr_printf("thread %d initialized..\n",dr_get_thread_id(drcontext));
 
 }
 
 //bb analysis routines
-void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile bb_data_t * timing, instrlist_t * bb){
+void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile bb_data_t * timing, instrlist_t * bb, code_embedding_t code_embedding){
 
   instr_t * first = instrlist_first(bb);
   app_pc first_pc = instr_get_app_pc(first);
@@ -116,7 +119,7 @@ void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile b
   cinfo->module_start = md->start;
   cinfo->rel_addr = rel_addr;
 
-  get_code_embedding(drcontext, cinfo, bb);
+  code_embedding(drcontext, cinfo, bb);
 
   timing->meta.slots_filled = 0;
   timing->meta.rel_addr = rel_addr;
@@ -203,7 +206,7 @@ void post_cleancall(uint32_t num_bbs){
   //remember the first time slot is used for the counter
   if (slots_filled >= TIMING_SLOTS){ //dump to data base
 
-    dr_printf("dumping call...\n");
+    //dr_printf("dumping call...\n");
     BEGIN_CONTROL(bk->control,IDLE,DR_CONTROL);
     
     bk->dump_bb = num_bbs;
@@ -286,9 +289,9 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   //bb analysis 
   BEGIN_CONTROL(cinfo->control,IDLE,DR_CONTROL);
 
-  populate_bb_info(drcontext,cinfo,&tinfo[bk->num_bbs],bb);
+  populate_bb_info(drcontext,cinfo,&tinfo[bk->num_bbs],bb,client_args.embedding_func);
   if(client_args.mode != SNOOP){
-    int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode);
+    int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
     //dr_printf("%s\n",query);
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
     if(client_args.mode == SQLITE){
@@ -318,7 +321,7 @@ static void
 thread_exit(void * drcontext){
 
 
-  dr_printf("thread exiting %d...\n",dr_get_thread_id(drcontext));
+  //dr_printf("thread exiting %d...\n",dr_get_thread_id(drcontext));
   mmap_file_t * file = dr_get_tls_field(drcontext);
   volatile bookkeep_t * bk = (bookkeep_t *)(file->data + START_BK_DATA);
   volatile bb_data_t * timing = (bb_data_t *)(file->data + START_BB_DATA);
@@ -363,7 +366,7 @@ thread_exit(void * drcontext){
   }
   close_memory_map_file(file,TOTAL_SIZE);
 
-  dr_printf("thread exiting %d...\n",dr_get_thread_id(drcontext));
+  //dr_printf("thread exiting %d...\n",dr_get_thread_id(drcontext));
  
 }
 
@@ -386,7 +389,7 @@ DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
 
-    dr_printf("timing client starting...\n");
+  //dr_printf("timing client starting...\n");
     
     /* register events */
     dr_register_thread_init_event(thread_init);    
@@ -397,22 +400,31 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     disassemble_set_syntax(DR_DISASM_INTEL);
 
     /* client arguments */
-    DR_ASSERT(argc == 4);
+    DR_ASSERT(argc == 5);
     client_args.mode = atoi(argv[1]);
-    strncpy(client_args.compiler,argv[2], MAX_STRING_SIZE);
-    strncpy(client_args.flags,argv[3], MAX_STRING_SIZE);
-   
+    client_args.code_format = atoi(argv[2]);
+    strncpy(client_args.compiler,argv[3], MAX_STRING_SIZE);
+    strncpy(client_args.flags,argv[4], MAX_STRING_SIZE);
+
+
+    if(client_args.code_format == TEXT){
+      client_args.embedding_func = textual_embedding;
+    }
+    else if(client_args.code_format == TOKEN){
+      client_args.embedding_func = token_embedding;
+    }
+
     mutex = dr_mutex_create();
     num_threads = 0;
 
-    dr_printf("mode - %d\n",client_args.mode);
+    //dr_printf("mode - %d\n",client_args.mode);
     
     if(client_args.mode == SNOOP){
       /* open filenames_file and mmap it */
       strcpy(filenames_file.filename,FILENAMES_FILE);
       filenames_file.filled = 0;
       filenames_file.offs = 0;
-      filenames_file.file = dr_open_file(filenames_file.file, DR_FILE_WRITE_OVERWRITE | DR_FILE_READ);
+      filenames_file.file = dr_open_file(filenames_file.filename, DR_FILE_WRITE_OVERWRITE | DR_FILE_READ);
       create_memory_map_file(&filenames_file,sizeof(thread_files_t));
       memset(filenames_file.data,0,sizeof(thread_files_t));
     }

@@ -17,13 +17,26 @@ int insert_config(char * query, const char * compiler, const char * flags, uint3
   return pos;
 }
 
-int insert_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode){
+int insert_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode,  uint32_t size){
+
+  uint32_t pos;
   if(mode == SQLITE){
-    return sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code) VALUES ((SELECT config_id from _config),'%s',%d,'%s')",program, rel_addr, code);
+    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code) VALUES ((SELECT config_id from _config),'%s',%d,'",program, rel_addr);
   }
   else{
-    return sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code) VALUES (@config_id,'%s',%d,'%s')",program, rel_addr, code);
+    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code) VALUES (@config_id,'%s',%d,'",program, rel_addr);
   }
+  
+  int i = 0;
+  for(i = 0; i < size; i++){
+    query[pos + i] = code[i];
+  } 
+
+  pos += size;
+  pos += sprintf(query + pos, "')");
+  return pos;
+
+
 }
 
 int insert_times(char * query, const char * program, uint32_t rel_addr, uint32_t arch, uint32_t time, uint32_t mode){

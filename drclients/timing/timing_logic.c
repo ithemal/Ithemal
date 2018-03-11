@@ -10,8 +10,85 @@ int get_filename(void * drcontext, char * filename, size_t max_size){
 
 }
 
+//we may decide to skip basic blocks with certain instrs and operands
 
-void get_code_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+#define OPCODE_START 0
+#define REG_START OP_LAST + 1
+#define INT_IMMED REG_START + DR_REG_YMM15 + 1
+#define FLOAT_IMMED INT_IMMED + 1
+#define MEMORY_START FLOAT_IMMED + 1
+
+void tokenize_operand(void * drcontext, uint16_t * cpos, opnd_t op, uint32_t * mem){
+  
+  uint16_t value = 0;
+
+  //dr_printf("%d,%d,%d,%d\n",opnd_is_reg(op),opnd_is_immed_int(op),opnd_is_immed_float(op),opnd_is_memory_reference(op));
+
+  //registers
+  if(opnd_is_reg(op)){
+    value = REG_START + opnd_get_reg(op);
+  }
+  //immediates
+  else if(opnd_is_immed_int(op)){
+    value = INT_IMMED;
+  }
+  else if(opnd_is_immed_float(op)){
+    value = FLOAT_IMMED;
+  }
+  //memory :(
+  else if(opnd_is_memory_reference(op)){
+    value = MEMORY_START + *mem++;
+  }
+  else{
+    opnd_disassemble(drcontext,op,STDOUT);
+    dr_printf("\n");
+  }
+
+  DR_ASSERT(value); //should have a non-zero value
+  DR_ASSERT(!opnd_is_pc(op)); //we do not consider branch instructions
+  
+  *cpos = value;
+
+}
+
+#define DELIMITER -1
+
+void token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+  instr_t * instr;
+  int pos = 0;
+  int i = 0;
+  
+  uint16_t * cpos = cinfo->code;
+
+  uint32_t mem;
+
+  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+
+    uint16_t opcode = instr_get_opcode(instr);   
+    cpos[pos++] = opcode;
+
+    opnd_t op;
+    for(i = 0; i < instr_num_srcs(instr); i++){
+      op = instr_get_src(instr,i);
+      tokenize_operand(drcontext, &cpos[pos], op, &mem);
+      pos++;
+    }
+    for(i = 0; i < instr_num_dsts(instr); i++){
+      op = instr_get_dst(instr,i);
+      tokenize_operand(drcontext, &cpos[pos], op, &mem);
+      pos++;
+    }
+
+    //delimiter
+    cpos[pos++] = DELIMITER;
+    
+  }
+
+  cinfo->code_size = sizeof(uint16_t) * pos;
+  
+}
+
+void textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
   instr_t * instr;
   int pos = 0;
@@ -20,9 +97,13 @@ void get_code_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb)
     DR_ASSERT(pos <= MAX_CODE_SIZE - 1);
     cinfo->code[pos] = '\n';
   }
-  cinfo->code[pos] = '\0';
+
+  cinfo->code_size = pos;
 
 }
+
+
+
 
 #define PERCENTAGE_THRESHOLD 10
 

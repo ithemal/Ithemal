@@ -9,6 +9,10 @@
 #define SQLITE  2
 #define RAW_SQL 3
 
+//code output
+#define TEXT   1
+#define TOKEN  2
+
 //snooping control modes
 #define IDLE       0
 #define DR_CONTROL 1

@@ -36,6 +36,7 @@ typedef struct{
   char module[MAX_MODULE_SIZE];
   void * module_start; 
   char code[MAX_CODE_SIZE];
+  uint32_t code_size;
   uint32_t rel_addr; 
 }code_info_t;
 
