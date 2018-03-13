@@ -90,7 +90,7 @@ def generate_batch(data, batch_size, num_skips, skip_window):
   return batch, labels
 
 # Step 4: Build and train a skip-gram model.
-def train_skipgram(data, vocabulary_size, reverse_dictionary):
+def train_skipgram(data, vocabulary_size, reverse_dictionary, sym_dict, mem_offset):
   
   batch_size = 128
   embedding_size = 128  # Dimension of the embedding vector.
@@ -158,44 +158,54 @@ def train_skipgram(data, vocabulary_size, reverse_dictionary):
       init = tf.global_variables_initializer()
       
   # Step 5: Begin training.
-    num_steps = 100001
+  num_steps = 10001
       
-    with tf.Session(graph=graph) as session:
-      # We must initialize all variables before we use them.
-      init.run()
-      print('Initialized')
+  with tf.Session(graph=graph) as session:
+    # We must initialize all variables before we use them.
+    init.run()
+    print('Initialized')
         
-      average_loss = 0
-      for step in xrange(num_steps):
-        batch_inputs, batch_labels = generate_batch(
-          data, batch_size, num_skips, skip_window)
-        feed_dict = {train_inputs: batch_inputs, train_labels: batch_labels}
+    average_loss = 0
+    for step in xrange(num_steps):
+      batch_inputs, batch_labels = generate_batch(
+        data, batch_size, num_skips, skip_window)
+      feed_dict = {train_inputs: batch_inputs, train_labels: batch_labels}
       
-        # We perform one update step by evaluating the optimizer op (including it
-        # in the list of returned values for session.run()
-        _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
-        average_loss += loss_val
-          
-        if step % 2000 == 0:
-          if step > 0:
-            average_loss /= 2000
+      # We perform one update step by evaluating the optimizer op (including it
+      # in the list of returned values for session.run()
+      _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
+      average_loss += loss_val
+        
+      if step % 2000 == 0:
+        if step > 0:
+          average_loss /= 2000
             # The average loss is an estimate of the loss over the last 2000 batches.
-          print('Average loss at step ', step, ': ', average_loss)
-          average_loss = 0
+        print('Average loss at step ', step, ': ', average_loss)
+        average_loss = 0
               
             # Note that this is expensive (~20% slowdown if computed every 500 steps)
-        if step % 10000 == 0:
-          sim = similarity.eval()
-          for i in xrange(valid_size):
-            valid_word = reverse_dictionary[valid_examples[i]]
-            top_k = 8  # number of nearest neighbors
-            nearest = (-sim[i, :]).argsort()[1:top_k + 1]
-            log_str = 'Nearest to %s:' % valid_word
-            for k in xrange(top_k):
-              close_word = reverse_dictionary[nearest[k]]
-              log_str = '%s %s,' % (log_str, close_word)
-            print(log_str)
-      final_embeddings = normalized_embeddings.eval()
+      if step % 10000 == 0:
+        sim = similarity.eval()
+        for i in xrange(valid_size):
+          valid_token_word = reverse_dictionary[valid_examples[i]]
+          if valid_token_word in sym_dict.keys():
+            valid_word = sym_dict[valid_token_word]
+          else:
+            valid_word = 'mem_' + str(valid_token_word - mem_offset)
+          top_k = 8  # number of nearest neighbors
+          nearest = (-sim[i, :]).argsort()[1:top_k + 1]
+          log_str = 'Nearest to %s:' % valid_word
+          for k in xrange(top_k):
+            close_token_word = reverse_dictionary[nearest[k]]
+            if close_token_word in sym_dict.keys():
+              close_word = sym_dict[close_token_word]
+            else:
+              close_word = 'mem_' + str(close_token_word - mem_offset)
+            log_str = '%s %s,' % (log_str, close_word)
+          print(log_str)
+    final_embeddings = normalized_embeddings.eval()
+  
+  return final_embeddings
                     
 # Step 6: Visualize the embeddings.
                     
@@ -203,6 +213,7 @@ def train_skipgram(data, vocabulary_size, reverse_dictionary):
 # pylint: disable=missing-docstring
 # Function to draw visualization of distance between embeddings.
 def plot_with_labels(low_dim_embs, labels, filename):
+  import matplotlib.pyplot as plt
   assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
   plt.figure(figsize=(18, 18))  # in inches
   for i, label in enumerate(labels):

@@ -113,7 +113,7 @@ void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile b
   instr_t * first = instrlist_first(bb);
   app_pc first_pc = instr_get_app_pc(first);
   module_data_t * md = dr_lookup_module(first_pc);
-  uint32_t rel_addr = (int)first_pc - (int)md->start;
+  uint32_t rel_addr = first_pc - md->start;
   
   strcpy(cinfo->module,dr_module_preferred_name(md));
   cinfo->module_start = md->start;
@@ -381,6 +381,9 @@ event_exit(void)
     while(files->control != IDLE);
     close_memory_map_file(&filenames_file);
   }
+  if(client_args.mode == SQLITE){
+    connection_close();
+  }
 
 }
 
@@ -411,7 +414,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
       client_args.embedding_func = textual_embedding;
     }
     else if(client_args.code_format == TOKEN){
-      client_args.embedding_func = token_embedding;
+      client_args.embedding_func = token_text_embedding;
     }
 
     mutex = dr_mutex_create();
@@ -431,5 +434,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     else if(client_args.mode == SQLITE){
       connection_init();
     }
+
+    //dr_printf("op start %d, reg_start %d, int %d, float %d, mem start %d\n",OPCODE_START,REG_START,INT_IMMED,FLOAT_IMMED,MEMORY_START);
   
 }

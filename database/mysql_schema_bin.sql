@@ -18,7 +18,7 @@ CREATE TABLE code (
   program varchar(255) NOT NULL,
   config_id int(11) NOT NULL,
   rel_addr int(32) NOT NULL,
-  code TEXT,
+  code MEDIUMBLOB,
   PRIMARY KEY (code_id),
   UNIQUE KEY (program,config_id,rel_addr),
   CONSTRAINT code_ibfk_1 FOREIGN KEY (config_id) REFERENCES config(config_id)

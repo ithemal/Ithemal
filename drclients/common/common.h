@@ -26,6 +26,13 @@
 #define MAX_CODE_SIZE 1024
 #define MAX_QUERY_SIZE 2048
 
+//tokenizing code
+#define REG_START 0
+#define INT_IMMED REG_START + DR_REG_YMM15 + 1
+#define FLOAT_IMMED INT_IMMED + 1
+#define OPCODE_START FLOAT_IMMED + 1
+#define MEMORY_START OPCODE_START + OP_LAST + 1
+
 //mmap file structure
 typedef struct{
 char filename[MAX_MODULE_SIZE];
