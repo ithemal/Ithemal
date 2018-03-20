@@ -26,6 +26,28 @@
 #define MAX_CODE_SIZE 1024
 #define MAX_QUERY_SIZE 2048
 
+//for snooping - store filenames
+
+/*
+  store the names of files that will have data in FILENAME_FILES. The snooping application 
+  will check all files for ready data to be written to the database.
+  All timing and code data will be written to the mmapped files, not to
+  thread local structures maintained by DR, so that snooping application will
+  also have access to it.
+ */
+
+#define FILENAMES_FILE "/tmp/names.txt"
+#define DATA_FOLDER   "/data/scratch/charithm/projects/cmodel/data"
+
+#define MAX_THREADS 16
+
+typedef struct{
+  uint32_t control;
+  uint32_t num_modules;
+  char modules[MAX_THREADS][MAX_MODULE_SIZE];
+} thread_files_t;
+
+
 //tokenizing code
 #define REG_START 0
 #define INT_IMMED REG_START + DR_REG_YMM15 + 1

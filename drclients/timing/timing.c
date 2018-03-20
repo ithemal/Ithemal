@@ -7,8 +7,12 @@
 #include "timing_mmap.h"
 #include "timing_logic.h"
 #include "timing_dump.h"
+
+#include "dr_utility.h"
+#include "code_embedding.h"
 #include "sqlite3_impl.h"
 #include "common.h"
+
 
 //client arguments
 typedef struct {
@@ -45,7 +49,7 @@ thread_init(void * drcontext){
   mmap_file_t * data = (mmap_file_t *)dr_thread_alloc(drcontext, sizeof(mmap_file_t));    
   dr_set_tls_field(drcontext,data);
   
-  get_filename(drcontext,data->filename,MAX_MODULE_SIZE);
+  get_perthread_filename(drcontext,data->filename,MAX_MODULE_SIZE);
   data->offs = data->filled = 0;
   
   if(client_args.mode == SNOOP){ //create filenames file for snooping process to know where we are dumping data
@@ -83,8 +87,10 @@ thread_init(void * drcontext){
   //if mode is raw sql dumping 
   if(client_args.mode == RAW_SQL){
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
-    bk->mmap_raw_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
-    create_raw_file(drcontext,bk->mmap_raw_file);
+    bk->dynamic_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
+    bk->static_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
+    create_raw_file(drcontext,DATA_FOLDER,"dyn",bk->dynamic_file);
+    create_raw_file(drcontext,DATA_FOLDER,"static",bk->static_file);
   }
 
   //insert the config string (query)
@@ -99,7 +105,7 @@ thread_init(void * drcontext){
     }
     else if(client_args.mode == RAW_SQL){
       sz = complete_query(query,sz);
-      write_to_file(bk->mmap_raw_file,query,sz);
+      write_to_file(bk->static_file,query,sz);
     }
   }
 
@@ -230,7 +236,7 @@ void post_cleancall(uint32_t num_bbs){
 	}
 	else if(client_args.mode == RAW_SQL){
 	  sz = complete_query(query,sz);
-	  write_to_file(bk->mmap_raw_file,query,sz);
+	  write_to_file(bk->dynamic_file,query,sz);
 	}
       }
     }
@@ -282,7 +288,7 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   //we are filtering based on exec
   module_data_t * md = dr_lookup_module(instr_get_app_pc(first));
 
-  if(!filter_based_on_exec(dr_module_preferred_name(md))){
+  if(!filter_based_on_module(dr_module_preferred_name(md))){
     return DR_EMIT_DEFAULT;
   }
 
@@ -299,7 +305,7 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
     }
     else if(client_args.mode == RAW_SQL){
       sz = complete_query(query,sz);
-      write_to_file(bk->mmap_raw_file,query,sz);
+      write_to_file(bk->static_file,query,sz);
     }
   }
  
@@ -353,7 +359,7 @@ thread_exit(void * drcontext){
 	}
 	else if(client_args.mode == RAW_SQL){
 	  sz = complete_query(query,sz);
-	  write_to_file(bk->mmap_raw_file,query,sz);
+	  write_to_file(bk->dynamic_file,query,sz);
 	}
       }
     }
@@ -362,7 +368,8 @@ thread_exit(void * drcontext){
   END_CONTROL(bk->control,DR_CONTROL,DUMP_ALL);
   
   if(client_args.mode == RAW_SQL){
-    close_raw_file(bk->mmap_raw_file);
+    close_raw_file(bk->dynamic_file);
+    close_raw_file(bk->static_file);
   }
   close_memory_map_file(file,TOTAL_SIZE);
 
@@ -379,7 +386,7 @@ event_exit(void)
     volatile thread_files_t * files = filenames_file.data;
     files->control = EXIT;
     while(files->control != IDLE);
-    close_memory_map_file(&filenames_file);
+    close_memory_map_file(&filenames_file,sizeof(thread_files_t));
   }
   if(client_args.mode == SQLITE){
     connection_close();

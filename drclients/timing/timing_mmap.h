@@ -4,42 +4,14 @@
 #include <stdint.h> /* for data type definitions */
 #include <string.h> /* may be for memset */
 #include "common.h"
-/*
-  store the names of files that will have data in FILENAME_FILES 
-  (2 files per thread, one for code and time). The snooping application 
-  will check all files for ready data to be written to the database.
-  All timing and code data will be written to the mmapped files, not to
-  thread local structures maintained by DR, so that snooping application will
-  also have access to it.
- */
+#include "code_embedding.h"
 
-
-#define FILENAMES_FILE "/tmp/names.txt"
-
-#define MAX_THREADS 16
-
-typedef struct{
-  uint32_t control;
-  uint32_t num_modules;
-  char modules[MAX_THREADS][MAX_MODULE_SIZE];
-} thread_files_t;
 
 /*
   convention of stored data in mapped file
   scratch space for book keeping - 4 bytes * BK_SLOTS
   timeslots per BB - 4bytes * TIME_SLOTS
  */
-
-
-typedef struct{
-  uint32_t control;
-  char module[MAX_MODULE_SIZE];
-  void * module_start; 
-  char code[MAX_CODE_SIZE];
-  uint32_t code_size;
-  uint32_t rel_addr; 
-}code_info_t;
-
 
 typedef struct{
   uint32_t control; 
@@ -49,7 +21,8 @@ typedef struct{
   uint32_t num_bbs;
   uint32_t overhead;
   uint32_t arch;
-  mmap_file_t * mmap_raw_file;
+  mmap_file_t * dynamic_file;
+  mmap_file_t * static_file;
 } bookkeep_t;
 
 typedef struct{
