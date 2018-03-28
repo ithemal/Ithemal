@@ -90,11 +90,11 @@ def generate_batch(data, batch_size, num_skips, skip_window):
   return batch, labels
 
 # Step 4: Build and train a skip-gram model.
-def train_skipgram(data, vocabulary_size, reverse_dictionary, sym_dict, mem_offset):
+def train_skipgram(data, vocabulary_size, reverse_dictionary, sym_dict, mem_offset, num_steps):
   
   batch_size = 128
-  embedding_size = 128  # Dimension of the embedding vector.
-  skip_window = 1       # How many words to consider left and right.
+  embedding_size = 256  # Dimension of the embedding vector.
+  skip_window = 2       # How many words to consider left and right.
   num_skips = 2         # How many times to reuse an input to generate a label.
   num_sampled = 64      # Number of negative examples to sample.
   
@@ -158,8 +158,7 @@ def train_skipgram(data, vocabulary_size, reverse_dictionary, sym_dict, mem_offs
       init = tf.global_variables_initializer()
       
   # Step 5: Begin training.
-  num_steps = 10001
-      
+
   with tf.Session(graph=graph) as session:
     # We must initialize all variables before we use them.
     init.run()
