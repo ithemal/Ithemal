@@ -38,8 +38,8 @@ def get_opcode_opnd_dict(opcode_start, opnd_start):
 
     return sym_dict
 
-def read_offsets():
-    offsets_filename = '/data/scratch/charithm/projects/cmodel/database/offsets.txt'
+def read_offsets(filename):
+    offsets_filename = filename
     offsets = list()
     with open(offsets_filename,'r') as f:
         for line in f:
@@ -49,7 +49,18 @@ def read_offsets():
     assert len(offsets) == 5
     return offsets
     
+def get_sym_dict(filename):
 
+    offsets = read_offsets(filename)
+    sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1])
+   
+    sym_dict[offsets[2]] = 'int_immed'
+    sym_dict[offsets[3]] = 'float_immed'
+
+    return sym_dict, offsets[4]
+
+
+ 
 #data reading function
 def get_data(cnx, format, cols):
     try:
@@ -92,4 +103,5 @@ def get_data(cnx, format, cols):
         print e
     else:
         return data
+
 
