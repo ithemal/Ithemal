@@ -4,10 +4,11 @@
 #include <stdlib.h>
 
 #include "dr_api.h"
-#include "timing_mmap.h"
-#include "timing_logic.h"
-#include "timing_dump.h"
+#include "static_mmap.h"
+#include "static_dump.h"
 #include "sqlite3_impl.h"
+#include "static_logic.h"
+#include "code_embedding.h"
 #include "common.h"
 
 //client arguments
@@ -45,7 +46,7 @@ thread_init(void * drcontext){
   mmap_file_t * data = (mmap_file_t *)dr_thread_alloc(drcontext, sizeof(mmap_file_t));    
   dr_set_tls_field(drcontext,data);
   
-  get_filename(drcontext,data->filename,MAX_MODULE_SIZE);
+  get_perthread_filename(drcontext,data->filename,MAX_MODULE_SIZE);
   data->offs = data->filled = 0;
   
   if(client_args.mode == SNOOP){ //create filenames file for snooping process to know where we are dumping data
@@ -83,8 +84,8 @@ thread_init(void * drcontext){
   //if mode is raw sql dumping 
   if(client_args.mode == RAW_SQL){
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
-    bk->mmap_raw_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
-    create_raw_file(drcontext,bk->mmap_raw_file);
+    bk->static_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
+    create_raw_file(drcontext,DATA_FOLDER,"test/static",bk->static_file);
   }
 
   //insert the config string (query)
@@ -99,7 +100,7 @@ thread_init(void * drcontext){
     }
     else if(client_args.mode == RAW_SQL){
       sz = complete_query(query,sz);
-      write_to_file(bk->mmap_raw_file,query,sz);
+      write_to_file(bk->static_file,query,sz);
     }
   }
 
@@ -146,9 +147,15 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   //bb analysis 
   BEGIN_CONTROL(cinfo->control,IDLE,DR_CONTROL);
 
-  populate_bb_info(drcontext,cinfo,&tinfo[bk->num_bbs],bb,client_args.embedding_func);
+  populate_bb_info(drcontext,cinfo,bb,client_args.embedding_func);
+  cinfo->num_instr = num_instructions(bb);
+  cinfo->span = span_bb(bb);
+  //instrlist_disassemble(drcontext,tag,bb,STDOUT);
+  //dr_printf("%d,%d,%d\n",bk->num_bbs,cinfo->num_instr,cinfo->span);
+
   if(client_args.mode != SNOOP){
-    int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
+    //int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
+    int sz = update_code(query,cinfo->module,cinfo->rel_addr,client_args.mode,cinfo->num_instr,cinfo->span);
     //dr_printf("%s\n",query);
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
     if(client_args.mode == SQLITE){
@@ -156,7 +163,7 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
     }
     else if(client_args.mode == RAW_SQL){
       sz = complete_query(query,sz);
-      write_to_file(bk->mmap_raw_file,query,sz);
+      write_to_file(bk->static_file,query,sz);
     }
   }
  
@@ -176,7 +183,7 @@ thread_exit(void * drcontext){
   volatile bookkeep_t * bk = (bookkeep_t *)(file->data + START_BK_DATA);
     
   if(client_args.mode == RAW_SQL){
-    close_raw_file(bk->mmap_raw_file);
+    close_raw_file(bk->static_file);
   }
   close_memory_map_file(file,TOTAL_SIZE);
  

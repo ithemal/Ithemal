@@ -13,6 +13,8 @@ typedef struct{
   char code[MAX_CODE_SIZE];
   uint32_t code_size;
   uint32_t rel_addr; 
+  uint32_t num_instr;
+  uint32_t span;
 }code_info_t;
 
 

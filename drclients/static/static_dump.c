@@ -1,6 +1,6 @@
 #include <string.h>
 #include <stdio.h>
-#include "timing_dump.h"
+#include "static_dump.h"
 #include "common.h"
 
 int insert_config(char * query, const char * compiler, const char * flags, uint32_t mode){
@@ -46,6 +46,21 @@ int insert_times(char * query, const char * program, uint32_t rel_addr, uint32_t
   else{
     return sprintf(query, "INSERT INTO times (code_id, arch, time) VALUES ((SELECT code_id FROM code WHERE config_id = @config_id AND program = '%s' AND rel_addr = %d), '%d', %d)",program,rel_addr,arch, time);
   }
+}
+
+int update_code(char * query, const char * program, uint32_t rel_addr, uint32_t mode, uint32_t num_instr,uint32_t span){
+
+  int pos;
+  if(mode == SQLITE){
+    pos = sprintf(query, "UPDATE code SET num_instr = %d, span = %d WHERE config_id = (SELECT config_id from _config) AND program = '%s' AND rel_addr = %d",num_instr,span,program, rel_addr);
+  }
+  else{
+    pos = sprintf(query, "UPDATE code SET num_instr = %d, span = %d WHERE config_id = @config_id AND program = '%s' AND rel_addr = %d",num_instr,span,program, rel_addr);
+  }
+  
+  return pos;
+
+
 }
 
 

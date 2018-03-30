@@ -1,5 +1,5 @@
-#ifndef TIMING_DUMP
-#define TIMING_DUMP
+#ifndef STATIC_DUMP
+#define STATIC_DUMP
 
 #include <stdint.h>
 
