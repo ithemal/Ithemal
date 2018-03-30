@@ -6,7 +6,7 @@ import matplotlib
 import sys
 import utilities as ut
 import tensorflow as tf
-import binary_classification as bc
+import multi_classification as bc
 import numpy as np
 
 matplotlib.use('Agg')
