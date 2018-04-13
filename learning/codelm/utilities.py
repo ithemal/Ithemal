@@ -67,10 +67,10 @@ def get_data(cnx, format, cols):
         cur = cnx.cursor(buffered=True)
 
         #code column is mandatory
-        columns = '(code'
+        columns = 'code'
         for col in cols:
             columns += ',' + col
-        columns += ')'
+        columns += ''
 
         sql = 'SELECT ' + columns + ' FROM code'
         print sql

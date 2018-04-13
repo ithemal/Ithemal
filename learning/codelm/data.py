@@ -6,11 +6,10 @@ import matplotlib
 import sys
 import utilities as ut
 import tensorflow as tf
-import multi_classification as bc
+import rnn_basic as bc
 import numpy as np
 
 matplotlib.use('Agg')
-
 
 if __name__ == "__main__":
 
@@ -20,7 +19,7 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
 
     #create database connection
-    cnx = ut.create_connection('training')
+    cnx = ut.create_connection('costmodel')
 
     data = bc.Data()
     model = bc.Model(data)
@@ -29,8 +28,8 @@ if __name__ == "__main__":
     data.generate_datasets()
     
     model.generate_model()
-    params = model.train_model()
-    model.test_model(params)
+    model.train_model()
+    # model.test_model(params)
 
     cnx.close()
     
