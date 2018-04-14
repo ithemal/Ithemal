@@ -21,7 +21,7 @@ class Word2Vec:
                  emb_dimension=100,
                  
                  #data generation related
-                 batch_size=50,
+                 batch_size=5000,
                  skip_window=2,
                  num_skips=2,
                  n_words=2000,
