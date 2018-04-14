@@ -5,28 +5,8 @@ import torch.nn.functional as F
 
 
 class SkipGramModel(nn.Module):
-    """Skip gram model of word2vec.
-
-    Attributes:
-        emb_size: Embedding size.
-        emb_dimention: Embedding dimention, typically from 50 to 500.
-        u_embedding: Embedding for center word.
-        v_embedding: Embedding for neibor words.
-    """
 
     def __init__(self, emb_size, emb_dimension):
-        """Initialize model parameters.
-
-           Apply for two embedding layers.
-        Initialize layer weight
-
-        Args:
-            emb_size: Embedding size.
-            emb_dimention: Embedding dimention, typically from 50 to 500.
-
-        Returns:
-            None
-        """
         super(SkipGramModel, self).__init__()
         self.emb_size = emb_size
         self.emb_dimension = emb_dimension
@@ -35,31 +15,11 @@ class SkipGramModel(nn.Module):
         self.init_emb()
 
     def init_emb(self):
-        """Initialize embedding weight like word2vec.
-
-        The u_embedding is a uniform distribution in [-0.5/em_size, 0.5/emb_size], and the elements of v_embedding are zeroes.
-
-        Returns:
-            None
-        """
         initrange = 0.5 / self.emb_dimension
         self.u_embeddings.weight.data.uniform_(-initrange, initrange)
         self.v_embeddings.weight.data.uniform_(-0, 0)
 
     def forward(self, pos_u, pos_v, neg_v):
-        """Forward process.
-
-        As pytorch designed, all variables must be batch format, so all input of this method is a list of word id.
-
-        Args:
-            pos_u: list of center word ids for positive word pairs.
-            pos_v: list of neibor word ids for positive word pairs.
-            neg_u: list of center word ids for negative word pairs.
-            neg_v: list of neibor word ids for negative word pairs.
-
-        Returns:
-            Loss of this process, a pytorch variable.
-        """
         emb_u = self.u_embeddings(pos_u)
         emb_v = self.v_embeddings(pos_v)
         score = torch.mul(emb_u, emb_v).squeeze()

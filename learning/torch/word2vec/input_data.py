@@ -3,27 +3,24 @@ from collections import deque
 numpy.random.seed(12345)
 
 
-class InputData:
-    """Store data for word2vec, such as word map, sampling table and so on.
+#this holds summaries of data, but does not hold data itself
+#and processing functions
 
-    Attributes:
-        word_frequency: Count of each word, used for filtering low-frequency words and sampling table
-        word2id: Map from word to word id, without low-frequency words.
-        id2word: Map from word id to word, without low-frequency words.
-        sentence_count: Sentence count in files.
-        word_count: Word count in files, without low-frequency words.
-    """
-
-    def __init__(self, file_name, min_count):
-        self.get_words(min_count)
-        self.word_pair_catch = deque()
-        self.init_sample_table()
-        print('Word Count: %d' % len(self.word2id))
-        print('Sentence Length: %d' % (self.sentence_length))
-
-
-    def get_common_words(self, words, n_words, min_count):
-
+class Data:
+    
+    def __init__(self,
+                 num_skips,
+                 skip_window,
+                 min_count,
+                 n_words):
+        self.data_index = 0
+        self.n_words = n_words
+        self.min_count = min_count
+        self.num_skips = num_skips
+        self.skip_window = skip_window
+        
+    def get_common_words(self, words):
+        
         word_frequency = dict()
         for w in words:
             try:
@@ -34,6 +31,7 @@ class InputData:
         self.id2word = dict()
         wid = 1
 
+        #filter and assign new ids
         if n_words == None: #we are filtering based on min_count
             self.word_frequency = dict()
             for w, c in word_frequency.items():
@@ -44,11 +42,25 @@ class InputData:
                     self.id2word[wid] = w
                     self.word_frequency[wid] = c
                     wid += 1
-            self.word_count = len(self.word2id)
-
+            
         elif min_count == None: #we are filtering based on the first n most common words
-            
-            
+            sorted_freq = sorted(word_frequency.items(), key=lambda x: x[1], reverse=True)
+            for i,(k,v) in enumerate(sorted_freq):
+                if i >= n_words:
+                    self.word_frequency[0] += c
+                else:
+                    self.word2id[w] = wid
+                    self.id2word[wid] = w
+                    self.word_frequency[wid] = c
+                    wid += 1
+
+        self.word_count = len(self.word2id)
+
+        data = []
+        for w in words:
+            data.append(word2id.get(w,0))
+
+        return data
 
     def init_sample_table(self):
         self.sample_table = []
@@ -61,38 +73,41 @@ class InputData:
             self.sample_table += [wid] * int(c)
         self.sample_table = numpy.array(self.sample_table)
 
-    # @profile
-    def get_batch_pairs(self, batch_size, window_size):
-        while len(self.word_pair_catch) < batch_size:
-            sentence = self.input_file.readline()
-            if sentence is None or sentence == '':
-                self.input_file = open(self.input_file_name)
-                sentence = self.input_file.readline()
-            word_ids = []
-            for word in sentence.strip().split(' '):
-                try:
-                    word_ids.append(self.word2id[word])
-                except:
-                    continue
-            for i, u in enumerate(word_ids):
-                for j, v in enumerate(
-                        word_ids[max(i - window_size, 0):i + window_size]):
-                    assert u < self.word_count
-                    assert v < self.word_count
-                    if i == j:
-                        continue
-                    self.word_pair_catch.append((u, v))
-        batch_pairs = []
-        for _ in range(batch_size):
-            batch_pairs.append(self.word_pair_catch.popleft())
-        return batch_pairs
+        # num skips = amount of context words sampled for given target word  
+    def generate_pos_pairs(self, data, batch_size):
+        assert batch_size % num_skips == 0
+        assert num_skips <= 2 * skip_window
+        span = 2 * skip_window + 1  # [ skip_window target skip_window ]
+        batch = []
+        labels = []
+        buffer = collections.deque(maxlen=span)
+        if self.data_index + span > len(data):
+            self.data_index = 0
+        buffer.extend(data[self.data_index:self.data_index + span])
+        self.data_index += span
+        for i in range(batch_size // num_skips):
+            context_words = [w for w in range(span) if w != skip_window]
+            words_to_use = random.sample(context_words, num_skips)
+            for j, context_word in enumerate(words_to_use):
+                batch.append(buffer[skip_window])
+                labels.append(buffer[context_word])
+            if self.data_index == len(data):
+                buffer.clear()
+                buffer.extend(data[:span])
+                self.data_index = span
+            else:
+                buffer.append(data[self.data_index])
+                self.data_index += 1
+        # Backtrack a little bit to avoid skipping words in the end of a batch
+        self.data_index = (self.data_index + len(data) - span) % len(data)
+    
+        return batch, labels
 
-    # @profile
-    def get_neg_v_neg_sampling(self, pos_word_pair, count):
+    
+    def generate_neg_words(self, batch_size, count):
         neg_v = numpy.random.choice(
-            self.sample_table, size=(len(pos_word_pair), count)).tolist()
+            self.sample_table, size=(batch_size, count)).tolist()
         return neg_v
 
-    def evaluate_pair_count(self, window_size):
-        return self.sentence_length * (2 * window_size - 1) - (
-            self.sentence_count - 1) * (1 + window_size) * window_size
+
+    
