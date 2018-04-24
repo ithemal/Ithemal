@@ -5,6 +5,7 @@ from mysql.connector import errorcode
 import re
 import os
 
+
 #mysql specific functions
 def create_connection(database):
     cnx = None
@@ -59,6 +60,11 @@ def get_sym_dict(filename):
 
     return sym_dict, offsets[4]
 
+def get_name(val,sym_dict,mem_offset):
+    if val >= mem_offset:
+        return 'mem_' + str(val - mem_offset)
+    else:
+        return sym_dict[val]
 
  
 #data reading function
@@ -103,5 +109,6 @@ def get_data(cnx, format, cols):
         print e
     else:
         return data
+
 
 

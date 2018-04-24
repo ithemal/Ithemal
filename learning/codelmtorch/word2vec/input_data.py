@@ -1,6 +1,8 @@
 import numpy
-from collections import deque
+import collections
+import random
 numpy.random.seed(12345)
+import common.utilities as ut
 
 
 #this holds summaries of data, but does not hold data itself
@@ -18,8 +20,12 @@ class Data:
         self.min_count = min_count
         self.num_skips = num_skips
         self.skip_window = skip_window
-        
-    def get_common_words(self, words):
+        self.word2id = dict()
+        self.id2word = dict()
+        self.word_frequency = dict()
+  
+       
+    def get_common_words(self, words, sym_dict, mem_offset):
         
         word_frequency = dict()
         for w in words:
@@ -27,15 +33,13 @@ class Data:
                 word_frequency[w] += 1
             except:
                 word_frequency[w] = 1
-        self.word2id = dict()
-        self.id2word = dict()
         wid = 1
 
+        self.word_frequency[0] = 0
         #filter and assign new ids
-        if n_words == None: #we are filtering based on min_count
-            self.word_frequency = dict()
+        if self.n_words == None: #we are filtering based on min_count
             for w, c in word_frequency.items():
-                if c < min_count:
+                if c < self.min_count:
                     self.word_frequency[0] += c
                 else:
                     self.word2id[w] = wid
@@ -43,10 +47,10 @@ class Data:
                     self.word_frequency[wid] = c
                     wid += 1
             
-        elif min_count == None: #we are filtering based on the first n most common words
+        elif self.min_count == None: #we are filtering based on the first n most common words
             sorted_freq = sorted(word_frequency.items(), key=lambda x: x[1], reverse=True)
-            for i,(k,v) in enumerate(sorted_freq):
-                if i >= n_words:
+            for i,(w,c) in enumerate(sorted_freq):
+                if i >= self.n_words:
                     self.word_frequency[0] += c
                 else:
                     self.word2id[w] = wid
@@ -54,17 +58,22 @@ class Data:
                     self.word_frequency[wid] = c
                     wid += 1
 
-        self.word_count = len(self.word2id)
+        self.word_count = len(self.word_frequency)
 
+        #for (w,c) in sorted_freq:
+        #    if self.word2id.get(w,0) != 0:
+        #        print ut.get_name(w,sym_dict,mem_offset) + ' (' + str(self.word2id.get(w,0)) + ') : ' + str(c)  
+        #    else:
+        #        print 'unknown (0) : ' + str(c)
+   
         data = []
         for w in words:
-            data.append(word2id.get(w,0))
-
+            data.append(self.word2id.get(w,0))
         return data
 
     def init_sample_table(self):
         self.sample_table = []
-        sample_table_size = 1e8
+        sample_table_size = 1e6
         pow_frequency = numpy.array(list(self.word_frequency.values()))**0.75
         words_pow = sum(pow_frequency)
         ratio = pow_frequency / words_pow
@@ -75,9 +84,9 @@ class Data:
 
         # num skips = amount of context words sampled for given target word  
     def generate_pos_pairs(self, data, batch_size):
-        assert batch_size % num_skips == 0
-        assert num_skips <= 2 * skip_window
-        span = 2 * skip_window + 1  # [ skip_window target skip_window ]
+        assert batch_size % self.num_skips == 0
+        assert self.num_skips <= 2 * self.skip_window
+        span = 2 * self.skip_window + 1  # [ skip_window target skip_window ]
         batch = []
         labels = []
         buffer = collections.deque(maxlen=span)
@@ -85,11 +94,11 @@ class Data:
             self.data_index = 0
         buffer.extend(data[self.data_index:self.data_index + span])
         self.data_index += span
-        for i in range(batch_size // num_skips):
-            context_words = [w for w in range(span) if w != skip_window]
-            words_to_use = random.sample(context_words, num_skips)
+        for i in range(batch_size // self.num_skips):
+            context_words = [w for w in range(span) if w != self.skip_window]
+            words_to_use = random.sample(context_words, self.num_skips)
             for j, context_word in enumerate(words_to_use):
-                batch.append(buffer[skip_window])
+                batch.append(buffer[self.skip_window])
                 labels.append(buffer[context_word])
             if self.data_index == len(data):
                 buffer.clear()
@@ -105,6 +114,7 @@ class Data:
 
     
     def generate_neg_words(self, batch_size, count):
+
         neg_v = numpy.random.choice(
             self.sample_table, size=(batch_size, count)).tolist()
         return neg_v
