@@ -24,42 +24,41 @@ class Data(object):
         self.percentage = 80
         self.embedder = w2v.Word2Vec(num_steps = 2500)
 
-    def extract_and_prepare_data(self,cnx,format,embedding_file):
+    def extract_data(self,cnx,format,embedding_file):
 
-        raw_data = ut.get_data(cnx,format,['num_instr'])
+        self.raw_data = ut.get_data(cnx,format,['num_instr'])
+        offsets_filename = '/data/scratch/charithm/projects/cmodel/database/offsets.txt'
+        self.sym_dict,_ = ut.get_sym_dict(offsets_filename)
+        self.offsets = ut.read_offsets(offsets_filename)
+
+        print self.offsets
+        self.opcode_start = self.offsets[0]
+        self.operand_start = self.offsets[1]
+        self.int_immed = self.offsets[2]
+        self.float_immed = self.offsets[3]
+        self.mem_start = self.offsets[4]
+
         if embedding_file == None:
             print 'running word2vec....'
             token_data = list()
             for row in raw_data:
                 token_data.extend(row[0])
             print len(token_data)
-
-            offsets_filename = '/data/scratch/charithm/projects/cmodel/database/offsets.txt'
-            sym_dict, mem_start = ut.get_sym_dict(offsets_filename)
-            offsets = ut.read_offsets(offsets_filename)
-
-            data = self.embedder.generate_dataset(token_data,sym_dict,mem_start)
-            self.embedder.train(data,sym_dict,mem_start)
+            
+            data = self.embedder.generate_dataset(token_data,self.sym_dict,self.mem_start)
+            self.embedder.train(data,self.sym_dict,self.mem_start)
             self.final_embeddings = self.embedder.get_embedding()
   
             #create variable length per basic block instruction stream
-            word2id = self.embedder.data.word2id
+            self.word2id = self.embedder.data.word2id
         
         else:
             print 'reading from file....'
             with open(embedding_file,'r') as f:
-                (self.final_embeddings, word2id,_) = torch.load(f)
+                (self.final_embeddings,self.word2id,_) = torch.load(f)
 
-        self.x = []
-        self.y = []
-
-        for row in raw_data:
-            if row[1] != None and len(row[0]) > 0:
-                code = []
-                for token in row[0]:
-                    code.append(self.final_embeddings[word2id.get(token,0)])
-                self.x.append(code)
-                self.y.append(row[1])
+    def prepare_data(self):
+        Pass
 
     def generate_datasets(self):
         assert len(self.x) == len(self.y)
@@ -83,10 +82,51 @@ class Data(object):
         return batch_x, batch_y
 
 
-class Model(nn.Module):
+class DataFinalHidden(Data):
 
+    def __init__(self):
+        super(DataFinalHidden, self).__init__()
+    
+    def prepare_data(self):
+        self.x = []
+        self.y = []
+    
+        for row in self.raw_data:
+            if row[1] != None and len(row[0]) > 0:
+                code = []
+                for token in row[0]:
+                    code.append(self.final_embeddings[self.word2id.get(token,0)])
+                self.x.append(code)
+                self.y.append(row[1])
+
+class DataAggregate(Data):
+
+
+    def __init__(self):
+        super(DataAggregate, self).__init__()
+    
+    def prepare_data(self):
+        self.x = []
+        self.y = []
+    
+        for row in self.raw_data:
+            if row[1] != None and len(row[0]) > 0:
+                code = []
+                labels = []
+                count = 1
+                for token in row[0]:
+                    code.append(self.final_embeddings[self.word2id.get(token,0)])
+                    labels.append(count)
+                    if token >= self.opcode_start and token < self.mem_start:
+                        count += 1
+                self.x.append(code)
+                self.y.append(labels)
+
+
+class ModelAbs(nn.Module):
+    
     def __init__(self, embedding_size):
-        super(Model, self).__init__()
+        super(ModelAbs, self).__init__()
         self.hidden_size = 256
         #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
@@ -99,28 +139,57 @@ class Model(nn.Module):
 
         #linear layer for regression - in_features, out_features
         self.linear = nn.Linear(self.hidden_size, 1)
-
+    
     def init_hidden(self):
-        #num layers, minibatch size, hidden size
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
         
+class ModelFinalHidden(ModelAbs):
 
+    def __init__(self, embedding_size):
+        super(ModelFinalHidden, self).__init__(embedding_size)
+            
     def forward(self, input):
 
         #print input
         #convert to tensor
         embeds = torch.FloatTensor(input)
+        #print embeds.shape
         
         #prepare for lstm - seq len, batch size, embedding size
         seq_len = embeds.shape[0]
-        embeds_for_lstm = embeds.view(seq_len, 1, -1)
+        #embeds_for_lstm = embeds.view(seq_len, 1, -1)
+        embeds_for_lstm = embeds.unsqueeze(1)
         #print embeds_for_lstm.shape
 
         lstm_out, self.hidden = self.lstm(embeds_for_lstm, self.hidden)
         
-        return self.linear(lstm_out[seq_len - 1,0,:]).squeeze()
-  
+        return self.linear(self.hidden[0].squeeze())
+
+
+class ModelAggregate(ModelAbs):
+
+    def __init__(self, embedding_size):
+        super(ModelAggregate, self).__init__(embedding_size)
+   
+    def forward(self, input):
+
+        #print input
+        #convert to tensor
+        embeds = torch.FloatTensor(input)
+        #print embeds.shape
+        
+        #prepare for lstm - seq len, batch size, embedding size
+        seq_len = embeds.shape[0]
+        #embeds_for_lstm = embeds.view(seq_len, 1, -1)
+        embeds_for_lstm = embeds.unsqueeze(1)
+        #print embeds_for_lstm.shape
+
+        lstm_out, self.hidden = self.lstm(embeds_for_lstm, self.hidden)
+    
+        values = self.linear(lstm_out[:,0,:].squeeze()).squeeze()
+        
+        return values
 
 class Train(): 
 
@@ -128,7 +197,7 @@ class Train():
     def __init__(self, 
                  model,
                  data,
-                 epochs = 5,
+                 epochs = 3,
                  batch_size = 1000):
         self.model = model
         self.data = data
@@ -163,18 +232,21 @@ class Train():
                     self.model.hidden = self.model.init_hidden()
 
                     #run the model
-                    output = self.model(x)
+                    outputs = self.model(x)
+                    targets = torch.FloatTensor([y]).squeeze()
+                    
                     loss_fn = nn.MSELoss()
-                    loss = loss_fn(output, torch.FloatTensor([y]))
+                    loss = loss_fn(outputs, targets)
+                    loss.backward()
+                    self.optimizer.step()
+
 
                     average_loss = (average_loss * j + loss.item()) / (j + 1)
                     j += 1
                     
-                    loss.backward()
-                
+                    
                     #step the optimizer
-                    self.optimizer.step()
-
+                
                 print j, average_loss
            
             print i
@@ -182,11 +254,42 @@ class Train():
 
     def validate(self):
         
+        average_loss = 0
+        j = 0
+
+        f = open('output.txt','w')
+
+        print len(self.data.test_x)
+
         for x,y in zip(self.data.test_x, self.data.test_y):
             
             self.model.hidden = self.model.init_hidden()
             output = self.model(x)
-            print output.item(),y
+            output_list = output.data.numpy().tolist()
+            
+            if len(y) == 1:
+                f.write('%f,%f ' % (output_list,y[0]))
+            else:
+                for i,_ in enumerate(y):
+                    f.write('%f,%d ' % (output_list[i],y[i]))
+            f.write('\n')
+
+            targets = torch.FloatTensor([y]).squeeze()
+            loss_fn = nn.MSELoss()
+            loss = loss_fn(output, targets)
+
+            average_loss = (average_loss * j + loss.item())/(j+1)
+            j += 1
+            if j % 1000 == 0:
+                print j, average_loss
+
+        print average_loss
+        f.close()
+            
+            
+
+
+
             
             
 
