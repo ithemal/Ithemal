@@ -23,7 +23,8 @@ class Data(object):
     def __init__(self):
         self.percentage = 80
         self.embedder = w2v.Word2Vec(num_steps = 2500)
-
+        self.costs = dict()
+    
     def extract_data(self,cnx,format,embedding_file):
 
         self.raw_data = ut.get_data(cnx,format,['num_instr'])
@@ -57,8 +58,15 @@ class Data(object):
             with open(embedding_file,'r') as f:
                 (self.final_embeddings,self.word2id,_) = torch.load(f)
 
+        for i in range(self.opcode_start, self.mem_start):
+            self.costs[i] = 1
+
     def prepare_data(self):
         Pass
+
+    def generate_costdict(self):
+        for i in range(self.opcode_start, self.mem_start):
+            self.costs[i] = np.random.randint(1,20)
 
     def generate_datasets(self):
         assert len(self.x) == len(self.y)
@@ -106,6 +114,7 @@ class DataAggregate(Data):
         super(DataAggregate, self).__init__()
     
     def prepare_data(self):
+    
         self.x = []
         self.y = []
     
@@ -113,12 +122,12 @@ class DataAggregate(Data):
             if row[1] != None and len(row[0]) > 0:
                 code = []
                 labels = []
-                count = 1
+                count = 0
                 for token in row[0]:
                     code.append(self.final_embeddings[self.word2id.get(token,0)])
-                    labels.append(count)
                     if token >= self.opcode_start and token < self.mem_start:
-                        count += 1
+                        count += self.costs[token]
+                    labels.append(count)
                 self.x.append(code)
                 self.y.append(labels)
 
@@ -131,32 +140,33 @@ class DataInstructionEmbedding(Data):
         self.x = []
         self.y = []
 
-        count = 0
+        wrong = 0
     
         for row in self.raw_data:
             if row[1] != None and len(row[0]) > 0:
                 code = []
                 ins = []
+                count = 0
                 for token in row[0]:
                     if token >= self.opcode_start and token < self.mem_start:
                         if len(ins) != 0:
                             code.append(ins)
                             ins = []
+                        count += self.costs[token]
                     ins.append(self.final_embeddings[self.word2id.get(token,0)]) 
                 if len(ins) != 0:
                     code.append(ins)
                     ins = []
                 if len(code) != row[1]:
-                    count += 1
+                    wrong += 1 
                 #assert len(code) == row[1]
                 if len(code) == row[1]:
                     self.x.append(code)
-                    self.y.append(row[1])
+                    self.y.append(count)
         
-        print count
+        print wrong
         print len(self.x)
         
-        #exit()
 
 class ModelAbs(nn.Module):
     

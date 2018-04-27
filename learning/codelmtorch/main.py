@@ -25,6 +25,7 @@ if __name__ == "__main__":
 
     data = rnn.DataInstructionEmbedding()
     data.extract_data(cnx,args.format,args.embed_file)
+    data.generate_costdict()
     data.prepare_data()
     data.generate_datasets()
 
