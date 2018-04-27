@@ -41,7 +41,7 @@ class Data(object):
         if embedding_file == None:
             print 'running word2vec....'
             token_data = list()
-            for row in raw_data:
+            for row in self.raw_data:
                 token_data.extend(row[0])
             print len(token_data)
             
@@ -122,6 +122,41 @@ class DataAggregate(Data):
                 self.x.append(code)
                 self.y.append(labels)
 
+class DataInstructionEmbedding(Data):
+    
+    def __init__(self):
+        super(DataInstructionEmbedding, self).__init__()
+
+    def prepare_data(self):
+        self.x = []
+        self.y = []
+
+        count = 0
+    
+        for row in self.raw_data:
+            if row[1] != None and len(row[0]) > 0:
+                code = []
+                ins = []
+                for token in row[0]:
+                    if token >= self.opcode_start and token < self.mem_start:
+                        if len(ins) != 0:
+                            code.append(ins)
+                            ins = []
+                    ins.append(self.final_embeddings[self.word2id.get(token,0)]) 
+                if len(ins) != 0:
+                    code.append(ins)
+                    ins = []
+                if len(code) != row[1]:
+                    count += 1
+                #assert len(code) == row[1]
+                if len(code) == row[1]:
+                    self.x.append(code)
+                    self.y.append(row[1])
+        
+        print count
+        print len(self.x)
+        
+        #exit()
 
 class ModelAbs(nn.Module):
     
@@ -144,11 +179,28 @@ class ModelAbs(nn.Module):
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
         
-class ModelFinalHidden(ModelAbs):
+class ModelFinalHidden(nn.Module):
 
     def __init__(self, embedding_size):
-        super(ModelFinalHidden, self).__init__(embedding_size)
-            
+        super(ModelFinalHidden, self).__init__()
+        self.hidden_size = 256
+        self.embedding_size = embedding_size
+        
+        self.layers = 2
+        self.directions = 1
+        self.is_bidirectional = (self.directions == 2)
+        self.lstm = torch.nn.LSTM(input_size = self.embedding_size, 
+                                  hidden_size = self.hidden_size,
+                                  num_layers = self.layers,
+                                  bidirectional = self.is_bidirectional)
+        self.linear1 = nn.Linear(self.layers * self. directions * self.hidden_size, self.hidden_size)
+        self.linear2 = nn.Linear(self.hidden_size,1)
+        self.hidden = self.init_hidden()
+
+    def init_hidden(self):
+        return (autograd.Variable(torch.zeros(self.layers * self.directions, 1, self.hidden_size)),
+                autograd.Variable(torch.zeros(self.layers * self.directions, 1, self.hidden_size)))
+
     def forward(self, input):
 
         #print input
@@ -164,9 +216,10 @@ class ModelFinalHidden(ModelAbs):
 
         lstm_out, self.hidden = self.lstm(embeds_for_lstm, self.hidden)
         
-        return self.linear(self.hidden[0].squeeze())
-
-
+        f1 = nn.functional.relu(self.linear1(self.hidden[0].squeeze().view(-1)))
+        f2 = self.linear2(f1)
+        return f2
+    
 class ModelAggregate(ModelAbs):
 
     def __init__(self, embedding_size):
@@ -191,17 +244,42 @@ class ModelAggregate(ModelAbs):
         
         return values
 
+class ModelInstructionEmbedding(ModelAbs):
+    
+    def __init__(self, embedding_size):
+        super(ModelInstructionEmbedding, self).__init__(embedding_size)
+
+        self.hidden_ins = self.init_hidden()
+        self.lstm_ins = nn.LSTM(self.embedding_size, self.hidden_size)
+
+    def forward(self, inputs):
+        
+        ins_embeds = autograd.Variable(torch.zeros(len(inputs),self.embedding_size))
+        for i, ins in enumerate(inputs):
+            token_embeds = torch.FloatTensor(ins)
+            token_embeds_lstm = token_embeds.unsqueeze(1)
+            out_token, hidden_token = self.lstm_ins(token_embeds_lstm,self.hidden_ins)
+            ins_embeds[i] = hidden_token[0].squeeze()
+
+        ins_embeds_lstm = ins_embeds.unsqueeze(1)
+
+        out_ins, hidden_ins = self.lstm(ins_embeds_lstm, self.hidden)
+
+        return self.linear(hidden_ins[0].squeeze())
+        
+
 class Train(): 
 
 
     def __init__(self, 
                  model,
                  data,
-                 epochs = 3,
+                 epochs = 4,
                  batch_size = 1000):
         self.model = model
+        print self.model
         self.data = data
-        self.optimizer = optim.SGD(self.model.parameters(), lr = 0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), lr = 0.001)
 
         #training parameters
         self.epochs = epochs
@@ -267,11 +345,14 @@ class Train():
             output = self.model(x)
             output_list = output.data.numpy().tolist()
             
-            if len(y) == 1:
-                f.write('%f,%f ' % (output_list,y[0]))
+            if not isinstance(y, list):
+                f.write('%f,%d ' % (output.data[0],y))
             else:
-                for i,_ in enumerate(y):
-                    f.write('%f,%d ' % (output_list[i],y[i]))
+                if len(y) == 1:
+                    f.write('%f,%d ' % (output_list,y[0]))
+                else:
+                    for i,_ in enumerate(y):
+                        f.write('%f,%d ' % (output_list[i],y[i]))
             f.write('\n')
 
             targets = torch.FloatTensor([y]).squeeze()

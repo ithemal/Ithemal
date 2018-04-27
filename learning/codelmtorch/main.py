@@ -23,14 +23,14 @@ if __name__ == "__main__":
     #create database connection
     cnx = ut.create_connection('costmodel')
 
-    data = rnn.DataAggregate()
+    data = rnn.DataInstructionEmbedding()
     data.extract_data(cnx,args.format,args.embed_file)
     data.prepare_data()
     data.generate_datasets()
 
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
-    model = rnn.ModelAggregate(embedding_size)
+    model = rnn.ModelInstructionEmbedding(embedding_size)
     train = rnn.Train(model,data)
 
     train.train()
