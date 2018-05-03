@@ -1,0 +1,53 @@
+commandline arguments - 
+
+argv1
+mode - 
+snoop 1 - have a snooping process collect data
+sqlite 2 - use sqlite calls to populate data
+raw_sql 3 - dump raw sql files; uses memory mapping heavily
+
+argv2
+code format - whether outputting disassembly tokenized or textual
+text 1
+token 2
+
+argv3
+compiler name
+
+argv4
+compiler flags
+
+code embeddings
+--------------
+textual - intel asm syntax
+token - 
+opcode,srcs,dsts
+regs,int,float,opcode,memory
+
+only interested in the raw sql dump
+
+mmap_file_t -> memory mapped file data (generic data structure)
+
+There are 3 memory mapped files per thread
+
+per thread information keeping - we use a memory mapped file (but I think we can use thread local memory?)
+
+It consists of:
+query - MAX_QUERY_SIZE * char
+code - code_info_t - static information about the code including the actual tokens, num_instrs, span etc.
+bookkeep data - bookkeeping like prevtime and nowtime to take the timing difference (uint32_t * BK_SLOTS)
+bb_data - meta data + timing for NUM_BBS
+
+These files contain the raw SQL commands
+per thread static info queries - bk->static_file 
+per thread dynamic info queries - bk->dynamic_file
+
+Instrumentation - see google doc
+Timing insertion logic - insert times if they are within a certain percentage of an existing timing number, or insert a new timing value (many timing slots per bb)
+
+to do
+-----
+add counts as well for timing numbers - can take the mode then?? mode of modes
+currently only NUM_BBS max amount of basic blocks are allowed, may be get rid of old basic blocks if there are no space to put?? - get rid of code that may be cold,
+or not run at all
+substract the overhead from timing numbers? May be the mode of overhead

@@ -1,6 +1,6 @@
-DROP DATABASE IF EXISTS costmodel;
-CREATE DATABASE IF NOT EXISTS costmodel;
-USE costmodel;
+-- DROP DATABASE IF EXISTS @db_name;
+-- CREATE DATABASE IF NOT EXISTS @db_name;
+-- USE @db_name;
 
 DROP TABLE IF EXISTS config;
 CREATE TABLE config (
@@ -19,6 +19,8 @@ CREATE TABLE code (
   config_id int(11) NOT NULL,
   rel_addr int(32) NOT NULL,
   code TEXT,
+  num_instr int(11),
+  span int(11),
   PRIMARY KEY (code_id),
   UNIQUE KEY (program,config_id,rel_addr),
   CONSTRAINT code_ibfk_1 FOREIGN KEY (config_id) REFERENCES config(config_id)
@@ -31,7 +33,8 @@ CREATE TABLE times (
   time_id int(11) NOT NULL AUTO_INCREMENT,
   code_id int(11) NOT NULL,
   arch int(11) NOT NULL,
-  time int(32) NOT NULL,
+  time int(16) NOT NULL,
+  count int(16) NOT NULL,
   PRIMARY KEY (time_id),
   CONSTRAINT times_ibfk_1 FOREIGN KEY (code_id) REFERENCES code(code_id)
 );

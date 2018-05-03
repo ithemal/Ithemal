@@ -26,13 +26,18 @@ int insert_code(char * query, const char * program, uint32_t rel_addr, const cha
   else{
     pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code) VALUES (@config_id,'%s',%d,'",program, rel_addr);
   }
+
+  if(pos < 0) return -1;
   
   int i = 0;
   for(i = 0; i < size; i++){
-    query[pos + i] = code[i];
+    query[pos] = code[i];
+    pos++;
+    if(pos > MAX_QUERY_SIZE - 4){ //need space for "');\n"
+      return -1;
+    }
   } 
 
-  pos += size;
   pos += sprintf(query + pos, "')");
   return pos;
 

@@ -284,7 +284,7 @@ class Train():
     def __init__(self, 
                  model,
                  data,
-                 epochs = 4,
+                 epochs = 10,
                  batch_size = 1000):
         self.model = model
         print self.model

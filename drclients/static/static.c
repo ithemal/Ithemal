@@ -15,6 +15,7 @@
 typedef struct {
   char compiler[MAX_STRING_SIZE];
   char flags[MAX_STRING_SIZE];
+  char data_folder[MAX_STRING_SIZE];
   uint32_t mode;
   uint32_t code_format;
   code_embedding_t embedding_func;
@@ -85,7 +86,7 @@ thread_init(void * drcontext){
   if(client_args.mode == RAW_SQL){
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
     bk->static_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
-    create_raw_file(drcontext,DATA_FOLDER,"test/static",bk->static_file);
+    create_raw_file(drcontext,DATA_FOLDER,client_args.data_folder,"static",bk->static_file);
   }
 
   //insert the config string (query)
@@ -148,6 +149,11 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   BEGIN_CONTROL(cinfo->control,IDLE,DR_CONTROL);
 
   populate_bb_info(drcontext,cinfo,bb,client_args.embedding_func);
+
+  if(cinfo->code_size == -1){
+    return DR_EMIT_DEFAULT;
+  }
+
   cinfo->num_instr = num_instructions(bb);
   cinfo->span = span_bb(bb);
   //instrlist_disassemble(drcontext,tag,bb,STDOUT);
@@ -156,6 +162,11 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   if(client_args.mode != SNOOP){
     //int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
     int sz = update_code(query,cinfo->module,cinfo->rel_addr,client_args.mode,cinfo->num_instr,cinfo->span);
+
+    if(sz == -1){
+      return DR_EMIT_DEFAULT;
+    }
+
     //dr_printf("%s\n",query);
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
     if(client_args.mode == SQLITE){
@@ -222,11 +233,12 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     disassemble_set_syntax(DR_DISASM_INTEL);
 
     /* client arguments */
-    DR_ASSERT(argc == 5);
+    DR_ASSERT(argc == 6);
     client_args.mode = atoi(argv[1]);
     client_args.code_format = atoi(argv[2]);
     strncpy(client_args.compiler,argv[3], MAX_STRING_SIZE);
     strncpy(client_args.flags,argv[4], MAX_STRING_SIZE);
+    strncpy(client_args.data_folder,argv[5], MAX_STRING_SIZE);
 
 
     if(client_args.code_format == TEXT){

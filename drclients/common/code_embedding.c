@@ -110,6 +110,7 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
   instr_t * instr;
   int pos = 0;
   int i = 0;
+  int ret = 0;
   
   char * cpos = cinfo->code;
 
@@ -117,16 +118,22 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
 
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
 
-    pos += dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,", OPCODE_START + instr_get_opcode(instr));   
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,", OPCODE_START + instr_get_opcode(instr));
+    if(ret != -1) pos += ret;
+    else { cinfo->code_size = -1; return; }
 
     opnd_t op;
     for(i = 0; i < instr_num_srcs(instr); i++){
       op = instr_get_src(instr,i);
-      pos += tokenize_text_operand(drcontext, cpos, pos, op, &mem);
+      ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
+      if(ret != -1) pos += ret;
+      else { cinfo->code_size = -1; return; }
     }
     for(i = 0; i < instr_num_dsts(instr); i++){
       op = instr_get_dst(instr,i);
-      pos += tokenize_text_operand(drcontext, cpos, pos, op, &mem);
+      ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
+      if(ret != -1) pos += ret;
+      else { cinfo->code_size = -1; return; }
     }
     
   }
