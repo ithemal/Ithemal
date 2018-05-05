@@ -17,6 +17,20 @@ int insert_config(char * query, const char * compiler, const char * flags, uint3
   return pos;
 }
 
+int get_config(char * query, const char * compiler, const char * flags, uint32_t mode){
+
+  int pos = 0;
+  if(mode == SQLITE){
+    pos += sprintf(query + pos,"CREATE TEMP TABLE _config (config_id INTEGER);");
+    pos += sprintf(query + pos,"INSERT INTO _config (config_id) VALUES ((SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s'))", compiler, flags);
+  }
+  else{
+    pos += sprintf(query + pos,"SET @config_id = (SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s')",compiler,flags);
+  }
+  return pos;
+
+}
+
 int insert_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode,  uint32_t size){
 
   uint32_t pos;
@@ -44,12 +58,12 @@ int insert_code(char * query, const char * program, uint32_t rel_addr, const cha
 
 }
 
-int insert_times(char * query, const char * program, uint32_t rel_addr, uint32_t arch, uint32_t time, uint32_t mode){
+int insert_times(char * query, const char * program, uint32_t rel_addr, uint32_t arch, uint32_t time, uint32_t count, uint32_t mode){
   if(mode == SQLITE){
-    return sprintf(query, "INSERT INTO times (code_id, arch, time) VALUES ((SELECT code_id FROM code WHERE config_id = (SELECT config_id from _config) AND program = '%s' AND rel_addr = %d), '%d', %d)",program,rel_addr,arch, time);
+    return sprintf(query, "INSERT INTO times (code_id, arch, time, count) VALUES ((SELECT code_id FROM code WHERE config_id = (SELECT config_id from _config) AND program = '%s' AND rel_addr = %d), '%d', %d, %d)",program,rel_addr,arch, time, count);
   }
   else{
-    return sprintf(query, "INSERT INTO times (code_id, arch, time) VALUES ((SELECT code_id FROM code WHERE config_id = @config_id AND program = '%s' AND rel_addr = %d), '%d', %d)",program,rel_addr,arch, time);
+    return sprintf(query, "INSERT INTO times (code_id, arch, time, count) VALUES ((SELECT code_id FROM code WHERE config_id = @config_id AND program = '%s' AND rel_addr = %d), '%d', %d, %d)",program,rel_addr,arch, time, count);
   }
 }
 

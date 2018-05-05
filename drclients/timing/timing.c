@@ -108,6 +108,19 @@ thread_init(void * drcontext){
       sz = complete_query(query,sz);
       write_to_file(bk->static_file,query,sz);
     }
+
+
+    sz = get_config(query, client_args.compiler, client_args.flags, client_args.mode);
+    DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
+    //dr_printf("%s\n",query);
+    if(client_args.mode == SQLITE){
+      query_db(query);
+    }
+    else if(client_args.mode == RAW_SQL){
+      sz = complete_query(query,sz);
+      write_to_file(bk->dynamic_file,query,sz);
+    }
+
   }
 
   //dr_printf("thread %d initialized..\n",dr_get_thread_id(drcontext));
@@ -210,6 +223,7 @@ void post_cleancall(uint32_t num_bbs){
   uint32_t slots_filled = timing[num_bbs].meta.slots_filled; 
 
   uint32_t i = 0;
+  
   if (slots_filled >= TIMING_SLOTS){ //dump to data base
 
     if(num_bbs == 0) return; //first bb is not dumped; it's for calculating the overhead
@@ -230,7 +244,9 @@ void post_cleancall(uint32_t num_bbs){
 			  module_name,
 			  bb_timing->meta.rel_addr,
 			  bk->arch,
-			  bb_timing->times[i].average, client_args.mode);
+			  bb_timing->times[i].average, 
+			  bb_timing->times[i].count,
+			  client_args.mode);
 	DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
 	//dr_printf("%s\n",query);
 	if(client_args.mode == SQLITE){
@@ -250,6 +266,22 @@ void post_cleancall(uint32_t num_bbs){
   }
 
   insert_timing(&timing[num_bbs],now - before);
+
+  int maxcount = 0;
+  int overhead = 0;
+
+  if(num_bbs == 0){
+    slots_filled = timing[num_bbs].meta.slots_filled; 
+    
+    for(i = 0; i < slots_filled; i++){
+      if(timing[num_bbs].times[i].count > maxcount){
+	maxcount = timing[num_bbs].times[i].count;
+	overhead = timing[num_bbs].times[i].average;
+      }
+    }
+    //dr_printf("overhead - %d\n",overhead);
+    bk->overhead = overhead;
+  }
  
 }
 
@@ -360,7 +392,8 @@ thread_exit(void * drcontext){
 		     module_name,
 		     bb_time->meta.rel_addr,
 		     bk->arch,
-		     bb_time->times[j].average, 
+		     bb_time->times[j].average,
+		     bb_time->times[j].count,  
 		     client_args.mode);
 	DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
 	//dr_printf("%s\n",query);

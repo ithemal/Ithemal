@@ -20,7 +20,12 @@ void insert_timing(bb_data_t * bb, uint32_t time){
     if(per_diff < PERCENTAGE_THRESHOLD){
       //dr_printf("%d\n",per_diff);
       bb->times[i].count++;
-      bb->times[i].average = (av * count + time)/(count + 1);
+      uint64_t cum_time = (uint64_t)av * (uint64_t)count + (uint64_t)time;
+      uint64_t average_time = cum_time / ((uint64_t)count + 1);
+      bb->times[i].average = average_time;
+      if(bb->times[i].average == 0){
+	dr_printf("time, av, count, cum_time - %d, %d, %d, %llu\n",time, av, bb->times[i].count, cum_time);
+      }
       found = 1;
       break;
     }

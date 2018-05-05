@@ -154,14 +154,14 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
     return DR_EMIT_DEFAULT;
   }
 
-  cinfo->num_instr = num_instructions(bb);
-  cinfo->span = span_bb(bb);
+  //cinfo->num_instr = num_instructions(bb);
+  //cinfo->span = span_bb(bb);
   //instrlist_disassemble(drcontext,tag,bb,STDOUT);
   //dr_printf("%d,%d,%d\n",bk->num_bbs,cinfo->num_instr,cinfo->span);
 
   if(client_args.mode != SNOOP){
-    //int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
-    int sz = update_code(query,cinfo->module,cinfo->rel_addr,client_args.mode,cinfo->num_instr,cinfo->span);
+    int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
+    //int sz = update_code(query,cinfo->module,cinfo->rel_addr,client_args.mode,cinfo->num_instr,cinfo->span);
 
     if(sz == -1){
       return DR_EMIT_DEFAULT;
