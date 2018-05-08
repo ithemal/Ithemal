@@ -24,7 +24,7 @@ void insert_timing(bb_data_t * bb, uint32_t time){
       uint64_t average_time = cum_time / ((uint64_t)count + 1);
       bb->times[i].average = average_time;
       if(bb->times[i].average == 0){
-	dr_printf("time, av, count, cum_time - %d, %d, %d, %llu\n",time, av, bb->times[i].count, cum_time);
+	dr_fprintf(STDERR,"time, av, count, cum_time - %d, %d, %d, %llu\n",time, av, bb->times[i].count, cum_time);
       }
       found = 1;
       break;

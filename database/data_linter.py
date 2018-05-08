@@ -5,7 +5,7 @@ import re
 if __name__ == '__main__':
 
 
-    mypath = '/data/scratch/charithm/projects/cmodel/data/timing'
+    mypath = '/data/scratch/charithm/projects/cmodel/data/test_static'
 
     files = [join(mypath,f) for f in listdir(mypath) if (isfile(join(mypath, f)) and 'static' in f)]
 

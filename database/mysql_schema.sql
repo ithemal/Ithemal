@@ -14,11 +14,12 @@ CREATE TABLE config (
 
 DROP TABLE IF EXISTS code;
 CREATE TABLE code (
-  code_id int(11) NOT NULL AUTO_INCREMENT,
+  code_id int(32) NOT NULL AUTO_INCREMENT,
   program varchar(255) NOT NULL,
   config_id int(11) NOT NULL,
   rel_addr int(32) NOT NULL,
   code TEXT,
+  time int(32),
   num_instr int(11),
   span int(11),
   PRIMARY KEY (code_id),
@@ -30,11 +31,11 @@ CREATE TABLE code (
 
 DROP TABLE IF EXISTS times;
 CREATE TABLE times (
-  time_id int(11) NOT NULL AUTO_INCREMENT,
-  code_id int(11) NOT NULL,
+  time_id int(32) NOT NULL AUTO_INCREMENT,
+  code_id int(32) NOT NULL,
   arch int(11) NOT NULL,
-  time int(16) NOT NULL,
-  count int(16) NOT NULL,
+  time int(32) NOT NULL,
+  count int(32),
   PRIMARY KEY (time_id),
   CONSTRAINT times_ibfk_1 FOREIGN KEY (code_id) REFERENCES code(code_id)
 );

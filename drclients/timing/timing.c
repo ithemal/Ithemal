@@ -85,6 +85,10 @@ thread_init(void * drcontext){
     data->data = NULL;
   }
 
+  //for all modes
+  bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
+  bk->overhead = 0;
+
   //if mode is raw sql dumping 
   if(client_args.mode == RAW_SQL){
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
@@ -127,10 +131,19 @@ thread_init(void * drcontext){
 
 }
 
+#define INS_THRESHOLD 2
+
 //bb analysis routines
-void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile bb_data_t * timing, instrlist_t * bb, code_embedding_t code_embedding){
+uint32_t populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile bb_data_t * timing, instrlist_t * bb, code_embedding_t code_embedding){
 
   instr_t * first = instrlist_first(bb);
+  instr_t * last  = instrlist_last(bb);
+  instr_t * instr;
+  int count = 0;
+  for(instr = first; instr != last; instr = instr_get_next(instr)){
+    count++;
+  }
+  if (count < INS_THRESHOLD) return -1;
   app_pc first_pc = instr_get_app_pc(first);
   module_data_t * md = dr_lookup_module(first_pc);
   uint32_t rel_addr = first_pc - md->start;
@@ -144,7 +157,7 @@ void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile b
   timing->meta.slots_filled = 0;
   timing->meta.rel_addr = rel_addr;
   timing->meta.module_start = md->start;
-
+  return 0;
 }
 
 //bb instrumentation routines
@@ -174,8 +187,10 @@ void timing_instrumentation(void * drcontext, instrlist_t * bb, instr_t * first,
  */
   save_registers(drcontext,bb,first);
   instrlist_meta_preinsert(bb,first,INSTR_CREATE_cpuid(drcontext));
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_rdtsc(drcontext));
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->prevtime,OPSZ_4), opnd_create_reg(DR_REG_EAX)));
+  instrlist_meta_preinsert(bb,first,INSTR_CREATE_rdtscp(drcontext));
+  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->prevtime_lo,OPSZ_4), opnd_create_reg(DR_REG_EAX)));
+  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->prevtime_hi,OPSZ_4), opnd_create_reg(DR_REG_EDX)));
+  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->proc_before,OPSZ_4), opnd_create_reg(DR_REG_ECX)));
   restore_registers(drcontext,bb,first);
 
  /*
@@ -188,9 +203,11 @@ void timing_instrumentation(void * drcontext, instrlist_t * bb, instr_t * first,
     restore registers
  */
   save_registers(drcontext,bb,last);
+  instrlist_meta_preinsert(bb,last,INSTR_CREATE_rdtscp(drcontext));
+  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->nowtime_lo,OPSZ_4), opnd_create_reg(DR_REG_EAX)));
+  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->nowtime_hi,OPSZ_4), opnd_create_reg(DR_REG_EDX)));
+  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->proc_after,OPSZ_4), opnd_create_reg(DR_REG_ECX)));
   instrlist_meta_preinsert(bb,last,INSTR_CREATE_cpuid(drcontext));
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_rdtsc(drcontext));
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&bk->nowtime,OPSZ_4), opnd_create_reg(DR_REG_EAX)));
   dr_insert_clean_call(drcontext,bb,last,post_cleancall,false,1,opnd_create_immed_uint(bb_num,OPSZ_4));
   restore_registers(drcontext,bb,last);
  
@@ -216,9 +233,22 @@ void post_cleancall(uint32_t num_bbs){
 
   volatile query_t * query = (query_t *)(file->data + START_QUERY);
   volatile bookkeep_t * bk = (bookkeep_t *)(file->data + START_BK_DATA);
-  uint32_t before = bk->prevtime;
-  uint32_t now = bk->nowtime;
- 
+
+  if(bk->proc_before != bk->proc_after){
+    return;
+  }
+
+  uint64_t b_hi = bk->prevtime_hi;
+  uint64_t b_lo = bk->prevtime_lo;
+  uint64_t n_hi = bk->nowtime_hi;
+  uint64_t n_lo = bk->nowtime_lo;
+
+  uint64_t before = (b_hi << 32) + b_lo;
+  uint64_t now = (n_hi << 32) + n_lo;
+  
+  DR_ASSERT(now > before);
+  DR_ASSERT((now - before) < UINT32_MAX);
+
   bb_data_t * timing = (bb_data_t *)(file->data + START_BB_DATA);
   uint32_t slots_filled = timing[num_bbs].meta.slots_filled; 
 
@@ -240,6 +270,10 @@ void post_cleancall(uint32_t num_bbs){
       //dr_printf("module-%s\n",module_name);
       int sz = 0;
       for(i = 0; i < slots_filled; i++){
+	//if(bb_timing->times[i].average <= bk->overhead){
+	//  dr_fprintf(STDERR,"%s,%llu,%llu,%llu\n",module_name,bb_timing->meta.rel_addr,bb_timing->times[i].average,bk->overhead);
+	//}
+	//DR_ASSERT(bb_timing->times[i].average > bk->overhead);
 	sz = insert_times(query,
 			  module_name,
 			  bb_timing->meta.rel_addr,
@@ -313,6 +347,7 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
 
   //first basic block is used to measure the overhead
   if(bk->num_bbs == 0){
+    populate_bb_info(drcontext,cinfo,&tinfo[bk->num_bbs],bb,client_args.embedding_func);
     measure_overhead(drcontext, bb, bk);
     bk->num_bbs++;
     return DR_EMIT_DEFAULT;
@@ -329,7 +364,9 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   //bb analysis 
   BEGIN_CONTROL(cinfo->control,IDLE,DR_CONTROL);
 
-  populate_bb_info(drcontext,cinfo,&tinfo[bk->num_bbs],bb,client_args.embedding_func);
+  if(populate_bb_info(drcontext,cinfo,&tinfo[bk->num_bbs],bb,client_args.embedding_func)){
+    return DR_EMIT_DEFAULT;
+  }
 
   if(cinfo->code_size == -1){ //we couldn't record the entire basic block
     return DR_EMIT_DEFAULT;
@@ -388,6 +425,10 @@ thread_exit(void * drcontext){
       const char * module_name = dr_module_preferred_name(md);
       int sz = 0;
       for(j = 0; j < slots_filled; j++){
+	//if(bb_time->times[j].average <= bk->overhead){
+	//  dr_fprintf(STDERR,"%s,%llu,%llu,%llu\n",module_name,bb_time->meta.rel_addr,bb_time->times[j].average,bk->overhead);
+	//}
+	//DR_ASSERT(bb_time->times[j].average > bk->overhead);
 	sz = insert_times(query,
 		     module_name,
 		     bb_time->meta.rel_addr,

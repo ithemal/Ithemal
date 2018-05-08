@@ -66,6 +66,19 @@ def get_name(val,sym_dict,mem_offset):
     else:
         return sym_dict[val]
 
+def execute_query(cnx, sql, fetch):
+    cur = cnx.cursor(buffered=True)
+    cur.execute(sql)
+    # if result.with_rows:
+    #     print("Rows produced by statement '{}':".format(
+    #         result.statement))
+    # else:
+    #     print("Number of rows affected by statement '{}': {}".format(
+    #         result.statement, result.rowcount))
+    if fetch:
+        return cur.fetchall()
+    else:
+        return None
  
 #data reading function
 def get_data(cnx, format, cols):
@@ -111,4 +124,32 @@ def get_data(cnx, format, cols):
         return data
 
 
+if __name__ == "__main__":
+    
+    cnx = create_connection('costmodel0404')
+    cur = cnx.cursor(buffered = True)
+    
+    sql = 'SELECT code_id, code from  code where program = \'2mm\' and rel_addr = 4136'
 
+    cur.execute(sql)
+
+    rows = cur.fetchall()
+
+    sym_dict, mem_start = get_sym_dict('/data/scratch/charithm/projects/cmodel/database/offsets.txt')
+
+    for row in rows:
+        print row[0]
+        code = []
+        for val in row[1].split(','):
+            if val != '':
+                code.append(get_name(int(val),sym_dict,mem_start))
+        print code
+
+
+    sql = 'SELECT time from times where code_id = ' + str(rows[0][0])
+    cur.execute(sql)
+    rows = cur.fetchall()
+
+    times = [int(t[0]) for t in rows]
+    print sorted(times)
+        

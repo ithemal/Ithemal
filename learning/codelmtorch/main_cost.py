@@ -10,7 +10,7 @@ import torch
 
 matplotlib.use('Agg')
 
-import rnn_numins as rnn
+import rnn_cost as rnn
 
 
 if __name__ == "__main__":
@@ -22,26 +22,12 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
 
     #create database connection
-    cnx = ut.create_connection('costmodel')
+    cnx = ut.create_connection('costmodel0506')
 
     data = rnn.DataInstructionEmbedding()
     data.extract_data(cnx,args.format,args.embed_file)
-    data.generate_costdict(20)
-    data.prepare_data()
-
-
-    print len(data.x)
-    
-    #we can filter certain data out here
-    if isinstance(data, DataInstructionEmbedding):
-        print 'filtering....'
-        for i, x in enumerate(data.x):
-            if len(x) < 5:
-                del data.x[i]
-                del data.y[i]
-                del data.cost[i]
-    
-    print len(data.x)
+    #data.update_times(cnx)
+    data.prepare_data(cnx)
 
     data.generate_datasets()
 
@@ -52,17 +38,6 @@ if __name__ == "__main__":
 
     train.train()
     train.validate()
-
-
-    # #ok now we need to check intermediate values
-    # data.test_x = data.x
-    # data.test_y = data.cost
-
-    # testmodel = rnn.ModelInstructionAggregate(embedding_size)
-    # testmodel.copy(model)
-
-    # testtrain = rnn.Train(testmodel,data)
-    # testtrain.validate()
     
     cnx.close()
     

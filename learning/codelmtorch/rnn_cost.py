@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.autograd as autograd
 import torch.optim as optim
 import torch
+from tqdm import tqdm
 
 
 class Data(object):
@@ -27,7 +28,7 @@ class Data(object):
     
     def extract_data(self,cnx,format,embedding_file):
 
-        self.raw_data = ut.get_data(cnx,format,['num_instr'])
+        self.raw_data = ut.get_data(cnx,format,['code_id','time'])
         offsets_filename = '/data/scratch/charithm/projects/cmodel/database/offsets.txt'
         self.sym_dict,_ = ut.get_sym_dict(offsets_filename)
         self.offsets = ut.read_offsets(offsets_filename)
@@ -58,21 +59,16 @@ class Data(object):
             with open(embedding_file,'r') as f:
                 (self.final_embeddings,self.word2id,_) = torch.load(f)
 
-        for i in range(self.opcode_start, self.mem_start):
-            self.costs[i] = 1
-
+ 
     def prepare_data(self):
         Pass
-
-    def generate_costdict(self, maxnum):
-        for i in range(self.opcode_start, self.mem_start):
-            self.costs[i] = np.random.randint(1,maxnum)
 
     def generate_datasets(self):
         assert len(self.x) == len(self.y)
         size = len(self.y)
         print len(self.x)
         split = (size * self.percentage) // 100
+        print split
         self.train_x  = self.x[:split]
         self.train_y = self.y[:split]
         self.test_x = self.x[(split + 1):]
@@ -90,88 +86,99 @@ class Data(object):
         return batch_x, batch_y
 
 
-class DataFinalHidden(Data):
-
-    def __init__(self):
-        super(DataFinalHidden, self).__init__()
-    
-    def prepare_data(self):
-        self.x = []
-        self.y = []
-    
-        for row in self.raw_data:
-            if row[1] != None and len(row[0]) > 0:
-                code = []
-                for token in row[0]:
-                    code.append(self.final_embeddings[self.word2id.get(token,0)])
-                self.x.append(code)
-                self.y.append(row[1])
-
-class DataAggregate(Data):
-
-
-    def __init__(self):
-        super(DataAggregate, self).__init__()
-    
-    def prepare_data(self):
-    
-        self.x = []
-        self.y = []
-    
-        for row in self.raw_data:
-            if row[1] != None and len(row[0]) > 0:
-                code = []
-                labels = []
-                count = 0
-                for token in row[0]:
-                    code.append(self.final_embeddings[self.word2id.get(token,0)])
-                    if token >= self.opcode_start and token < self.mem_start:
-                        count += self.costs[token]
-                    labels.append(count)
-                self.x.append(code)
-                self.y.append(labels)
-    
-
 class DataInstructionEmbedding(Data):
     
     def __init__(self):
         super(DataInstructionEmbedding, self).__init__()
+        self.time_percentage = 10
+        self.threshold = 80
 
-    def prepare_data(self):
+    def get_time_mode(self, times):
+        self.times = []
+        for row in times:
+            if row[0] < 1 or row[0] > 100000: #something is wrong for this code so just omit??
+                break
+            inserted = False
+            try:
+                for i,time in enumerate(self.times):
+                    if (abs(row[0] - time[0]) * 100) / time[0] < self.time_percentage:
+                        new_time = (time[0] * time[1] + row[0] * row[1]) / (time[1] + row[1])
+                        new_count = time[1] + row[1]
+                        self.times[i] = [new_time, new_count]
+                        inserted = True
+                        break
+                if not inserted:
+                    self.times.append([row[0],row[1]])
+            except:
+                print self.times
+
+        maxcount = 0
+        maxtime = 0
+        total = 0
+        for time in self.times:
+            total += time[1]
+            if time[1] >= maxcount:
+                maxcount = time[1]
+                maxtime = time[0]
+
+        if total > 0 and maxcount * 100 / total >= self.threshold:
+            return maxtime
+        else:
+            return None
+
+    def update_times(self, cnx):
+
+        count = 0
+        for row in tqdm(self.raw_data):
+            sql = 'UPDATE code SET time=NULL WHERE code_id=' + str(row[1])
+            ut.execute_query(cnx, sql, False)
+        cnx.commit()
+
+        for row in tqdm(self.raw_data):
+            sql = 'SELECT time, count FROM times WHERE code_id = ' + str(row[1])
+            times = ut.execute_query(cnx, sql, True)                
+            mode = self.get_time_mode(times)
+            if mode != None:
+                count += 1
+                sql = 'UPDATE code SET time=' + str(mode) + ' WHERE code_id=' + str(row[1])
+                ut.execute_query(cnx, sql, False)
+                sql = 'SELECT time from code WHERE code_id=' + str(row[1])
+                res = ut.execute_query(cnx, sql, True)
+                assert res[0][0] == mode
+
+        print len(self.raw_data)
+        print count
+
+        cnx.commit()
+                
+                
+        
+        
+    def prepare_data(self, cnx):
         self.x = []
         self.y = []
-        self.cost = []
 
-        wrong = 0
-    
-        for row in self.raw_data:
-            if row[1] != None and len(row[0]) > 0:
+        for row in tqdm(self.raw_data):
+            if len(row[0]) > 0 and row[2] != None:
+            
                 code = []
                 ins = []
-                cost = []
-                count = 0
                 for token in row[0]:
                     if token >= self.opcode_start and token < self.mem_start:
                         if len(ins) != 0:
                             code.append(ins)
                             ins = []
-                        count += self.costs[token]
-                        cost.append(count)
                     ins.append(self.final_embeddings[self.word2id.get(token,0)]) 
                 if len(ins) != 0:
                     code.append(ins)
                     ins = []
-                if len(code) != row[1]:
-                    wrong += 1 
-                #assert len(code) == row[1]
-                if len(code) == row[1]:
-                    self.x.append(code)
-                    self.y.append(count)
-                    self.cost.append(cost)
+                mode = row[2]
+      
+                self.x.append(code)
+                self.y.append(mode)
         
-        print wrong
+        print len(self.raw_data)
         print len(self.x)
-        
 
 class ModelAbs(nn.Module):
     
@@ -194,100 +201,6 @@ class ModelAbs(nn.Module):
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
         
-class ModelFinalHidden(nn.Module):
-
-    def __init__(self, embedding_size):
-        super(ModelFinalHidden, self).__init__()
-        self.hidden_size = 256
-        self.embedding_size = embedding_size
-        
-        self.layers = 2
-        self.directions = 1
-        self.is_bidirectional = (self.directions == 2)
-        self.lstm = torch.nn.LSTM(input_size = self.embedding_size, 
-                                  hidden_size = self.hidden_size,
-                                  num_layers = self.layers,
-                                  bidirectional = self.is_bidirectional)
-        self.linear1 = nn.Linear(self.layers * self. directions * self.hidden_size, self.hidden_size)
-        self.linear2 = nn.Linear(self.hidden_size,1)
-        self.hidden = self.init_hidden()
-
-    def init_hidden(self):
-        return (autograd.Variable(torch.zeros(self.layers * self.directions, 1, self.hidden_size)),
-                autograd.Variable(torch.zeros(self.layers * self.directions, 1, self.hidden_size)))
-
-    def forward(self, input):
-
-        #print input
-        #convert to tensor
-        embeds = torch.FloatTensor(input)
-        #print embeds.shape
-        
-        #prepare for lstm - seq len, batch size, embedding size
-        seq_len = embeds.shape[0]
-        #embeds_for_lstm = embeds.view(seq_len, 1, -1)
-        embeds_for_lstm = embeds.unsqueeze(1)
-        #print embeds_for_lstm.shape
-
-        lstm_out, self.hidden = self.lstm(embeds_for_lstm, self.hidden)
-        
-        f1 = nn.functional.relu(self.linear1(self.hidden[0].squeeze().view(-1)))
-        f2 = self.linear2(f1)
-        return f2
-    
-class ModelAggregate(ModelAbs):
-
-    def __init__(self, embedding_size):
-        super(ModelAggregate, self).__init__(embedding_size)
-   
-    def forward(self, input):
-
-        #print input
-        #convert to tensor
-        embeds = torch.FloatTensor(input)
-        #print embeds.shape
-        
-        #prepare for lstm - seq len, batch size, embedding size
-        seq_len = embeds.shape[0]
-        #embeds_for_lstm = embeds.view(seq_len, 1, -1)
-        embeds_for_lstm = embeds.unsqueeze(1)
-        #print embeds_for_lstm.shape
-
-        lstm_out, self.hidden = self.lstm(embeds_for_lstm, self.hidden)
-    
-        values = self.linear(lstm_out[:,0,:].squeeze()).squeeze()
-        
-        return values
-
-class ModelInstructionAggregate(ModelAbs):
-    
-    def __init__(self, embedding_size):
-        super(ModelInstructionAggregate, self).__init__(embedding_size)
-
-        self.hidden_ins = self.init_hidden()
-        self.lstm_ins = nn.LSTM(self.embedding_size, self.hidden_size)
-
-    def copy(self, model):
-
-        self.lstm = model.lstm
-        self.linear = model.linear
-        self.lstm_ins = model.lstm_ins
-
-    def forward(self, inputs):
-        
-        ins_embeds = autograd.Variable(torch.zeros(len(inputs),self.embedding_size))
-        for i, ins in enumerate(inputs):
-            token_embeds = torch.FloatTensor(ins)
-            token_embeds_lstm = token_embeds.unsqueeze(1)
-            out_token, hidden_token = self.lstm_ins(token_embeds_lstm,self.hidden_ins)
-            ins_embeds[i] = hidden_token[0].squeeze()
-
-        ins_embeds_lstm = ins_embeds.unsqueeze(1)
-
-        out_ins, hidden_ins = self.lstm(ins_embeds_lstm, self.hidden)
-
-        return self.linear(out_ins[:,0,:].squeeze()).squeeze()
-
 
 class ModelInstructionEmbedding(ModelAbs):
     
@@ -333,6 +246,7 @@ class Train():
 
     def train(self):
 
+        print len(self.data.train_x), len(self.data.test_x)
         epoch_len = (len(self.data.train_x) // self.batch_size) / 10
         print epoch_len
 
@@ -355,7 +269,7 @@ class Train():
                     self.model.hidden = self.model.init_hidden()
 
                     #initialize the hidden state for instructions
-                    if isinstance(self.model, ModelInstructionEmbedding) or isinstance(self.model, ModelInstructionAggregate):
+                    if isinstance(self.model, ModelInstructionEmbedding): 
                         self.model.hidden_ins = self.model.init_hidden()
 
                     #run the model
@@ -392,7 +306,7 @@ class Train():
             
             self.model.hidden = self.model.init_hidden()
             
-            if isinstance(self.model, ModelInstructionEmbedding) or isinstance(self.model, ModelInstructionAggregate):
+            if isinstance(self.model, ModelInstructionEmbedding):
                 self.model.hidden_ins = self.model.init_hidden()
 
             output = self.model(x)
