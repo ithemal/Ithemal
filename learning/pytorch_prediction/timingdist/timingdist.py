@@ -47,6 +47,7 @@ class CodeTimes:
                 print self.times
 
     def print_times(self):
+        print self.times
         count = 0
         for time in self.times:
             count += time[1]
@@ -74,13 +75,15 @@ class CodeTimes:
 
 if __name__ == '__main__':
 
-    cnx = ut.create_connection('costmodel0506')
+    cnx = ut.create_connection('timingmodel')
     
     cur = cnx.cursor(buffered=True)
     sql = 'SELECT code_id, code, program, rel_addr from code'
     cur.execute(sql)
 
-    sym_dict, mem_offset = ut.get_sym_dict('/data/scratch/charithm/projects/cmodel/database/offsets.txt')
+    offsets_file = '../inputs/offsets.txt'
+    encoding_file = '../inputs/encoding.h'
+    sym_dict, mem_offset = ut.get_sym_dict(offsets_file, encoding_file)
     rows = cur.fetchall()
 
     codes = []

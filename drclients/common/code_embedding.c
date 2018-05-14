@@ -105,7 +105,6 @@ int tokenize_text_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op
 
 }
 
-
 void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   instr_t * instr;
   int pos = 0;
@@ -118,9 +117,10 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
 
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
 
-    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,", OPCODE_START + instr_get_opcode(instr));
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), DELIMITER);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return; }
+    
 
     opnd_t op;
     for(i = 0; i < instr_num_srcs(instr); i++){
@@ -129,12 +129,21 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
       if(ret != -1) pos += ret;
       else { cinfo->code_size = -1; return; }
     }
+
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DELIMITER);
+    if(ret != -1) pos += ret;
+    else { cinfo->code_size = -1; return; }
+   
     for(i = 0; i < instr_num_dsts(instr); i++){
       op = instr_get_dst(instr,i);
       ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
       if(ret != -1) pos += ret;
       else { cinfo->code_size = -1; return; }
     }
+
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DELIMITER);
+    if(ret != -1) pos += ret;
+    else { cinfo->code_size = -1; return; }
     
   }
 

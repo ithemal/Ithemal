@@ -21,9 +21,9 @@ def create_connection(database):
     return cnx
 
 #dynamorio specific encoding details
-def get_opcode_opnd_dict(opcode_start, opnd_start):
+def get_opcode_opnd_dict(opcode_start, opnd_start, filename):
     sym_dict = dict()
-    with open('encoding.h','r') as f:
+    with open(filename,'r') as f:
         opcode_num = opcode_start
         opnd_num = opnd_start
         for line in f:
@@ -50,10 +50,10 @@ def read_offsets(filename):
     assert len(offsets) == 5
     return offsets
     
-def get_sym_dict(filename):
+def get_sym_dict(offsets_filename,encoding_filename):
 
-    offsets = read_offsets(filename)
-    sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1])
+    offsets = read_offsets(offsets_filename)
+    sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1], filename = encoding_filename)
    
     sym_dict[offsets[2]] = 'int_immed'
     sym_dict[offsets[3]] = 'float_immed'
@@ -63,6 +63,8 @@ def get_sym_dict(filename):
 def get_name(val,sym_dict,mem_offset):
     if val >= mem_offset:
         return 'mem_' + str(val - mem_offset)
+    elif val < 0:
+        return 'delim'
     else:
         return sym_dict[val]
 
@@ -122,6 +124,102 @@ def get_data(cnx, format, cols):
         print e
     else:
         return data
+
+#this computes span of a code given the instruction sequence in form (opcode,-1,srcs,-1,dsts,-1)...
+class Instruction:
+    
+    def __init__(self, opcode, srcs, dsts):
+        self.opcode = opcode
+        self.srcs = srcs
+        self.dsts = dsts
+
+    def print_instr(self):
+        print self.opcode, self.srcs, self.dsts
+
+class BasicBlock:
+
+    def __init__(self, instrs):
+        self.instrs = instrs
+        self.span_values = [0] * len(self.instrs)
+
+    def num_instrs(self):
+        return len(self.instrs)
+
+    def num_span(self):
+        
+        for i in range(len(self.instrs)):
+            self.span_rec(i)
+
+        if len(self.instrs) > 0:
+            return max(self.span_values)
+        else:
+            return 0
+
+    def print_block(self):
+        for instr in self.instrs:
+            instr.print_instr()
+
+
+    def span_rec(self, n):
+
+        if self.span_values[n] != 0:
+            return self.span_values[n]
+
+        src_instr = self.instrs[n]
+        span = 0
+        for i in range(n + 1, len(self.instrs)):
+            dst_instr = self.instrs[i]
+            for dst in src_instr.dsts:
+                found = False
+                for src in dst_instr.srcs:
+                    if(dst == src):
+                        ret = self.span_rec(i)
+                        if span < ret:
+                            span = ret
+                        found = True
+                        break
+                if found:
+                    break
+        self.span_values[n] = span + 1
+        return self.span_values[n]
+                        
+                    
+
+
+def create_instr_stream(rows):
+
+    opcode = None
+    srcs = []
+    dsts = []
+    mode = 0
+
+
+    blocks = []
+    for row in rows:
+        instrs = []
+        for item in row[0]:
+            if item == -1:
+                mode += 1
+                if mode > 2:
+                    mode = 0
+                    instr = Instruction(opcode,srcs,dsts)
+                    instrs.append(instr)
+                    opcode = None
+                    srcs = []
+                    dsts = []
+                continue
+            else:
+                if mode == 0:
+                    opcode = item
+                elif mode == 1:
+                    srcs.append(item)
+                else:
+                    dsts.append(item)
+
+        block = BasicBlock(instrs)
+        blocks.append(block)
+
+    return blocks
 
 
 if __name__ == "__main__":

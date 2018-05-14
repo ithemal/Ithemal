@@ -10,7 +10,8 @@ import torch
 
 matplotlib.use('Agg')
 
-import rnn_cost as rnn
+import models.rnn_models as Model
+import data.data_cost as Data
 
 
 if __name__ == "__main__":
@@ -24,20 +25,19 @@ if __name__ == "__main__":
     #create database connection
     cnx = ut.create_connection('costmodel0506')
 
-    data = rnn.DataInstructionEmbedding()
-    data.extract_data(cnx,args.format,args.embed_file)
+    data = Data.DataInstructionEmbedding()
     #data.update_times(cnx)
-    data.prepare_data(cnx)
+    data.prepare_data(cnx,args.format,args.embed_file)
 
     data.generate_datasets()
 
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
-    model = rnn.ModelInstructionEmbedding(embedding_size)
-    train = rnn.Train(model,data)
+    model = Model.ModelInstructionAggregate(embedding_size)
+    train = Model.Train(model,data)
 
-    train.train()
-    train.validate()
+    train.train(train.mse_loss_plus_rank_loss,2)
+    train.validate(train.mse_loss_plus_rank_loss,2)
     
     cnx.close()
     
