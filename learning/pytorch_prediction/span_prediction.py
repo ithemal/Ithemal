@@ -33,11 +33,11 @@ if __name__ == "__main__":
 
     # #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
-    model = Model.ModelInstructionAggregate(embedding_size)
-    train = Model.Train(model,data)
+    model = Model.ModelSpanRelational(embedding_size)
+    train = Model.Train(model,data, batch_size = 100)
 
-    train.train(train.mse_loss_plus_rank_loss,2)
-    train.validate(train.mse_loss_plus_rank_loss,2)
+    train.train(train.mse_loss,1)
+    train.validate(train.mse_loss,1)
     
     cnx.close()
     

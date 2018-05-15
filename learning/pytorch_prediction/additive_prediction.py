@@ -22,7 +22,7 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
 
     #create database connection
-    cnx = ut.create_connection('costmodel')
+    cnx = ut.create_connection('static0512')
 
     data = Data.DataInstructionEmbedding()
 

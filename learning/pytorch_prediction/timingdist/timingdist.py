@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('..')
 import common.utilities as ut
+from tqdm import tqdm
 
 
 def example_plot():
@@ -29,8 +30,20 @@ class CodeTimes:
         self.times = []
 
     def add_times(self,times):
+
+        self.min_time_threshold = 44
+        self.min_count_threshold = 10
+
+        self.count = 0
+
+        self.mode_time = 0
+        self.mode_count = 0
+                
+        self.min_time = 2e8
+        self.min_count = 0
+
         for row in times:
-            if row[0] < 1:
+            if row[0] <= self.min_time_threshold: #if the times are too low
                 continue
             inserted = False
             try:
@@ -44,75 +57,79 @@ class CodeTimes:
                 if not inserted:
                     self.times.append([row[0],row[1]])
             except:
+                print 'error' 
                 print self.times
 
-    def print_times(self):
-        print self.times
-        count = 0
         for time in self.times:
-            count += time[1]
-        self.count = 0
-        self.av_time = 0
-        try:
+            self.count += time[1]
+  
+        if self.count > self.min_count_threshold:
             for time in self.times:
-                if time[1] >= self.count:
-                    self.av_time = time[0]
-                    self.count = time[1]
-            self.count = self.count * 100 / count
-            print self.av_time, self.count
-        except:
-            self.count = 100
-            print 0, self.count
-            
+                if time[1] >= self.mode_count:
+                    self.mode_time = time[0]
+                    self.mode_count = time[1]
+                if time[0] < self.min_time:
+                    self.min_time = time[0]
+                    self.min_count = time[1]
+                    
+            self.mode_count = self.mode_count * 100.0 / self.count
+            self.min_count = self.min_count * 100.0 / self.count
+        
+
+    def print_times(self):
+        if self.count > self.min_count_threshold:
+            print self.times
+            print self.count
+            print self.mode_time, self.mode_count
+            print self.min_time, self.min_count
 
 
 
     def print_code(self):
-        print self.program, self.rel_addr
-        print self.code
+        if self.count > self.min_count_threshold:
+            print self.program, self.rel_addr
+            print self.code
         
 
 
 if __name__ == '__main__':
 
-    cnx = ut.create_connection('timingmodel')
+    cnx = ut.create_connection('timing0514')
     
-    cur = cnx.cursor(buffered=True)
     sql = 'SELECT code_id, code, program, rel_addr from code'
-    cur.execute(sql)
+    rows = ut.execute_query(cnx, sql, True)
 
     offsets_file = '../inputs/offsets.txt'
     encoding_file = '../inputs/encoding.h'
     sym_dict, mem_offset = ut.get_sym_dict(offsets_file, encoding_file)
-    rows = cur.fetchall()
-
+    
     codes = []
-    print len(rows)
-    for i,row in enumerate(rows):
-        new_code = CodeTimes(row[0],row[1],row[2],row[3],sym_dict,mem_offset)
+    for row in tqdm(rows):
+        code = CodeTimes(row[0],row[1],row[2],row[3],sym_dict,mem_offset)
         sql = 'SELECT time, count FROM times WHERE code_id = ' + str(row[0])
-        cur.execute(sql)
-        times = cur.fetchall()
-        new_code.add_times(times)
-        codes.append(new_code)
-        if i % 10000 == 0:
-            print i
+        times = ut.execute_query(cnx, sql, True)
+        code.add_times(times)
+        codes.append(code)
 
     for code in codes:
         code.print_code()
         code.print_times()
 
 
-    amount = range(len(codes))
     percentage = []
-    over = 0
+    over = 0.0
     for code in codes:
-        percentage.append(code.count)
-        if code.count > 70:
+        if code.count > code.min_count_threshold:
+            percentage.append(code.mode_count)
+        if code.mode_count > 70:
             over += 1
 
-    print len(codes), over, over / len(codes)
+    print 'total ' + str(len(codes))
+    print 'total above count threshold ' + str(len(percentage))
+    print 'total over ' + str(over)
+    print 'percentage ' + str(float(over) / float(len(codes)))
 
+    amount = range(len(percentage))
     plt.plot(amount, percentage)
     plt.show()
 
