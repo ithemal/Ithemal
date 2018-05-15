@@ -26,10 +26,16 @@ if __name__ == "__main__":
     cnx = ut.create_connection('static0512')
 
     data = Data.DataInstructionEmbedding()
-    #data.update_span(cnx)
+
+    #data.update_span(cnx, args.format)
+    #exit()
+
     data.prepare_data(cnx,args.format,args.embed_file)
 
     data.generate_datasets()
+    
+    data.count_span_dist(data.train_y)
+    data.count_span_dist(data.test_y)
 
     # #get the embedding size
     embedding_size = data.final_embeddings.shape[1]

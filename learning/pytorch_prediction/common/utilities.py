@@ -145,10 +145,10 @@ class BasicBlock:
     def num_instrs(self):
         return len(self.instrs)
 
-    def num_span(self):
+    def num_span(self, instr_cost):
         
         for i in range(len(self.instrs)):
-            self.span_rec(i)
+            self.span_rec(i, instr_cost)
 
         if len(self.instrs) > 0:
             return max(self.span_values)
@@ -160,7 +160,7 @@ class BasicBlock:
             instr.print_instr()
 
 
-    def span_rec(self, n):
+    def span_rec(self, n, instr_cost):
 
         if self.span_values[n] != 0:
             return self.span_values[n]
@@ -173,14 +173,23 @@ class BasicBlock:
                 found = False
                 for src in dst_instr.srcs:
                     if(dst == src):
-                        ret = self.span_rec(i)
+                        ret = self.span_rec(i, instr_cost)
                         if span < ret:
                             span = ret
                         found = True
                         break
                 if found:
                     break
-        self.span_values[n] = span + 1
+        
+        if src_instr.opcode in instr_cost:
+            cost = instr_cost[src_instr.opcode]
+        else:
+            src_instr.print_instr()
+            cost = 1
+
+        assert cost == 1
+
+        self.span_values[n] = span + cost
         return self.span_values[n]
                         
                     
@@ -196,6 +205,7 @@ def create_instr_stream(rows):
 
     blocks = []
     for row in rows:
+        mode = 0
         instrs = []
         for item in row[0]:
             if item == -1:
