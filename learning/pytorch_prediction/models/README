@@ -1,0 +1,4 @@
+need span data and some costs for the span - change code embedding in dr_clients
+generate data static only - staticmodel
+write python code to compute span and max span cost model
+predict span and max span
