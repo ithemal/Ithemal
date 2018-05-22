@@ -125,16 +125,58 @@ def get_data(cnx, format, cols):
     else:
         return data
 
-#this computes span of a code given the instruction sequence in form (opcode,-1,srcs,-1,dsts,-1)...
+
+#calculating static properties of instructions and basic blocks
+
+def create_basicblock(tokens):
+
+    opcode = None
+    srcs = []
+    dsts = []
+    mode = 0
+
+    mode = 0
+    instrs = []
+    for item in tokens:
+        if item == -1:
+            mode += 1
+            if mode > 2:
+                mode = 0
+                instr = Instruction(opcode,srcs,dsts)
+                instrs.append(instr)
+                opcode = None
+                srcs = []
+                dsts = []
+                continue
+        else:
+            if mode == 0:
+                opcode = item
+            elif mode == 1:
+                srcs.append(item)
+            else:
+                dsts.append(item)
+
+    block = BasicBlock(instrs)
+    return block
+
+
 class Instruction:
     
     def __init__(self, opcode, srcs, dsts):
         self.opcode = opcode
         self.srcs = srcs
         self.dsts = dsts
+        self.parents = []
+        self.children = []
 
     def print_instr(self):
+        print self
         print self.opcode, self.srcs, self.dsts
+        print len(self.children), len(self.parents)
+        for parent in self.parents:
+            print parent
+        for child in self.children:
+            print child
 
 class BasicBlock:
 
@@ -167,9 +209,13 @@ class BasicBlock:
 
         src_instr = self.instrs[n]
         span = 0
+        dsts = []
+        for dst in src_instr.dsts:
+            dsts.apppend(dst)
+
         for i in range(n + 1, len(self.instrs)):
             dst_instr = self.instrs[i]
-            for dst in src_instr.dsts:
+            for dst in dsts:
                 found = False
                 for src in dst_instr.srcs:
                     if(dst == src):
@@ -180,6 +226,7 @@ class BasicBlock:
                         break
                 if found:
                     break
+            dsts = list(set(dsts) - set(dst_instr.dsts)) #remove dead destinations
         
         if src_instr.opcode in instr_cost:
             cost = instr_cost[src_instr.opcode]
@@ -192,45 +239,36 @@ class BasicBlock:
         self.span_values[n] = span + cost
         return self.span_values[n]
                         
-                    
 
+    def find_uses(self, n):
 
-def create_instr_stream(rows):
+        instr = self.instrs[n]
+        for dst in instr.dsts:
+            for i in range(n + 1, len(self.instrs), 1):
+                dst_instr = self.instrs[i]
+                if dst in dst_instr.srcs:
+                    if not dst_instr in instr.children:
+                        instr.children.append(dst_instr)
+                if dst in dst_instr.dsts: #value becomes dead here
+                    break
 
-    opcode = None
-    srcs = []
-    dsts = []
-    mode = 0
+    def find_defs(self, n):
 
+        instr = self.instrs[n]
+        for src in instr.srcs:
+            for i in range(n - 1, -1, -1):
+                src_instr = self.instrs[i]
+                if src in src_instr.dsts:
+                    if not src_instr in instr.parents:
+                        instr.parents.append(src_instr)
+                    break
+        
+    def create_dependencies(self):
 
-    blocks = []
-    for row in rows:
-        mode = 0
-        instrs = []
-        for item in row[0]:
-            if item == -1:
-                mode += 1
-                if mode > 2:
-                    mode = 0
-                    instr = Instruction(opcode,srcs,dsts)
-                    instrs.append(instr)
-                    opcode = None
-                    srcs = []
-                    dsts = []
-                continue
-            else:
-                if mode == 0:
-                    opcode = item
-                elif mode == 1:
-                    srcs.append(item)
-                else:
-                    dsts.append(item)
-
-        block = BasicBlock(instrs)
-        blocks.append(block)
-
-    return blocks
-
+        for n in range(len(self.instrs)):
+            self.find_defs(n)
+            self.find_uses(n)
+        
 
 if __name__ == "__main__":
     

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import sys
 
 
 def test_del():
@@ -50,8 +51,18 @@ def test_mseloss():
 
     print output, output1, output2, torch.sum(output2).item(), torch.mean(output2).item()
 
+def test_tensor_op():
+
+    x = torch.randn(5,3)
+    y = torch.randn(5)
+
+    for i in range(5):
+        for j in range(3):
+            sys.stdout.write('%f\n' % x[i][j])
+
+    print torch.abs(y[-1] - x[0][0])
 
 
 if __name__ == "__main__":
 
-    test_del()
+    test_tensor_op()

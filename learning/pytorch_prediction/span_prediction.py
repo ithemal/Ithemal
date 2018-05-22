@@ -7,11 +7,85 @@ import sys
 import common.utilities as ut
 import numpy as np
 import torch
+import models.rnn_models as md_rnn
+import models.graph_models as md_gr
+import models.losses as ls
+import models.train as tr
+import data.data_span as dt
 
-matplotlib.use('Agg')
+def graph_span_classification(database, format, embed_file):
 
-import models.rnn_models as Model
-import data.data_span as Data
+    #create database connection
+    cnx = ut.create_connection(database)
+
+    data = dt.DataInstructionEmbedding()
+
+    data.prepare_data(cnx, format, embed_file)
+
+    data.generate_datasets()
+
+    data.count_span_dist(data.train)
+    data.count_span_dist(data.test)
+
+    #prepare for classification
+    num_classes = data.prepare_for_classification()
+    print 'classes ' + str(num_classes)
+    data.generate_datasets()
+
+    #get the embedding size
+    embedding_size = data.final_embeddings.shape[1]
+    
+    #train
+    model = md_gr.GraphNN(embedding_size, num_classes)
+    train = tr.Train(model,data, batch_size = 1000)
+    
+    train.loss_fn = ls.cross_entropy_loss
+    train.print_fn = train.print_max
+    train.correct_fn = train.correct_classification
+    train.num_losses = 1
+    
+    train.train()
+    train.validate('span.txt')
+    
+    cnx.close()
+
+
+def inst_span_classification(database, format, embed_file):
+
+    #create database connection
+    cnx = ut.create_connection(database)
+
+    data = dt.DataInstructionEmbedding()
+
+    data.prepare_data(cnx, format, embed_file)
+
+    data.generate_datasets()
+
+    data.count_span_dist(data.train)
+    data.count_span_dist(data.test)
+
+    #prepare for classification
+    num_classes = data.prepare_for_classification()
+    print 'classes ' + str(num_classes)
+    data.generate_datasets()
+
+    #get the embedding size
+    embedding_size = data.final_embeddings.shape[1]
+    
+    #train
+    model = md_rnn.ModelInstructionEmbeddingClassification(embedding_size, num_classes)
+    train = tr.Train(model,data, batch_size = 1000)
+    
+    train.loss_fn = ls.cross_entropy_loss
+    train.print_fn = train.print_max
+    train.correct_fn = train.correct_classification
+    train.num_losses = 1
+    
+    train.train()
+    train.validate('span.txt')
+    
+    cnx.close()
+
 
 
 if __name__ == "__main__":
@@ -22,28 +96,5 @@ if __name__ == "__main__":
     parser.add_argument('--embed_file',action='store',type=str)
     args = parser.parse_args(sys.argv[1:])
 
-    #create database connection
-    cnx = ut.create_connection('static0512')
-
-    data = Data.DataInstructionEmbedding()
-
-    #data.update_span(cnx, args.format)
-    #exit()
-
-    data.prepare_data(cnx,args.format,args.embed_file)
-
-    data.generate_datasets()
     
-    data.count_span_dist(data.train_y)
-    data.count_span_dist(data.test_y)
-
-    # #get the embedding size
-    embedding_size = data.final_embeddings.shape[1]
-    model = Model.ModelSpanRelational(embedding_size)
-    train = Model.Train(model,data, batch_size = 100)
-
-    train.train(train.mse_loss,1)
-    train.validate(train.mse_loss,1)
-    
-    cnx.close()
-    
+    graph_span_classification('static0512', args.format, args.embed_file)

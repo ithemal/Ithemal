@@ -8,10 +8,47 @@ import common.utilities as ut
 import numpy as np
 import torch
 
-matplotlib.use('Agg')
+import models.graph_models as md
+import data.data_cost as dt
+import models.losses as ls
+import models.train as tr
 
-import models.rnn_models as Model
-import data.data_cost as Data
+def graph_cost_classification(database, format, embed_file):
+
+    #create database connection
+    cnx = ut.create_connection(database)
+
+    data = dt.DataInstructionEmbedding()
+    
+    data.prepare_data(cnx, format, embed_file)
+
+    data.generate_datasets()
+
+    print 'training data'
+    data.count_cost_dist(data.train)
+    print 'test data'
+    data.count_cost_dist(data.test)
+
+    num_classes = data.prepare_for_classification()
+    print num_classes
+    data.generate_datasets()
+
+ 
+    #get the embedding size
+    embedding_size = data.final_embeddings.shape[1]
+    model = md.GraphNN(embedding_size, num_classes)
+    train = tr.Train(model,data, batch_size = 1000)
+           
+    #defining losses, correctness and printing functions
+    train.loss_fn = ls.cross_entropy_loss
+    train.print_fn = train.print_max 
+    train.correct_fn = train.correct_classification
+    train.num_losses = 1
+
+    train.train()
+    train.validate('timing_results.txt')
+    
+    cnx.close()
 
 
 if __name__ == "__main__":
@@ -22,22 +59,5 @@ if __name__ == "__main__":
     parser.add_argument('--embed_file',action='store',type=str)
     args = parser.parse_args(sys.argv[1:])
 
-    #create database connection
-    cnx = ut.create_connection('costmodel0506')
-
-    data = Data.DataInstructionEmbedding()
-    #data.update_times(cnx)
-    data.prepare_data(cnx,args.format,args.embed_file)
-
-    data.generate_datasets()
-
-    #get the embedding size
-    embedding_size = data.final_embeddings.shape[1]
-    model = Model.ModelInstructionAggregate(embedding_size)
-    train = Model.Train(model,data)
-
-    train.train(train.mse_loss_plus_rank_loss,2)
-    train.validate(train.mse_loss_plus_rank_loss,2)
-    
-    cnx.close()
+    graph_cost_classification('timing0518', args.format, args.embed_file)
     

@@ -32,7 +32,7 @@ class CodeTimes:
     def add_times(self,times):
 
         self.min_time_threshold = 44
-        self.min_count_threshold = 10
+        self.min_count_threshold = 1
 
         self.count = 0
 
@@ -63,7 +63,7 @@ class CodeTimes:
         for time in self.times:
             self.count += time[1]
   
-        if self.count > self.min_count_threshold:
+        if self.count >= self.min_count_threshold:
             for time in self.times:
                 if time[1] >= self.mode_count:
                     self.mode_time = time[0]
@@ -94,7 +94,7 @@ class CodeTimes:
 
 if __name__ == '__main__':
 
-    cnx = ut.create_connection('timing0514')
+    cnx = ut.create_connection('timing0518')
     
     sql = 'SELECT code_id, code, program, rel_addr from code'
     rows = ut.execute_query(cnx, sql, True)
@@ -111,17 +111,17 @@ if __name__ == '__main__':
         code.add_times(times)
         codes.append(code)
 
-    for code in codes:
-        code.print_code()
-        code.print_times()
+    #for code in codes:
+    #    code.print_code()
+    #    code.print_times()
 
 
     percentage = []
     over = 0.0
     for code in codes:
-        if code.count > code.min_count_threshold:
+        if code.count >= code.min_count_threshold:
             percentage.append(code.mode_count)
-        if code.mode_count > 70:
+        if code.mode_count > 20:
             over += 1
 
     print 'total ' + str(len(codes))
