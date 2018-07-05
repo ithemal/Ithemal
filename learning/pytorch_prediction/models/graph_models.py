@@ -7,41 +7,16 @@ import torch.autograd as autograd
 import torch.optim as optim
 import math
 import numpy as np
-
-class InstructionLSTM(ut.Instruction):
-    
-    def __init__(self, opcode, srcs, dsts):
-        super(InstructionLSTM, self).__init__(opcode, srcs, dsts)
-
-    def init(self, tokens):
-        self.lstm = None
-        self.tokens = tokens
-        self.hidden = None
-
-
-class BasicBlockLSTM(ut.BasicBlock):
-
-    def __init__(self, instrs):
-        super(BasicBlocLSTM, self).__init__(instrs)
-
-
-    def find_roots(self):
-        roots = []
-        for instr in self.instrs:
-            if len(instr.children) == 0:
-                roots.append(instr)
-
-        return roots
         
 
 class GraphNN(nn.Module):
 
-    def __init__(self, embedding_size, num_classes):
+    def __init__(self, embedding_size, hidden_size, num_classes):
         super(GraphNN, self).__init__()
 
         self.num_classes = num_classes
 
-        self.hidden_size = 256
+        self.hidden_size = hidden_size
         #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
         
@@ -50,8 +25,8 @@ class GraphNN(nn.Module):
         self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
         
         #hidden state for the rnn
-        self.hidden_token = self.init_hidden()
-        self.hidden_ins = self.init_hidden()
+        #self.hidden_token = self.init_hidden()
+        #self.hidden_ins = self.init_hidden()
 
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
@@ -61,12 +36,15 @@ class GraphNN(nn.Module):
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
 
 
-    def create_bblstm(self, x, block):
+    def init_bblstm(self, x, block):
 
-        block.__class__ = BasicBlockLSTM
-        for i,instr in enumerate(block.instrs):
-            instr.__class__ = InstructionLSTM
-            instr.init(x[i])
+        for instr in block.instrs:
+            if instr.lstm != None:
+                del instr.lstm
+            if instr.hidden != None:
+                del instr.hidden
+            instr.lstm = None
+            instr.hidden = None
 
     def reduction(self, v1, v2):
         return torch.max(v1,v2)
@@ -112,7 +90,8 @@ class GraphNN(nn.Module):
         #do the token based lstm encoding for the instruction
         token_embeds = torch.FloatTensor(instr.tokens)
         token_embeds_lstm = token_embeds.unsqueeze(1)
-        out_token, hidden_token = self.lstm_token(token_embeds_lstm, self.hidden_token)
+        in_hidden_token = self.init_hidden()
+        out_token, hidden_token = self.lstm_token(token_embeds_lstm,in_hidden_token)
 
         ins_embed = hidden_token[0] #first out of the tuple
         
@@ -124,13 +103,18 @@ class GraphNN(nn.Module):
     def forward(self, item):
 
         
-        self.hidden_ins = self.init_hidden()
-        self.hidden_token = self.init_hidden()
+        #self.hidden_ins = self.init_hidden()
+        #self.hidden_token = self.init_hidden()
 
-        self.create_bblstm(item.x, item.block)
+        self.init_bblstm(item.x, item.block)
 
         hidden = self.create_graphlstm(item.x, item.block)
         
-        return self.linear(hidden)
+        return self.linear(hidden).squeeze()
+
+
+    def remove_refs(self, item):
+        
+        self.init_bblstm(item.x, item.block)
 
 

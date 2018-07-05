@@ -1,3 +1,7 @@
+import sys
+sys.path.append('..')
+
+
 import numpy as np
 import common.utilities as ut
 import torch
@@ -7,7 +11,6 @@ import matplotlib
 
 matplotlib.use('Agg')
 
-import sys
 import common.utilities as ut
 import numpy as np
 import word2vec.word2vec as w2v
@@ -35,8 +38,8 @@ if __name__ == "__main__":
         token_data.extend(row[0])
     print len(token_data)
 
-    offsets_filename = 'inputs/offsets.txt'
-    encoding_filename = 'inputs/encoding.h'
+    offsets_filename = '../inputs/offsets.txt'
+    encoding_filename = '../inputs/encoding.h'
     sym_dict, mem_start = ut.get_sym_dict(offsets_filename, encoding_filename)
     offsets = ut.read_offsets(offsets_filename)
 
@@ -47,7 +50,7 @@ if __name__ == "__main__":
     embedder.print_associated_words(final_embeddings,200,sym_dict,mem_start)
     embedder.plot_with_labels(final_embeddings,200,sym_dict,mem_start)
 
-    embed_file = 'inputs/' + str(args.output)
+    embed_file = '../inputs/' + str(args.output)
     save_obj = (final_embeddings, embedder.data.word2id, embedder.data.id2word)
 
 

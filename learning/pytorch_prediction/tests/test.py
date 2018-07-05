@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import sys
+import numpy as np
 
 
 def test_del():
@@ -62,7 +63,23 @@ def test_tensor_op():
 
     print torch.abs(y[-1] - x[0][0])
 
+def test_numpy():
+
+    x = torch.randn(1)
+    print type(x.numpy().tolist())
+
+def test_any():
+
+    x1 = torch.tensor([1, 2, np.nan])
+    y1 = torch.isnan(x1)
+    x2 = torch.tensor([1, 2, 3])
+    y2 = torch.isnan(x2)
+
+    if y1.any():
+        print 'nan correct'
+    if y2.any():
+        print 'nan incorrect'
 
 if __name__ == "__main__":
 
-    test_tensor_op()
+    test_any()

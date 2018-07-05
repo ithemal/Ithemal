@@ -1,2 +1,10 @@
 *.pyc
 *.txt
+data/
+inputs/
+results/
+saved/
+*~
+*.png
+*.jpg
+*.pdf

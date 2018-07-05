@@ -88,7 +88,7 @@ def get_data(cnx, format, cols):
         cur = cnx.cursor(buffered=True)
 
         #code column is mandatory
-        columns = 'code'
+        columns = 'code_token'
         for col in cols:
             columns += ',' + col
         columns += ''
@@ -125,6 +125,21 @@ def get_data(cnx, format, cols):
     else:
         return data
 
+def get_percentage_error(predicted, actual):
+
+    errors = []
+    for pitem, aitem in zip(predicted, actual):
+        
+        if type(pitem) == list:
+            pitem = pitem[-1]
+            aitem = aitem[-1]
+        
+        error = abs(float(pitem) - float(aitem)) * 100.0 / float(aitem)
+
+        errors.append(error)
+
+    return errors
+        
 
 #calculating static properties of instructions and basic blocks
 
@@ -142,7 +157,7 @@ def create_basicblock(tokens):
             mode += 1
             if mode > 2:
                 mode = 0
-                instr = Instruction(opcode,srcs,dsts)
+                instr = Instruction(opcode,srcs,dsts,len(instrs))
                 instrs.append(instr)
                 opcode = None
                 srcs = []
@@ -162,21 +177,25 @@ def create_basicblock(tokens):
 
 class Instruction:
     
-    def __init__(self, opcode, srcs, dsts):
+    def __init__(self, opcode, srcs, dsts, num):
         self.opcode = opcode
+        self.num = num
         self.srcs = srcs
         self.dsts = dsts
         self.parents = []
         self.children = []
 
+        #for lstms
+        self.lstm = None
+        self.hidden = None
+        self.tokens = None
+
+
     def print_instr(self):
-        print self
-        print self.opcode, self.srcs, self.dsts
-        print len(self.children), len(self.parents)
-        for parent in self.parents:
-            print parent
-        for child in self.children:
-            print child
+        print self.num, self.opcode, self.srcs, self.dsts
+        num_parents = [parent.num for parent in self.parents]
+        num_children = [child.num for child in self.children]
+        print num_parents, num_children
 
 class BasicBlock:
 
@@ -211,7 +230,7 @@ class BasicBlock:
         span = 0
         dsts = []
         for dst in src_instr.dsts:
-            dsts.apppend(dst)
+            dsts.append(dst)
 
         for i in range(n + 1, len(self.instrs)):
             dst_instr = self.instrs[i]
@@ -234,7 +253,7 @@ class BasicBlock:
             src_instr.print_instr()
             cost = 1
 
-        assert cost == 1
+        #assert cost == 1
 
         self.span_values[n] = span + cost
         return self.span_values[n]
@@ -268,6 +287,16 @@ class BasicBlock:
         for n in range(len(self.instrs)):
             self.find_defs(n)
             self.find_uses(n)
+
+
+    def find_roots(self):
+        roots = []
+        for instr in self.instrs:
+            if len(instr.children) == 0:
+                roots.append(instr)
+
+        return roots
+
         
 
 if __name__ == "__main__":
