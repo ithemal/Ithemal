@@ -110,7 +110,7 @@ thread_init(void * drcontext){
 }
 
 //bb analysis routines
-void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_t * bb, code_embedding_t code_embedding){
+bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_t * bb, bookkeep_t * bk, query_t * query){
 
   instr_t * first = instrlist_first(bb);
   app_pc first_pc = instr_get_app_pc(first);
@@ -121,7 +121,60 @@ void populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
   cinfo->module_start = md->start;
   cinfo->rel_addr = rel_addr;
 
-  code_embedding(drcontext, cinfo, bb);
+  //get the token embedding
+  token_text_embedding(drcontext, cinfo, bb);
+
+  if(cinfo->code_size == -1){
+    return false;
+  }
+
+  //dr_printf("%s\n", cinfo->code);
+
+  if(client_args.mode != SNOOP){
+    int sz = insert_code_token(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
+
+    if(sz == -1){
+      return false;
+    }
+
+    DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
+    if(client_args.mode == SQLITE){
+      query_db(query);
+    }
+    else if(client_args.mode == RAW_SQL){
+      sz = complete_query(query,sz);
+      write_to_file(bk->static_file,query,sz);
+    }
+  }
+
+  //get the text embedding
+  textual_embedding(drcontext, cinfo, bb);
+
+  if(cinfo->code_size == -1){
+    return false;
+  }
+
+  //dr_printf("%s\n", cinfo->code);
+
+  if(client_args.mode != SNOOP){
+    int sz = insert_code_text(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
+
+    if(sz == -1){
+      return false;
+    }
+
+    DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
+    if(client_args.mode == SQLITE){
+      query_db(query);
+    }
+    else if(client_args.mode == RAW_SQL){
+      sz = complete_query(query,sz);
+      write_to_file(bk->static_file,query,sz);
+    }
+  }
+
+  return true;
+
 
 }
 
@@ -148,34 +201,8 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   //bb analysis 
   BEGIN_CONTROL(cinfo->control,IDLE,DR_CONTROL);
 
-  populate_bb_info(drcontext,cinfo,bb,client_args.embedding_func);
-
-  if(cinfo->code_size == -1){
+  if(!populate_bb_info(drcontext,cinfo,bb,bk,query)){
     return DR_EMIT_DEFAULT;
-  }
-
-  //cinfo->num_instr = num_instructions(bb);
-  //cinfo->span = span_bb(bb);
-  //instrlist_disassemble(drcontext,tag,bb,STDOUT);
-  //dr_printf("%d,%d,%d\n",bk->num_bbs,cinfo->num_instr,cinfo->span);
-
-  if(client_args.mode != SNOOP){
-    int sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
-    //int sz = update_code(query,cinfo->module,cinfo->rel_addr,client_args.mode,cinfo->num_instr,cinfo->span);
-
-    if(sz == -1){
-      return DR_EMIT_DEFAULT;
-    }
-
-    //dr_printf("%s\n",query);
-    DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
-    if(client_args.mode == SQLITE){
-      query_db(query);
-    }
-    else if(client_args.mode == RAW_SQL){
-      sz = complete_query(query,sz);
-      write_to_file(bk->static_file,query,sz);
-    }
   }
  
   END_CONTROL(cinfo->control,DUMP_ONE,DR_CONTROL);
@@ -222,9 +249,9 @@ DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
 
-  //dr_printf("timing client starting...\n");
-    
-    /* register events */
+  //dr_printf("static client starting...\n");
+
+  
     dr_register_thread_init_event(thread_init);    
     dr_register_bb_event(bb_creation_event);
     dr_register_thread_exit_event(thread_exit);
@@ -232,7 +259,6 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     
     disassemble_set_syntax(DR_DISASM_INTEL);
 
-    /* client arguments */
     DR_ASSERT(argc == 6);
     client_args.mode = atoi(argv[1]);
     client_args.code_format = atoi(argv[2]);
@@ -254,7 +280,6 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     //dr_printf("mode - %d\n",client_args.mode);
     
     if(client_args.mode == SNOOP){
-      /* open filenames_file and mmap it */
       strcpy(filenames_file.filename,FILENAMES_FILE);
       filenames_file.filled = 0;
       filenames_file.offs = 0;
@@ -265,5 +290,6 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     else if(client_args.mode == SQLITE){
       connection_init();
     }
+  
   
 }

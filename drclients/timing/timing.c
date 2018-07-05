@@ -131,7 +131,7 @@ thread_init(void * drcontext){
 
 }
 
-#define INS_THRESHOLD 5
+#define INS_THRESHOLD 3
 
 //bb analysis routines
 uint32_t populate_bb_info(void * drcontext, volatile code_info_t * cinfo, volatile bb_data_t * timing, instrlist_t * bb, code_embedding_t code_embedding){
@@ -230,55 +230,47 @@ void check_used_and_live(instrlist_t * bb, uint32_t * used, uint32_t * live){
 
 void timing_instrumentation(void * drcontext, instrlist_t * bb, instr_t * first, instr_t * last, uint32_t bb_num, volatile bookkeep_t * bk){
 
- /*
-    before execution of the basic block
-    save registers
-    cpuid
-    rdtsc
-    spill eax
-    restore registers
- */
   
   uint32_t used[4];
   uint32_t live[4];
-
   uint32_t all[4] = {1,1,1,1};
+  uint32_t i;
+
+  instr_t * instr;
+  
 
   check_used_and_live(bb, used, live);
-  
-  save_registers(drcontext,bb,first, all);
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_cpuid(drcontext));
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_rdtscp(drcontext));
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->prevtime_lo),OPSZ_4), opnd_create_reg(DR_REG_EAX)));
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->prevtime_hi),OPSZ_4), opnd_create_reg(DR_REG_EDX)));
-  instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->proc_before),OPSZ_4), opnd_create_reg(DR_REG_ECX)));
-  //instrlist_meta_preinsert(bb,first,INSTR_CREATE_cpuid(drcontext));
-  if(bb_num)
-    restore_registers(drcontext,bb,first, all);
 
- /*
-    after execution of the basic block - before the final conditional branch
-    save registers
-    cpuid
-    rdtsc
-    save eax
-    clean call
-    restore registers
- */
-  
-  if(bb_num)
-    save_registers(drcontext,bb,last, all);
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_rdtscp(drcontext));
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->nowtime_lo),OPSZ_4), opnd_create_reg(DR_REG_EAX)));
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->nowtime_hi),OPSZ_4), opnd_create_reg(DR_REG_EDX)));
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->proc_after),OPSZ_4), opnd_create_reg(DR_REG_ECX)));
-  instrlist_meta_preinsert(bb,last,INSTR_CREATE_cpuid(drcontext));
-  dr_insert_clean_call(drcontext,bb,last,post_cleancall,false,1,opnd_create_immed_uint(bb_num,OPSZ_4));
-  restore_registers(drcontext,bb,last, all);
+#define REPEAT_BB 3
+
+  for(i = 0; i < REPEAT_BB; i++){
+ 
+    save_registers(drcontext,bb,first, all);
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_cpuid(drcontext));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_rdtscp(drcontext));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->prevtime_lo),OPSZ_4), opnd_create_reg(DR_REG_EAX)));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->prevtime_hi),OPSZ_4), opnd_create_reg(DR_REG_EDX)));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->proc_before),OPSZ_4), opnd_create_reg(DR_REG_ECX)));
+    if(bb_num){
+      restore_registers(drcontext,bb,first, all);
+      for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+	instrlist_meta_preinsert(bb, first, instr_clone(drcontext,instr));
+      }
+      save_registers(drcontext,bb,first, all);
+    }
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_rdtscp(drcontext));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->nowtime_lo),OPSZ_4), opnd_create_reg(DR_REG_EAX)));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->nowtime_hi),OPSZ_4), opnd_create_reg(DR_REG_EDX)));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&(bk->proc_after),OPSZ_4), opnd_create_reg(DR_REG_ECX)));
+    instrlist_meta_preinsert(bb,first,INSTR_CREATE_cpuid(drcontext));
+    dr_insert_clean_call(drcontext,bb,first,post_cleancall,false,1,opnd_create_immed_uint(bb_num,OPSZ_4));
+    restore_registers(drcontext,bb,first, all);
+ 
+  }
  
 }
 
-#define REPEAT_TIMES 100
+#define REPEAT_TIMES 10
 
 static void measure_overhead(void * drcontext, instrlist_t * bb, volatile bookkeep_t * bk){
   
@@ -312,8 +304,8 @@ void post_cleancall(uint32_t num_bbs){
   uint64_t before = (b_hi << 32) + b_lo;
   uint64_t now = (n_hi << 32) + n_lo;
   
-  DR_ASSERT(now > before);
-  DR_ASSERT((now - before) < UINT32_MAX);
+  //DR_ASSERT(now > before);
+  //DR_ASSERT((now - before) < UINT32_MAX);
 
   
   bb_data_t * timing = (bb_data_t *)(file->data + START_BB_DATA);
@@ -476,14 +468,14 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
  
   END_CONTROL(cinfo->control,DUMP_ONE,DR_CONTROL);
 
-  app_pc first_pc = instr_get_app_pc(first);
-  md = dr_lookup_module(first_pc);
-  uint32_t rel_addr = first_pc - md->start;
-  uint32_t save = 1;
+  //app_pc first_pc = instr_get_app_pc(first);
+  //md = dr_lookup_module(first_pc);
+  //uint32_t rel_addr = first_pc - md->start;
+  //uint32_t save = 1;
 
-  if(rel_addr == 2034 && strcmp("2mm", dr_module_preferred_name(md)) == 0){
-    save = 0;
-  }
+  //if(rel_addr == 2034 && strcmp("2mm", dr_module_preferred_name(md)) == 0){
+  //  save = 0;
+  //}
 
   //debug_print(drcontext, tag, bb, bk->num_bbs);
   //bb instrumentation

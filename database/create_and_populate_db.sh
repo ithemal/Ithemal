@@ -12,12 +12,14 @@ dyn_files=$(find /data/scratch/charithm/projects/cmodel/data/$2 -type f -name '*
 for file in $static_files
 do
  # do something on $file
+ echo $file
  ./bin/mysql --defaults-file=my.cnf --database=$1 -u root -pmysql7788# --max_allowed_packet=32M -f < $file
 done
 
 for file in $dyn_files
 do
  # do something on $file
+ echo $file
  ./bin/mysql --defaults-file=my.cnf --database=$1 -u root -pmysql7788# --max_allowed_packet=32M -f < $file
 done
 

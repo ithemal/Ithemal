@@ -21,8 +21,10 @@ typedef struct{
 typedef void (*code_embedding_t) (void *, code_info_t *, instrlist_t *);
 
 void textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+
 void token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+
 
 
 #endif

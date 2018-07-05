@@ -1,0 +1,7 @@
+Gadgets are just wrappers around classes which does the actual work and processes commandline arguments.
+TargetGadget -> CfgGadget -> Cfg
+Cfg has TUnit which holds the Code
+Cfg.get_function() -> returns the TUnit
+
+WeightedTransformGadget holds the transforms -> WeightedTransform
+We can adapt the Search.search function to do the mutations

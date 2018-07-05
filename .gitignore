@@ -87,3 +87,6 @@ benchmarks/
 data/
 testing/    
 virtualenv/
+stoke/
+agner/
+testing/*

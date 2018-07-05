@@ -105,6 +105,30 @@ int tokenize_text_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op
 
 }
 
+bool filter_instr(instr_t * instr){
+
+  //first it cannot be a rip relative instruction
+  if(instr_has_rel_addr_reference(instr)){
+    return true;
+  }
+
+
+  uint32_t tainted[12] = {DR_REG_R13, DR_REG_R13D, DR_REG_R13W, DR_REG_R13L,
+			  DR_REG_R14, DR_REG_R14D, DR_REG_R14W, DR_REG_R14L,
+			  DR_REG_R15, DR_REG_R15D, DR_REG_R15W, DR_REG_R15L};
+
+  uint32_t i = 0;
+
+  for(i = 0; i < 12; i++){
+    if(instr_reg_in_dst(instr, tainted[i])){
+      return true;
+    } 
+  }
+  return false;
+
+}
+
+
 void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   instr_t * instr;
   int pos = 0;
@@ -116,6 +140,8 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
   uint32_t mem = 0;
 
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+
+    if(filter_instr(instr)) continue;
 
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), DELIMITER);
     if(ret != -1) pos += ret;
@@ -158,13 +184,15 @@ void textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   instr_t * instr;
   int pos = 0;
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+
+    if(filter_instr(instr)) continue;
+    
     pos += instr_disassemble_to_buffer(drcontext,instr,cinfo->code + pos, MAX_CODE_SIZE - 1 -  pos);
-    DR_ASSERT(pos <= MAX_CODE_SIZE - 1);
-    cinfo->code[pos] = '\n';
+    cinfo->code[pos++] = '\n';
+    DR_ASSERT(pos <= MAX_CODE_SIZE);
   }
 
   cinfo->code_size = pos;
 
 }
-
 
