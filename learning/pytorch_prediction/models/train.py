@@ -46,17 +46,23 @@ class Train():
                  saves_per_epoch = 5,
                  lr = 0.001,
                  momentum = 0.9,
-                 clip = 2
+                 clip = 2,
+                 opt = 'SGD'
     ):
 
         self.model = model
         print self.model
         self.data = data
-        #self.optimizer = optim.Adam(self.model.parameters())
         self.lr = lr
         self.momentum = momentum
         self.clip = clip
-        self.optimizer = optim.SGD(self.model.parameters(), lr = lr, momentum = momentum)
+        if opt == 'SGD':
+            self.optimizer = optim.SGD(self.model.parameters(), lr = lr, momentum = momentum)
+        elif opt == 'Adam':
+            self.optimizer = optim.Adam(self.model.parameters())
+        else:
+            print 'unknown optimizer...'
+            exit(-1)
 
         #training parameters
         self.epochs = epochs
@@ -342,6 +348,9 @@ class Train():
                     p_str += str(av) + ' '
                 p_str += str(self.correct) + ' '
                 print p_str
+
+            #remove refs; so the gc remove unwanted tensors
+            self.model.remove_refs(item)
            
         for loss in average_loss:
             f.write('loss - %f\n' % (loss))

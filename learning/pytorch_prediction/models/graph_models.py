@@ -17,8 +17,9 @@ class GraphNN(nn.Module):
         self.num_classes = num_classes
 
         self.hidden_size = hidden_size
+        
         #numpy array with batchsize, embedding_size
-        self.embedding_size = embedding_size
+        self.embedding_size = embedding_size        
         
         #lstm - input size, hidden size, num layers
         self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
@@ -30,21 +31,54 @@ class GraphNN(nn.Module):
 
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
+
+    def set_learnable_embedding(self, mode, dictsize, seed = None):
+        
+        self.mode = mode
+        
+        if mode != 'learnt':
+            embedding = nn.Embedding(dictsize, self.embedding_size)
+        
+        if mode == 'none':
+            print 'learn embeddings form scratch...'
+            initrange = 0.5 / self.embedding_size
+            embedding.weight.data.uniform_(-initrange, initrange)
+            self.final_embeddings = embedding
+        elif mode == 'seed':
+            print 'seed by word2vec vectors....'
+            embedding.weight.data = torch.FloatTensor(seed)
+            self.final_embeddings = embedding
+        else:
+            print 'using learnt word2vec embeddings...'
+            self.final_embeddings = seed
+
         
     def init_hidden(self):
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
-
-
-    def init_bblstm(self, x, block):
-
-        for instr in block.instrs:
+        
+    def remove_refs(self, item):
+ 
+       for instr in item.block.instrs:
             if instr.lstm != None:
                 del instr.lstm
             if instr.hidden != None:
                 del instr.hidden
             instr.lstm = None
             instr.hidden = None
+            instr.tokens = None
+       
+    def init_bblstm(self, item):
+
+        self.remove_refs(item)
+        for i, instr in enumerate(item.block.instrs):
+            tokens = item.x[i]
+            if self.mode == 'learnt':
+                instr.tokens = []
+                for token in tokens:
+                    instr.tokens.append(self.final_embeddings[token])
+            else:
+                instr.tokens = self.final_embeddings(torch.LongTensor(tokens))
 
     def reduction(self, v1, v2):
         return torch.max(v1,v2)
@@ -106,15 +140,12 @@ class GraphNN(nn.Module):
         #self.hidden_ins = self.init_hidden()
         #self.hidden_token = self.init_hidden()
 
-        self.init_bblstm(item.x, item.block)
+        self.init_bblstm(item)
 
         hidden = self.create_graphlstm(item.x, item.block)
         
         return self.linear(hidden).squeeze()
 
 
-    def remove_refs(self, item):
-        
-        self.init_bblstm(item.x, item.block)
 
 

@@ -49,9 +49,30 @@ class ModelAbs(nn.Module):
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
 
 
+    #this is to set learnable embeddings
+    def set_learnable_embedding(self, mode, dictsize, seed = None):
+        
+        self.mode = mode
+        
+        if mode != 'learnt':
+            embedding = nn.Embedding(dictsize, self.embedding_size)
+        
+        if mode == 'none':
+            print 'learn embeddings form scratch...'
+            initrange = 0.5 / self.embedding_size
+            embedding.weight.data.uniform_(-initrange, initrange)
+            self.final_embeddings = embedding
+        elif mode == 'seed':
+            print 'seed by word2vec vectors....'
+            embedding.weight.data = torch.FloatTensor(seed)
+            self.final_embeddings = embedding
+        else:
+            print 'using learnt word2vec embeddings...'
+            self.final_embeddings = seed
+
     #remove any references you may have that inhibits garbage collection
     def remove_refs(self, item):
-        Pass
+        return
 
 class ModelSequentialRNN(ModelAbs):
 
@@ -79,7 +100,14 @@ class ModelSequentialRNN(ModelAbs):
         self.hidden_token = self.init_hidden()
  
         #convert to tensor
-        embeds = torch.FloatTensor(item.x)
+        if self.mode == 'learnt':
+            acc_embeds = []
+            for token in item.x:
+                acc_embeds.append(self.final_embeddings[token])
+            embeds = torch.FloatTensor(acc_embeds)
+        else:
+            embeds = self.final_embeddings(torch.LongTensor(item.x))
+
         
         #prepare for lstm - seq len, batch size, embedding size
         seq_len = embeds.shape[0]
@@ -145,9 +173,20 @@ class ModelHierarchicalRNN(ModelAbs):
         self.hidden_token = self.init_hidden()
         self.hidden_ins = self.init_hidden()
 
+
+
         ins_embeds = autograd.Variable(torch.zeros(len(item.x),self.embedding_size))
         for i, ins in enumerate(item.x):
-            token_embeds = torch.FloatTensor(ins)
+
+            if self.mode == 'learnt':
+                acc_embeds = []
+                for token in ins:
+                    acc_embeds.append(self.final_embeddings[token])
+                token_embeds = torch.FloatTensor(acc_embeds)
+            else:
+                token_embeds = self.final_embeddings(torch.LongTensor(ins))
+
+            #token_embeds = torch.FloatTensor(ins)
             token_embeds_lstm = token_embeds.unsqueeze(1)
             out_token, hidden_token = self.lstm_token(token_embeds_lstm,self.hidden_token)
             ins_embeds[i] = hidden_token[0].squeeze()

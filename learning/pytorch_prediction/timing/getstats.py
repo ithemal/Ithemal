@@ -36,12 +36,10 @@ class Stat:
         plt.xlabel(self.name)
         plt.ylabel('count')
         plt.title(self.name + ' count histogram')
-        #plt.show()
         plt.savefig(self.name + '.png')
         plt.close()
 
         
-
 class CodeStats:
     
     def __init__(self):
