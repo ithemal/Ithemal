@@ -223,7 +223,16 @@ class ModelHierarchicalRNNRelational(ModelAbs):
 
         ins_embeds = autograd.Variable(torch.zeros(len(item.x),self.hidden_size))
         for i, ins in enumerate(item.x):
-            token_embeds = torch.FloatTensor(ins)
+
+            if self.mode == 'learnt':
+                acc_embeds = []
+                for token in ins:
+                    acc_embeds.append(self.final_embeddings[token])
+                token_embeds = torch.FloatTensor(acc_embeds)
+            else:
+                token_embeds = self.final_embeddings(torch.LongTensor(ins))
+
+            #token_embeds = torch.FloatTensor(ins)
             token_embeds_lstm = token_embeds.unsqueeze(1)
             out_token, hidden_token = self.lstm_token(token_embeds_lstm,self.hidden_token)
             ins_embeds[i] = hidden_token[0].squeeze()
@@ -291,7 +300,14 @@ class ModelSequentialRNNComplex(nn.Module):
         self.hidden_token = self.init_hidden()
 
         #convert to tensor
-        embeds = torch.FloatTensor(item.x)
+        if self.mode == 'learnt':
+            acc_embeds = []
+            for token in item.x:
+                acc_embeds.append(self.final_embeddings[token])
+            embeds = torch.FloatTensor(acc_embeds)
+        else:
+            embeds = self.final_embeddings(torch.LongTensor(item.x))
+
         
         #prepare for lstm - seq len, batch size, embedding size
         seq_len = embeds.shape[0]
