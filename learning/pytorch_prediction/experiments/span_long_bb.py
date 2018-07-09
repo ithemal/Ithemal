@@ -43,7 +43,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=10):
     return (losses, results)
 
 
-def train_model_classification(data, model, savemodelfile, resultfile, clip):
+def train_model_classification(data, model, savemodelfile, resultfile, clip=10):
 
     train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 2, lr = 0.001, clip=clip)
 
@@ -68,7 +68,8 @@ if __name__ == "__main__":
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--embed_file',action='store',type=str)
+    parser.add_argument('--embed_file',action='store',type=str,default='../inputs/code_delim.emb')
+    parser.add_argument('--mode',action='store',type=str,default='learnt')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -111,6 +112,9 @@ if __name__ == "__main__":
     
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=1)
 
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
+
     model_name = '../saved/modelDspanregressbigbb.mdl'
     result_name = '../results/modelDspanregressbigbb.txt'
     
@@ -131,6 +135,8 @@ if __name__ == "__main__":
     dataIns.generate_datasets()
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=num_classes)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
 
     model_name = '../saved/modelDspanclassificationbigbb.mdl'
     result_name = '../results/modelDspanclassificationbigbb.txt'

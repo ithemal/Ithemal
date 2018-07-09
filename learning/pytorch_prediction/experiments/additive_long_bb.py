@@ -23,7 +23,7 @@ import models.train as tr
 #train using the final value for models (A), (B), (C) - regression
 def train_model_regression(data, model, savemodelfile, resultfile, clip=None):
 
-    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, clip=clip)
+    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, clip=clip, lr = 0.01)
 
     train.loss_fn = ls.mse_loss
     train.print_fn = train.print_final
@@ -46,7 +46,8 @@ if __name__ == "__main__":
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--embed_file',action='store',type=str)
+    parser.add_argument('--embed_file',action='store',type=str,default='../inputs/code_delim.emb')
+    parser.add_argument('--mode',action='store',type=str,default='learnt')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -83,6 +84,9 @@ if __name__ == "__main__":
     dataIns.generate_datasets()
 
     model = md.ModelHierarchicalRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=False)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
 
     model_name = '../saved/modelCaddbigbb.mdl'
     result_name = '../results/modelCaddbigbb.txt'

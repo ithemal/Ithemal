@@ -46,9 +46,10 @@ if __name__ == "__main__":
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--embed_file',action='store',type=str)
+    parser.add_argument('--embed_file',action='store',type=str, default='../inputs/code_delim.emb')
     parser.add_argument('--cost_dist',action='store',type=int)
     parser.add_argument('--run_model',action='store',type=int, default=0)
+    parser.add_argument('--mode',action='store',type=str,default='learnt')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -87,6 +88,8 @@ if __name__ == "__main__":
     if args.run_model == 0 or args.run_model == 1:
         print 'running model A...'
         modelA = md.ModelSequentialRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=False)
+
+        modelA.set_learnable_embedding(mode = args.mode, dictsize = max(dataToken.word2id) + 1, seed = dataToken.final_embeddings)
     
         model_name = '../saved/modelAadd' + cost_prefix + '.mdl'
         result_name = '../results/modelAadd' + cost_prefix + '.txt'
@@ -106,6 +109,8 @@ if __name__ == "__main__":
         print 'running model B....'
         modelB = md.ModelSequentialRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=True)
 
+        modelB.set_learnable_embedding(mode = args.mode, dictsize = max(dataToken.word2id) + 1, seed = dataToken.final_embeddings)
+
         model_name = '../saved/modelBadd' + cost_prefix + '.mdl'
         result_name = '../results/modelBadd' + cost_prefix + '.txt'
     
@@ -124,6 +129,9 @@ if __name__ == "__main__":
     if args.run_model == 0 or args.run_model == 3:
         print 'running model C...'
         modelC = md.ModelHierarchicalRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=False)
+
+        modelC.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
 
         model_name = '../saved/modelCadd' + cost_prefix + '.mdl'
         result_name = '../results/modelCadd' + cost_prefix + '.txt'

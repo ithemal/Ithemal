@@ -24,7 +24,7 @@ import models.train as tr
 #train using the final value for models (A), (B), (C) - regression
 def train_model_regression(data, model, savemodelfile, resultfile, clip=None):
 
-    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, lr = 0.005, clip=clip)
+    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, lr = 0.01, clip=clip)
 
     train.loss_fn = ls.mse_loss
     train.print_fn = train.print_final
@@ -43,7 +43,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=None):
     return (losses, results)
 
 
-def train_model_classification(data, model, savemodelfile, resultfile, clip):
+def train_model_classification(data, model, savemodelfile, resultfile, clip=None):
 
     train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, lr = 0.005, clip=clip)
 
@@ -68,8 +68,9 @@ if __name__ == "__main__":
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--embed_file',action='store',type=str)
+    parser.add_argument('--embed_file',action='store',type=str,default='../inputs/code_delim.emb')
     parser.add_argument('--cost_dist',action='store',type=int)
+    parser.add_argument('--mode',action='store',type=str,default='learnt')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -103,6 +104,8 @@ if __name__ == "__main__":
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=1)
 
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
     
@@ -119,6 +122,9 @@ if __name__ == "__main__":
     dataIns.generate_datasets()
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=1)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
 
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
@@ -138,6 +144,8 @@ if __name__ == "__main__":
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=1)
 
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
     
@@ -148,9 +156,9 @@ if __name__ == "__main__":
 
 
     result_name = '../results/spanregressvariance.png'
-    gr.plot_plot_graphs(result_name, losses_regress, modelnames)
+    gr.plot_line_graphs(result_name, losses_regress, modelnames)
     result_name = '../results/spanregressvariancetesterror.png'
-    gr.plot_plot_graphs(result_name, errors_regress, modelnames)
+    gr.plot_line_graphs(result_name, errors_regress, modelnames)
 
 
     print 'running span variance testing classification...'
@@ -164,6 +172,9 @@ if __name__ == "__main__":
     dataIns.generate_datasets()
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=num_classes)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
 
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
@@ -181,6 +192,8 @@ if __name__ == "__main__":
     dataIns.generate_datasets()
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=num_classes)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
 
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
@@ -200,6 +213,8 @@ if __name__ == "__main__":
 
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=num_classes)
 
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
     
@@ -209,8 +224,8 @@ if __name__ == "__main__":
     losses_classification.append(loss)
 
     result_name = '../results/spanclassificationvariance.png'
-    gr.plot_plot_graphs(result_name, losses_classification, modelnames)
+    gr.plot_line_graphs(result_name, losses_classification, modelnames)
     result_name = '../results/spanclassificationvariancetesterror.png'
-    gr.plot_plot_graphs(result_name, errors_classification, modelnames)
+    gr.plot_line_graphs(result_name, errors_classification, modelnames)
 
 

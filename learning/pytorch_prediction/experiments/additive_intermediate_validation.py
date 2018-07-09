@@ -39,7 +39,8 @@ if __name__ == "__main__":
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--embed_file',action='store',type=str)
+    parser.add_argument('--embed_file',action='store',type=str, default='../inputs/code_delim.emb')
+    parser.add_argument('--mode',action='store',type=str,default='learnt')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -63,6 +64,9 @@ if __name__ == "__main__":
     dataToken.generate_datasets()
 
     modelA = md.ModelSequentialRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=True)
+
+    modelA.set_learnable_embedding(mode = args.mode, dictsize = max(dataToken.word2id) + 1, seed = dataToken.final_embeddings)
+    
     
     validate_regression(dataToken, modelA, '../saved/modeAins.mdl', '../results/modelAinsinter.txt')
 
@@ -75,6 +79,8 @@ if __name__ == "__main__":
     dataIns.generate_datasets()
 
     modelC = md.ModelHierarchicalRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=True)
+
+    modelC.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
     
     validate_regression(dataIns, modelC, '../saved/modeCins.mdl', '../results/modelCinsinter.txt')
 

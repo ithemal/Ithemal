@@ -43,9 +43,9 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=10):
     return (losses, results)
 
 
-def train_model_classification(data, model, savemodelfile, resultfile, clip):
+def train_model_classification(data, model, savemodelfile, resultfile, clip=10):
 
-    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, clip=clip)
+    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 10, clip=clip, lr=0.01)
 
     train.loss_fn = ls.cross_entropy_loss
     train.print_fn = train.print_max
@@ -70,8 +70,9 @@ if __name__ == "__main__":
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--embed_file',action='store',type=str)
+    parser.add_argument('--embed_file',action='store',type=str, default='../inputs/code_delim.emb')
     parser.add_argument('--cost_dist',action='store',type=int)
+    parser.add_argument('--mode',action='store',type=str,default='learnt')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -113,6 +114,8 @@ if __name__ == "__main__":
 
     model = md.ModelHierarchicalRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=False)
 
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
     model_name = '../saved/modelCspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelCspanregress' + cost_prefix + '.txt'
     
@@ -123,6 +126,8 @@ if __name__ == "__main__":
 
     print 'model D regression....'
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=1)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
 
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
@@ -146,6 +151,8 @@ if __name__ == "__main__":
 
     model = md.ModelHierarchicalRNN(embedding_size=embedding_size,hidden_size=256,num_classes=num_classes,intermediate=False)
 
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
     model_name = '../saved/modelCspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelCspanclassification' + cost_prefix + '.txt'
     
@@ -156,6 +163,9 @@ if __name__ == "__main__":
 
     print 'running model D classification....'
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=num_classes)
+
+    model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
+
 
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
