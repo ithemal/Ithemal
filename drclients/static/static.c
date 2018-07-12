@@ -11,6 +11,15 @@
 #include "code_embedding.h"
 #include "common.h"
 
+//dump modes are defined here - bit mask
+#define DUMP_INTEL  0x1 //dumps intel
+#define DUMP_ATT    0x2 //dumps att
+#define DUMP_TOKEN  0x4 //dumps token output
+
+//whether we generate SQL statements for updating or inserting code
+#define INSERT_CODE 1
+#define UPDATE_CODE 2
+
 //client arguments
 typedef struct {
   char compiler[MAX_STRING_SIZE];
@@ -18,7 +27,8 @@ typedef struct {
   char data_folder[MAX_STRING_SIZE];
   uint32_t mode;
   uint32_t code_format;
-  code_embedding_t embedding_func;
+  uint32_t dump_mode;
+  uint32_t insert_or_update;
 } client_arg_t;
 
 client_arg_t client_args;
@@ -109,55 +119,23 @@ thread_init(void * drcontext){
 
 }
 
-//bb analysis routines
-bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_t * bb, bookkeep_t * bk, query_t * query){
+bool dump_bb(void * drcontext, code_embedding_t embedding_func, code_info_t * cinfo, instrlist_t * bb, bool insert, const char * type, bookkeep_t * bk, query_t * query){
 
-  instr_t * first = instrlist_first(bb);
-  app_pc first_pc = instr_get_app_pc(first);
-  module_data_t * md = dr_lookup_module(first_pc);
-  uint32_t rel_addr = first_pc - md->start;
-  
-  strcpy(cinfo->module,dr_module_preferred_name(md));
-  cinfo->module_start = md->start;
-  cinfo->rel_addr = rel_addr;
+  int sz = -1;
 
-  //get the token embedding
-  token_text_embedding(drcontext, cinfo, bb);
+  //get the embedding
+  embedding_func(drcontext, cinfo, bb);
 
   if(cinfo->code_size == -1){
     return false;
   }
 
-  //dr_printf("%s\n", cinfo->code);
-
   if(client_args.mode != SNOOP){
-    int sz = insert_code_token(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
 
-    if(sz == -1){
-      return false;
-    }
-
-    DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
-    if(client_args.mode == SQLITE){
-      query_db(query);
-    }
-    else if(client_args.mode == RAW_SQL){
-      sz = complete_query(query,sz);
-      write_to_file(bk->static_file,query,sz);
-    }
-  }
-
-  //get the text embedding
-  textual_embedding(drcontext, cinfo, bb);
-
-  if(cinfo->code_size == -1){
-    return false;
-  }
-
-  //dr_printf("%s\n", cinfo->code);
-
-  if(client_args.mode != SNOOP){
-    int sz = insert_code_text(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size);
+    if(insert)
+      sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size, type);
+    else
+      sz = update_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size, type);
 
     if(sz == -1){
       return false;
@@ -175,6 +153,75 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
   return true;
 
+
+} 
+
+//bb analysis routines
+bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_t * bb, bookkeep_t * bk, query_t * query){
+
+  instr_t * first = instrlist_first(bb);
+  app_pc first_pc = instr_get_app_pc(first);
+  module_data_t * md = dr_lookup_module(first_pc);
+  uint32_t rel_addr = first_pc - md->start;
+  
+  strcpy(cinfo->module,dr_module_preferred_name(md));
+  cinfo->module_start = md->start;
+  cinfo->rel_addr = rel_addr;
+
+  uint32_t inserted = false;
+
+  if( (client_args.dump_mode & DUMP_TOKEN) == DUMP_TOKEN ){
+
+    if(client_args.insert_or_update == INSERT_CODE && !inserted){
+      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, true, "code_token", bk, query)){
+	return false;
+      }
+      inserted = true;
+    }
+    else{
+      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, false, "code_token", bk, query)){
+	return false;
+      }
+    }
+
+  }
+
+  if( (client_args.dump_mode & DUMP_INTEL) == DUMP_INTEL ){
+
+    disassemble_set_syntax(DR_DISASM_INTEL);
+    if(client_args.insert_or_update == INSERT_CODE && !inserted){
+      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, true, "code_intel", bk, query)){
+	return false;
+      }
+      inserted = true;
+    }
+    else{
+      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, false, "code_intel", bk, query)){
+	return false;
+      }
+    }
+
+  }
+
+
+  if( (client_args.dump_mode & DUMP_ATT) == DUMP_ATT ){
+    
+    disassemble_set_syntax(DR_DISASM_ATT);
+    if(client_args.insert_or_update == INSERT_CODE && !inserted){
+      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, true, "code_att", bk, query)){
+	return false;
+      }
+      inserted = true;
+    }
+    else{
+      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, false, "code_att", bk, query)){
+	return false;
+      }
+    }
+
+  }
+  
+  return true;
 
 }
 
@@ -257,22 +304,14 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     dr_register_thread_exit_event(thread_exit);
     dr_register_exit_event(event_exit);
     
-    disassemble_set_syntax(DR_DISASM_INTEL);
-
-    DR_ASSERT(argc == 6);
+    DR_ASSERT(argc == 7);
     client_args.mode = atoi(argv[1]);
-    client_args.code_format = atoi(argv[2]);
-    strncpy(client_args.compiler,argv[3], MAX_STRING_SIZE);
-    strncpy(client_args.flags,argv[4], MAX_STRING_SIZE);
-    strncpy(client_args.data_folder,argv[5], MAX_STRING_SIZE);
+    client_args.dump_mode = atoi(argv[2]);
+    client_args.insert_or_update = atoi(argv[3]);
+    strncpy(client_args.compiler,argv[4], MAX_STRING_SIZE);
+    strncpy(client_args.flags,argv[5], MAX_STRING_SIZE);
+    strncpy(client_args.data_folder,argv[6], MAX_STRING_SIZE);
 
-
-    if(client_args.code_format == TEXT){
-      client_args.embedding_func = textual_embedding;
-    }
-    else if(client_args.code_format == TOKEN){
-      client_args.embedding_func = token_text_embedding;
-    }
 
     mutex = dr_mutex_create();
     num_threads = 0;

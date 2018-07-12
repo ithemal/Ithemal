@@ -17,14 +17,14 @@ int insert_config(char * query, const char * compiler, const char * flags, uint3
   return pos;
 }
 
-int insert_code_token(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode,  uint32_t size){
+int insert_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode,  uint32_t size, const char * type){
 
   uint32_t pos;
   if(mode == SQLITE){
-    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code_token) VALUES ((SELECT config_id from _config),'%s',%d,'",program, rel_addr);
+    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, %s) VALUES ((SELECT config_id from _config),'%s',%d,'", type, program, rel_addr);
   }
   else{
-    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, code_token) VALUES (@config_id,'%s',%d,'",program, rel_addr);
+    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, %s) VALUES (@config_id,'%s',%d,'", type, program, rel_addr);
   }
   
   int i = 0;
@@ -38,10 +38,10 @@ int insert_code_token(char * query, const char * program, uint32_t rel_addr, con
 
 }
 
-int insert_code_text(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode,  uint32_t size){
+int update_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode,  uint32_t size, const char * type){
 
   uint32_t pos;
-  pos = sprintf(query, "UPDATE code SET code_text='");
+  pos = sprintf(query, "UPDATE code SET %s='", type);
   
   int i = 0;
   for(i = 0; i < size; i++){
@@ -69,7 +69,7 @@ int insert_times(char * query, const char * program, uint32_t rel_addr, uint32_t
   }
 }
 
-int update_code(char * query, const char * program, uint32_t rel_addr, uint32_t mode, uint32_t num_instr,uint32_t span){
+int update_static_info(char * query, const char * program, uint32_t rel_addr, uint32_t mode, uint32_t num_instr,uint32_t span){
 
   int pos;
   if(mode == SQLITE){
