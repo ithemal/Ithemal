@@ -170,6 +170,7 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
   uint32_t inserted = false;
 
+
   if( (client_args.dump_mode & DUMP_TOKEN) == DUMP_TOKEN ){
 
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
@@ -245,8 +246,10 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
 
   //not filtering based on executable for static data collection
 
+
   //bb analysis 
   BEGIN_CONTROL(cinfo->control,IDLE,DR_CONTROL);
+
 
   if(!populate_bb_info(drcontext,cinfo,bb,bk,query)){
     return DR_EMIT_DEFAULT;

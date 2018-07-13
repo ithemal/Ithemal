@@ -9,8 +9,9 @@
 #define IMM_TYPE 2
 #define REG_TYPE 3
 
-#define MNEMONIC_SIZE 32
-#define NUM_OPS 5
+#define MNEMONIC_SIZE 64
+#define NUM_OPS 8
+#define BUFFER_SIZE 1024
 
 typedef struct {
   uint32_t type;
@@ -42,6 +43,8 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
   
   int i = 0;
 
+  instr->num_ops = 0;
+
   //skip white space
   while(i < length && buffer[i] == ' ') i++;
 
@@ -52,7 +55,7 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
   }
   instr->name[i - start_opcode] = '\0';
 
-  if(strcmp(instr->name,"rep") == 0){  //handle repetition opcodes correctly
+  if(strcmp(instr->name,"rep") == 0 || strcmp(instr->name,"repne") == 0){  //handle repetition opcodes correctly
     instr->num_ops = 0;
     while(i < length){
       instr->name[i - start_opcode] = buffer[i];
@@ -86,6 +89,9 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
 	instr->operands[op_num].type = MEM_TYPE;
 	bool found_open = false;
 	while(buffer[i] != ')'){
+	  if(i >= length){
+	    dr_printf("%s:\n",buffer);
+	  }
 	  DR_ASSERT(i < length);
 	  if(buffer[i] == '(') found_open = true;
 	  instr->operands[op_num].name[i - start_operand] = buffer[i];
@@ -108,6 +114,9 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
 	  if(j < length && buffer[j] == '('){ //has base index
 	    bool found_open = false;
 	    while(buffer[i] != ')'){
+	      if(i >= length){
+		dr_printf("%s:\n",buffer);
+	      }
 	      DR_ASSERT(i < length);
 	      if(buffer[i] == '(') found_open = true;
 	      instr->operands[op_num].name[i - start_operand] = buffer[i];
@@ -284,6 +293,15 @@ bool filter_instr(instr_t * instr){
       return true;
     } 
   }
+
+  uint32_t omitted[9] = {OP_rep_ins, OP_rep_outs, OP_rep_movs, OP_rep_stos, OP_rep_lods, OP_rep_cmps, OP_rep_scas, OP_repne_cmps, OP_repne_scas};
+
+  for(i = 0; i <9; i++){
+    if(instr_get_opcode(instr) == omitted[i]){
+      return true;
+    }
+  }
+
   return false;
 
 }
@@ -374,7 +392,7 @@ char get_size_prefix(uint32_t size){
 
 void remove_data(char * buffer, unsigned length){
   
-  char first[24];  
+  char first[MNEMONIC_SIZE];  
   int i = 0;
 
   while(i < length && buffer[i] == ' ') i++;
@@ -410,7 +428,7 @@ void remove_data(char * buffer, unsigned length){
 void switch_operands(ins_t * ins, int in1, int in2){
 
 
-  char temp[32];
+  char temp[MNEMONIC_SIZE];
   
   int len1 = strlen(ins->operands[in1].name);
   int len2 = strlen(ins->operands[in2].name);
@@ -446,7 +464,7 @@ int check_for_opcode(int * opcodes, int num_opcodes, instr_t * instr){
 
 void print_opnds(instr_t * instr){
 
-  char temp[32];
+  char temp[MNEMONIC_SIZE];
 
   void * drcontext = dr_get_current_drcontext();
 
@@ -456,7 +474,7 @@ void print_opnds(instr_t * instr){
   dr_printf("srcs:");
   for(i = 0; i < num_srcs; i++){
     opnd_t op = instr_get_src(instr,i);
-    opnd_disassemble_to_buffer(drcontext, op, temp, 32);
+    opnd_disassemble_to_buffer(drcontext, op, temp, MNEMONIC_SIZE);
     dr_printf("%s,",temp);
   }
   dr_printf("\n");
@@ -467,7 +485,7 @@ void print_opnds(instr_t * instr){
   dr_printf("dsts:");
   for(i = 0; i < num_dsts; i++){
     opnd_t op = instr_get_dst(instr,i);
-    opnd_disassemble_to_buffer(drcontext, op, temp, 32);
+    opnd_disassemble_to_buffer(drcontext, op, temp, MNEMONIC_SIZE);
     dr_printf("%s,",temp);
   }
   dr_printf("\n");
@@ -479,8 +497,35 @@ void print_opnds(instr_t * instr){
 
 void change_operands(ins_t * ins, instr_t * instr){
 
-  int opcode = instr_get_opcode(instr);
+  //ok, change all operands with r<>l to r<>b
+  int i;
+  int j;
 
+ 
+  for(i = 0; i < ins->num_ops; i++){
+    if(ins->operands[i].type == REG_TYPE){
+      
+      int len = strlen(ins->operands[i].name);
+      char * name = ins->operands[i].name;
+      if(name[1] == 'r' && name[len - 1] == 'l'){
+	bool found = true;
+	for(j = 2; j < len - 1; j++){
+	  if(name[j] < '0' || name[j] > '9'){
+	    found = false;
+	    break;
+	  }
+	}
+
+	if(found){
+	  name[len - 1] = 'b';
+	}
+	
+      }
+    }
+  }
+
+
+  int opcode = instr_get_opcode(instr);
 
   switch(opcode){
   
@@ -500,11 +545,15 @@ void change_operands(ins_t * ins, instr_t * instr){
   case OP_vextracti128:
   case OP_vfmsub132sd:
   case OP_imul:{
-    switch_operands(ins,0,1);
+    if(ins->num_ops == 3)
+      switch_operands(ins,0,1);
     break;
   }
 
-  case OP_cmpxchg:{
+  case OP_cmpxchg:
+  case OP_vpabsd:
+  case OP_vpabsw:
+  case OP_vpabsb:{
     ins->num_ops = 2;
     break;
   }
@@ -559,7 +608,65 @@ void change_operands(ins_t * ins, instr_t * instr){
     ins->num_ops = 1;
     break;
   }
+
+  case OP_vpslld:
+  case OP_vpslldq:
+  case OP_vpsllq:
+  case OP_vpsllw:
+  case OP_vpsrad:
+  case OP_vpsraw:
+  case OP_vpsrld:
+  case OP_vpsrldq:
+  case OP_vpsrlq:
+  case OP_vpsrlw:{
+    break;
   }
+
+  case OP_xadd:{
+    if(ins->operands[0].type == MEM_TYPE){ //ex - xaddl (%rbx), %eax
+      switch_operands(ins, 0, 1);
+    }
+    break;
+  }
+
+  case OP_vpmovzxbw:
+  case OP_vpmovzxwd:{
+    if(ins->num_ops == 2){ //TODO - check actual DR operands
+      if(ins->operands[0].type == REG_TYPE){
+	if(ins->operands[0].name[1] == 'y')
+	  ins->operands[0].name[1] = 'x';
+      }
+      if(ins->operands[1].type == REG_TYPE){
+	if(ins->operands[1].name[1] == 'y')
+	  ins->operands[1].name[1] = 'x';	
+      }
+    }
+    break;
+  }
+    
+
+  default:{
+    //can change later - we need to change the operand order - is this correct??
+    if(ins->num_ops >= 3){
+      int srcs = ins->num_ops - 1;
+      int front = 0;
+      int back = srcs - 1;
+
+      while(front < back){
+	switch_operands(ins, front, back);
+	front++;
+	back--;
+      }
+    }
+
+
+  }
+    
+
+  }
+
+
+
 }
 
 
@@ -571,7 +678,7 @@ void change_opcodes(ins_t * ins,  instr_t * instr){
 #define num_opcodes 2
 
   int opcodes[num_opcodes] = {OP_cwde, OP_cdq};
-  char alt_names[num_opcodes][32] = {"cwtl", "cltd"};
+  char alt_names[num_opcodes][MNEMONIC_SIZE] = {"cwtl", "cltd"};
 
   int opcode = instr_get_opcode(instr);
   
@@ -601,7 +708,8 @@ void change_opcodes(ins_t * ins,  instr_t * instr){
     break;
   }
 
-  case OP_vcvtsi2sd:{
+  case OP_vcvtsi2sd:
+  case OP_vcvtsi2ss:{
    
     int size = opnd_size_in_bytes(opnd_get_size(instr_get_src(instr,1)));
     char suffix = get_size_prefix(size);
@@ -610,13 +718,7 @@ void change_opcodes(ins_t * ins,  instr_t * instr){
     break;
 
   }
-
-
   }
-
-
-
-
 
 }
 
@@ -665,6 +767,8 @@ bool add_operand_size(ins_t * ins, instr_t * instr){
   if(!change_opcode[opcode]){
     return false;
   }
+  
+ 
 
   //get the maximum write size
   int num_dsts = instr_num_dsts(instr);
@@ -693,22 +797,48 @@ bool add_operand_size(ins_t * ins, instr_t * instr){
       maxsize = maxsize < size_in_bytes ? size_in_bytes : maxsize;
   }
   
-  //DR bug fixing - check for consistency later
-  if(num_dsts == 1){ //DR bug 
-    if( (opnd_is_memory_reference(instr_get_dst(instr,0))) && immed_op )
-      return false;
+  //some special cases
+  //get the intel opcode
+  char intel[BUFFER_SIZE];
+  char name[MNEMONIC_SIZE];
+  disassemble_set_syntax(DR_DISASM_INTEL);
+  void * drcontext = dr_get_current_drcontext();
+  int length = instr_disassemble_to_buffer(drcontext, instr, intel, BUFFER_SIZE);
+  remove_data(intel, length);
+  i = 0;
+  while(intel[i] == ' ') i++;
+  int start = i;
+  while(intel[i] != ' '){
+    name[i - start] = intel[i];
+    i++;
   }
+  name[i - start] = '\0';
+  disassemble_set_syntax(DR_DISASM_ATT);
+  
+
+  //are they the same? if not return
+  if(strcmp(ins->name, name) != 0){
+    return false;
+  }
+
+  //DR bug fixing - check for consistency later
+  //if(num_dsts == 1){ //DR bug 
+  //  if( (opnd_is_memory_reference(instr_get_dst(instr,0))) && immed_op )
+  //    return false;
+  //}
 
   //rep instructions are correct
   if(strstr(ins->name,"rep")){
     return false;
   }
 
+  //ok, add the prefix
   char prefix = get_size_prefix(maxsize);
   
   if(prefix == 'e'){
     return false;
   }
+
 
   //now we need to insert this letter to the end of the opcode
   int opcode_sz = strlen(ins->name);
@@ -724,90 +854,62 @@ void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
 
   instr_t * instr;
   int pos = 0;
-  int instr_count = 0;
-
-  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
-    if(filter_instr(instr)) continue;
-    instr_count++;
-  }
-
-  ins_t * instrs = dr_thread_alloc(drcontext, sizeof(ins_t) * instr_count);
-
+ 
   int i = 0;  
-  char disasm[1024];
+  char disasm[BUFFER_SIZE];
+
+  ins_t ins;
   
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
     if(filter_instr(instr)) continue;
 
-    ins_t * ins = &instrs[i];
-    int length = instr_disassemble_to_buffer(drcontext, instr, disasm, 1024);
+    int length = instr_disassemble_to_buffer(drcontext, instr, disasm, BUFFER_SIZE);
 
-    //dr_printf("dis-%s\n",disasm);
+
+    //dr_printf("raw:%s:\n",disasm);
     remove_data(disasm, length);
-    parse_instr(disasm, length, ins);
-    //print_instr(ins);
+    parse_instr(disasm, length, &ins);
+    //dr_printf("before:");
+    //print_instr(&ins);
 
-    //int opcode = instr_get_opcode(instr);
-    //if( (opcode == OP_nop) || (opcode == OP_nop_modrm) ){
-    //dr_printf("%s,%d\n",disasm, length);
-    //print_instr(ins);
-    //}
+    add_operand_size(&ins, instr);
+    correct_movs(&ins, instr);
+    change_opcodes(&ins, instr);
+    change_operands(&ins, instr);
+    //dr_printf("after:");
+    //print_instr(&ins);
 
-    add_operand_size(ins, instr);
-    correct_movs(ins, instr);
-    change_opcodes(ins, instr);
-    change_operands(ins, instr);
-    
 
     int j = 0;
     int w = 0;
 
-    w = sprintf(cinfo->code + pos, "%s ", ins->name);
+    w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos, "%s ", ins.name);
     DR_ASSERT(w > 0);
     pos += w;
     
-    for(j = 0; j < ins->num_ops; j++){
-      w = sprintf(cinfo->code + pos, "%s", ins->operands[j].name);
+    for(j = 0; j < ins.num_ops; j++){
+      w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos, "%s", ins.operands[j].name);
       DR_ASSERT(w > 0);
       pos += w;
-      if(j != ins->num_ops - 1){
-	w = sprintf(cinfo->code + pos,  ", ");
+      if(j != ins.num_ops - 1){
+	w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos, ", ");
 	DR_ASSERT(w > 0);
 	pos += w;
       }
     }
-    w = sprintf(cinfo->code + pos,  "\n"); 
+    w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos,  "\n"); 
     DR_ASSERT(w > 0);
     pos += w;
 
     i++;
     DR_ASSERT(pos <= MAX_CODE_SIZE); 
+    
+
   }
 
-  cinfo->code_size = pos;
-  dr_thread_free(drcontext, instrs, sizeof(ins_t) * instr_count);
 
+  cinfo->code_size = pos;
+ 
 
 }
 
-
-/*
-
-  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
-
-    if(filter_instr(instr)) continue;
-    
-    pos += instr_disassemble_to_buffer(drcontext,instr,cinfo->code + pos, MAX_CODE_SIZE - 1 -  pos);
-    cinfo->code[pos++] = '\n';
-    remove_data(cinfo->code, prev_pos, pos, instr);
-    if(add_operand_size(cinfo->code, prev_pos, pos, instr)){
-      pos++;
-    }
-    correct_operand_ordering(cinfo->code, prev_pos, pos, instr);
-    prev_pos = pos;
-    DR_ASSERT(pos <= MAX_CODE_SIZE);
-  }
-
-  cinfo->code_size = pos;
-
- */
