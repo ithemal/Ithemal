@@ -23,8 +23,8 @@
 //global character count constants
 #define MAX_STRING_SIZE 128   //this is for generic strings
 #define MAX_MODULE_SIZE 128
-#define MAX_CODE_SIZE 10240
-#define MAX_QUERY_SIZE 10240
+#define MAX_CODE_SIZE 20480
+#define MAX_QUERY_SIZE 20480
 
 //for snooping - store filenames
 

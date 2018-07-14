@@ -39,7 +39,7 @@ void print_instr(ins_t * ins){
 }
 
 //assumes a cleaned up instruction with only valid mnemonics
-void parse_instr(const char * buffer, int length, ins_t * instr){
+bool parse_instr_att(const char * buffer, int length, ins_t * instr){
   
   int i = 0;
 
@@ -62,7 +62,7 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
       i++;
     }
     instr->name[i - start_opcode] = '\0';
-    return;
+    return true;
   }
 
 
@@ -89,15 +89,12 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
 	instr->operands[op_num].type = MEM_TYPE;
 	bool found_open = false;
 	while(buffer[i] != ')'){
-	  if(i >= length){
-	    dr_printf("%s:\n",buffer);
-	  }
-	  DR_ASSERT(i < length);
+	  if(i >= length) return false;
 	  if(buffer[i] == '(') found_open = true;
 	  instr->operands[op_num].name[i - start_operand] = buffer[i];
 	  i++;
 	}
-	DR_ASSERT(found_open);
+	if(!found_open) return false;
 	instr->operands[op_num].name[i - start_operand] = buffer[i];
 	instr->operands[op_num].name[i - start_operand + 1] = '\0';
 	while(i < length && buffer[i] != ',') i++;
@@ -114,15 +111,12 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
 	  if(j < length && buffer[j] == '('){ //has base index
 	    bool found_open = false;
 	    while(buffer[i] != ')'){
-	      if(i >= length){
-		dr_printf("%s:\n",buffer);
-	      }
-	      DR_ASSERT(i < length);
+	      if(i >= length) return false;      
 	      if(buffer[i] == '(') found_open = true;
 	      instr->operands[op_num].name[i - start_operand] = buffer[i];
 	      i++;
 	    }
-	    DR_ASSERT(found_open);
+	    if(!found_open) return false;
 	    instr->operands[op_num].name[i - start_operand] = buffer[i];
 	    instr->operands[op_num].name[i - start_operand + 1] = '\0';
 	    while(i < length && buffer[i] != ',') i++;
@@ -166,6 +160,8 @@ void parse_instr(const char * buffer, int length, ins_t * instr){
   }
 
   instr->num_ops = op_num;
+
+  return true;
   
 
 }
@@ -367,6 +363,12 @@ void textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     
     pos += instr_disassemble_to_buffer(drcontext,instr,cinfo->code + pos, MAX_CODE_SIZE - 1 -  pos);
     cinfo->code[pos++] = '\n';
+
+    if(pos > MAX_CODE_SIZE){
+      cinfo->code[MAX_CODE_SIZE - 1] = '\0';
+      dr_printf("%s:\n", cinfo->code);
+    }
+
     DR_ASSERT(pos <= MAX_CODE_SIZE);
   }
 
@@ -559,10 +561,11 @@ void change_operands(ins_t * ins, instr_t * instr){
   }
 
   case OP_vpinsrd:
-  case OP_vinserti128:{
+  case OP_vinserti128:
+  case OP_vinsertf128:{
     switch_operands(ins,0,2);
 
-    if(opcode == OP_vinserti128){
+    if(opcode == OP_vinserti128 || opcode == OP_vinsertf128){
       if(ins->operands[1].name[1] == 'y'){ //cannot be a ymm
 	ins->operands[1].name[1] = 'x';
       }
@@ -618,20 +621,27 @@ void change_operands(ins_t * ins, instr_t * instr){
   case OP_vpsrld:
   case OP_vpsrldq:
   case OP_vpsrlq:
-  case OP_vpsrlw:{
+  case OP_vpsrlw:
+
+  case OP_vpcmpistri:
+  case OP_pcmpistri:{
     break;
   }
 
   case OP_xadd:{
-    if(ins->operands[0].type == MEM_TYPE){ //ex - xaddl (%rbx), %eax
-      switch_operands(ins, 0, 1);
-    }
+    //if(ins->operands[0].type == MEM_TYPE){ //ex - xaddl (%rbx), %eax
+    switch_operands(ins, 0, 1);
+    //}
     break;
   }
 
   case OP_vpmovzxbw:
-  case OP_vpmovzxwd:{
-    if(ins->num_ops == 2){ //TODO - check actual DR operands
+  case OP_vpmovzxwd:
+  case OP_vpmovzxdq:
+  case OP_vpmovsxbw:
+  case OP_vpmovsxwd:
+  case OP_vpmovsxdq:{
+    if(ins->num_ops == 2){ //TODO - check actual DR operands and then emit ymm or xmm
       if(ins->operands[0].type == REG_TYPE){
 	if(ins->operands[0].name[1] == 'y')
 	  ins->operands[0].name[1] = 'x';
@@ -709,7 +719,9 @@ void change_opcodes(ins_t * ins,  instr_t * instr){
   }
 
   case OP_vcvtsi2sd:
-  case OP_vcvtsi2ss:{
+  case OP_vcvtsi2ss:
+  case OP_cvtsi2sd:
+  case OP_cvtsi2ss:{
    
     int size = opnd_size_in_bytes(opnd_get_size(instr_get_src(instr,1)));
     char suffix = get_size_prefix(size);
@@ -768,8 +780,6 @@ bool add_operand_size(ins_t * ins, instr_t * instr){
     return false;
   }
   
- 
-
   //get the maximum write size
   int num_dsts = instr_num_dsts(instr);
   int i = 0;
@@ -821,17 +831,12 @@ bool add_operand_size(ins_t * ins, instr_t * instr){
     return false;
   }
 
-  //DR bug fixing - check for consistency later
-  //if(num_dsts == 1){ //DR bug 
-  //  if( (opnd_is_memory_reference(instr_get_dst(instr,0))) && immed_op )
-  //    return false;
-  //}
 
   //rep instructions are correct
   if(strstr(ins->name,"rep")){
     return false;
   }
-
+  
   //ok, add the prefix
   char prefix = get_size_prefix(maxsize);
   
@@ -855,7 +860,6 @@ void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
   instr_t * instr;
   int pos = 0;
  
-  int i = 0;  
   char disasm[BUFFER_SIZE];
 
   ins_t ins;
@@ -868,7 +872,10 @@ void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
 
     //dr_printf("raw:%s:\n",disasm);
     remove_data(disasm, length);
-    parse_instr(disasm, length, &ins);
+    if(!parse_instr_att(disasm, length, &ins)){
+      dr_printf("%s:\n",disasm);
+      continue;
+    }
     //dr_printf("before:");
     //print_instr(&ins);
 
@@ -901,7 +908,11 @@ void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
     DR_ASSERT(w > 0);
     pos += w;
 
-    i++;
+    if(pos > MAX_CODE_SIZE){
+      cinfo->code[MAX_CODE_SIZE - 1] = '\0';
+      dr_printf("%s:\n",cinfo->code);
+    }
+
     DR_ASSERT(pos <= MAX_CODE_SIZE); 
     
 
