@@ -9,13 +9,6 @@ import common.utilities as ut
 from tqdm import tqdm
 
 
-def example_plot():
-
-    x = np.random.choice(10,10)
-    y = np.random.choice(10,10)
-    plt.plot(x,y)
-    plt.show()
-
 class CodeTimes:
     
     def __init__(self,code_id, code, program, rel_addr, sym_dict, mem_offset):

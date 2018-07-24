@@ -12,7 +12,7 @@ import os
 import re
 import time
 import argparse
-
+    
 
 def wait_timeout(proc, seconds):
     """Wait for a process to finish, or raise exception after timeout"""
@@ -29,28 +29,6 @@ def wait_timeout(proc, seconds):
             return None
         time.sleep(interval)
 
-def remove_unrecog_words(line):
-
-    words = ['ptr', '<rel>']
-
-    for word in words:
-        line = line.replace(word,'')
-    return line
-
-def add_memory_prefix(line):
-    mem = re.search('.*\[(.*)\].*', line)
-    if mem != None and 'rsp' not in line:
-        index = mem.span(1)[0]
-        line = line[:index] + 'UserData + ' + line[index:]
-    return line
-
-
-def insert_time_value(cnx,code_id, time, arch):
-
-    sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'actual\',' + str(time) + ')'
-    ut.execute_query(cnx, sql, False)
-    cnx.commit()
-    
 
 class PMCValue:
     
@@ -122,6 +100,14 @@ class PMCCounters:
                 return counter.mode
         return None
 
+
+def insert_time_value(cnx,code_id, time, arch):
+
+    sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'llvm\',' + str(time) + ')'
+    ut.execute_query(cnx, sql, False)
+    cnx.commit()
+
+
 def check_error(line):
     
     errors = ['error','fault']
@@ -143,7 +129,6 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
 
-    
     assert (args.database != None) or (args.input != None and args.output != None)
     if args.database != None:
         mode = 1
@@ -153,20 +138,18 @@ if __name__ == '__main__':
 
     if mode == 1:
         cnx = ut.create_connection(args.database)
-        sql = 'SELECT code_intel, code_id from code'
+        sql = 'SELECT code_att, code_id from code'
         rows = ut.execute_query(cnx, sql, True)
         print len(rows)
     elif mode == 2:
         rows = torch.load(args.input)
-
-    os.chdir('/data/scratch/charithm/projects/cmodel/agner/testp/PMCTest')
     
     lines = []
     start_line = -1
-    with open('PMCTestB64.nasm','r') as f:
+    with open('test.s','r') as f:
         lines = f.readlines()
         for i, line in enumerate(lines):
-            rep = re.search('.*%REP.*', line)
+            rep = re.search('.*NO_APP.*', line)
             if rep != None:
                 start_line = i
                 break
@@ -180,7 +163,8 @@ if __name__ == '__main__':
     not_finished = 0
 
 
-    for row in rows:
+
+    for row in tqdm(rows):
     
         if row[0] == None:
             continue
@@ -192,24 +176,17 @@ if __name__ == '__main__':
         final_bb = []
         for i, line in enumerate(splitted):
             if line != '':
-                line = remove_unrecog_words(line + '\n')
-                line = add_memory_prefix(line)
-                final_bb.append(line)
-                write_lines.insert(start_line + 1 + i, line)
+                final_bb.append(line + '\n')
+                write_lines.insert(start_line + 1 + i, line + '\n')
                 written += 1
-
-        for line in final_bb:
-            print line[:-1]
-
 
         #written = 1
         if written > 0:
             total += 1
-            with open('out.nasm','w+') as f:
+            with open('out.s','w+') as f:
                 f.writelines(write_lines)
-            proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)            
+            proc = subprocess.Popen(['../../../llvm-build/bin/llvm-mca','out.s'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)            
             result = wait_timeout(proc, 10)
-
             
             if result != None:
                 
@@ -222,28 +199,13 @@ if __name__ == '__main__':
                             break
  
                     if error_lines == False:
-                        startHeading = False
-                        startTimes = False
-                        counters = None
-                        for i, line in enumerate(iter(proc.stdout.readline, '')):
-                            print line
-                            if 'Clock' in line and startTimes == False and startHeading == False: #still didn't start collecting the actual timing data
-                                startHeading = True
-                            if startHeading == True:
-                                #print 'headings ' + line
-                                counters = PMCCounters(line)
-                                startTimes = True
-                                startHeading = False
-                            elif startTimes == True:
-                                #print 'values ' + line
-                                counters.add_to_counters(line)
-                        if counters != None:
-                            counters.set_modes()
-                            mode = counters.get_value('Core_cyc')
-                            print mode
-                            if mode != None:                    
-                                insert_time_value(cnx, row[1], mode, args.arch)
-                                success += 1
+                        success += 1
+                        for line in iter(proc.stdout.readline, ''):
+                            found = re.search('.*Total Cycles:.* ([0-9]+)',line)
+                            if found:
+                                cycles = int(found.group(1))
+                                insert_time_value(cnx, row[1], cycles, args.arch) 
+
                     else:
                         for line in final_bb:
                             print line[:-1]
@@ -255,7 +217,7 @@ if __name__ == '__main__':
             else:
                 print 'error not completed'
                 not_finished += 1
-        
-        print total, success, errors, not_finished, except_errors
-
+        if total % 100000 == 0:
+            print total, success, errors, not_finished, except_errors
+    
     cnx.close()

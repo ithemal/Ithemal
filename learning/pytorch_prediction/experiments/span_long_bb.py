@@ -126,8 +126,8 @@ if __name__ == "__main__":
     result_name = '../results/spanregressbigbb.png'
     gr.plot_line_graphs(result_name, losses_regress, modelnames)
     result_name = '../results/spanregressbigbbtesterror.png'
-    gr.plot_line_graphs(result_name, errors_regress, modelnames)
-
+    gr.plot_line_graphs(result_name, errors_regress, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
+ 
 
     #task - classification
     print 'classification model D...'
@@ -149,6 +149,6 @@ if __name__ == "__main__":
     result_name = '../results/spanclassificationbigbb.png'
     gr.plot_line_graphs(result_name, losses_classification, modelnames)
     result_name = '../results/spanclassificationbigbbtesterror.png'
-    gr.plot_line_graphs(result_name, errors_classification, modelnames)
+    gr.plot_line_graphs(result_name, errors_classification, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
 
 

@@ -140,8 +140,7 @@ if __name__ == "__main__":
     result_name = '../results/spanregress' + cost_prefix + '.png'
     gr.plot_line_graphs(result_name, losses_regress, modelnames)
     result_name = '../results/spanregresstesterror' + cost_prefix + '.png'
-    gr.plot_line_graphs(result_name, errors_regress, modelnames)
-
+    gr.plot_line_graphs(result_name, errors_regress, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
 
 
     #task - classification
@@ -178,6 +177,6 @@ if __name__ == "__main__":
     result_name = '../results/spanclassification' + cost_prefix + '.png'
     gr.plot_line_graphs(result_name, losses_classification, modelnames)
     result_name = '../results/spanclassificationtesterror' + cost_prefix + '.png'
-    gr.plot_line_graphs(result_name, errors_classification, modelnames)
-
+    gr.plot_line_graphs(result_name, errors_classification, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
+  
 

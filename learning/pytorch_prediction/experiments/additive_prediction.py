@@ -145,7 +145,7 @@ if __name__ == "__main__":
     result_name = '../results/add' + cost_prefix + '.png'
     gr.plot_line_graphs(result_name, losses, modelnames)
     result_name = '../results/addtesterror' + cost_prefix + '.png'
-    gr.plot_line_graphs(result_name, errors, modelnames)
+    gr.plot_line_graphs(result_name, errors, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
 
 
 

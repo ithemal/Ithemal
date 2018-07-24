@@ -10,7 +10,6 @@ import numpy as np
 import os
 import gc
 import psutil
-from tqdm import tqdm
 
 def memReport():
     num_obj = 0
@@ -47,24 +46,17 @@ class Train():
                  saves_per_epoch = 5,
                  lr = 0.001,
                  momentum = 0.9,
-                 clip = 2,
-                 opt = 'SGD'
+                 clip = 2
     ):
 
         self.model = model
         print self.model
         self.data = data
+        self.optimizer = optim.Adam(self.model.parameters())
         self.lr = lr
         self.momentum = momentum
         self.clip = clip
-        self.opt = opt
-        if opt == 'SGD':
-            self.optimizer = optim.SGD(self.model.parameters(), lr = lr, momentum = momentum)
-        elif opt == 'Adam':
-            self.optimizer = optim.Adam(self.model.parameters())
-        else:
-            print 'unknown optimizer...'
-            exit(-1)
+        #self.optimizer = optim.SGD(self.model.parameters(), lr = lr, momentum = momentum)
 
         #training parameters
         self.epochs = epochs
@@ -209,8 +201,6 @@ class Train():
                     
                     if isnan.any():
                         print 'output nan detected, quit learning, please use the saved model...'
-                        #also add the per epch loss to the main loss accumulation
-                        self.loss.append(self.per_epoch_loss)
                         return
                         
 
@@ -249,8 +239,6 @@ class Train():
                         isnan = torch.isnan(param.grad)
                         if isnan.any():
                             print 'gradient values are nan...'
-                            #append the loss before returning
-                            self.loss.append(self.per_epoch_loss)
                             return
 
                     #optimizer step to update parameters
@@ -280,7 +268,7 @@ class Train():
                 self.per_epoch_loss.append(losses)
                 
                 #change learning rates
-                if self.correct_fn == self.correct_regression and self.opt != 'Adam':
+                if self.correct_fn == self.correct_regression:
                     if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
                         print 'reducing learning rate....'
                         self.lr = self.lr * 0.1
@@ -304,7 +292,7 @@ class Train():
         if savefile != None:
             print 'final model saved...'
             self.save_checkpoint(self.epochs - 1,epoch_len - 1,savefile)
-    
+        
         
     """
     Validation with a test set
@@ -324,7 +312,7 @@ class Train():
         actual = []
         predicted = []
 
-        for j, item in enumerate(tqdm(self.data.test)):
+        for j, item in enumerate(self.data.test):
 
             #print len(item.x)
             output = self.model(item)
@@ -355,8 +343,10 @@ class Train():
                 p_str += str(self.correct) + ' '
                 print p_str
 
+
             #remove refs; so the gc remove unwanted tensors
             self.model.remove_refs(item)
+                
            
         for loss in average_loss:
             f.write('loss - %f\n' % (loss))
@@ -373,4 +363,3 @@ class Train():
 
         
         
-

@@ -158,7 +158,8 @@ if __name__ == "__main__":
     result_name = '../results/spanregressvariance.png'
     gr.plot_line_graphs(result_name, losses_regress, modelnames)
     result_name = '../results/spanregressvariancetesterror.png'
-    gr.plot_line_graphs(result_name, errors_regress, modelnames)
+    gr.plot_line_graphs(result_name, errors_regress, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
+    
 
 
     print 'running span variance testing classification...'
@@ -226,6 +227,6 @@ if __name__ == "__main__":
     result_name = '../results/spanclassificationvariance.png'
     gr.plot_line_graphs(result_name, losses_classification, modelnames)
     result_name = '../results/spanclassificationvariancetesterror.png'
-    gr.plot_line_graphs(result_name, errors_classification, modelnames)
+    gr.plot_line_graphs(result_name, errors_classification, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
 
 

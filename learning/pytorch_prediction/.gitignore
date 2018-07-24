@@ -1,6 +1,5 @@
 *.pyc
 *.txt
-data/
 inputs/
 results/
 saved/

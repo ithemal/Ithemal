@@ -68,6 +68,11 @@ def get_name(val,sym_dict,mem_offset):
     else:
         return sym_dict[val]
 
+def execute_many(cnx, sql, values):
+    cur = cnx.cursor(buffered=True)
+    cur.executemany(sql, values)
+
+
 def execute_query(cnx, sql, fetch):
     cur = cnx.cursor(buffered=True)
     cur.execute(sql)
