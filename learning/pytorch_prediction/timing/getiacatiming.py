@@ -103,14 +103,14 @@ class PMCCounters:
 
 def insert_time_value(cnx,code_id, time, arch):
 
-    sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'llvm\',' + str(time) + ')'
+    sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'iaca\',' + str(time) + ')'
     ut.execute_query(cnx, sql, False)
     cnx.commit()
 
 
 def check_error(line):
     
-    errors = ['error','fault']
+    errors = ['error','fault','Error']
     
     for error in errors:
         if error in line:
@@ -164,10 +164,16 @@ if __name__ == '__main__':
     success = 0
     not_finished = 0
 
-
-
-    for row in rows:
     
+    start = int(len(rows) * 0.8)
+    finished_idx = 0
+
+    for row in tqdm(rows[start:]):
+    
+        finished_idx += 1
+        if finished_idx < 28000:
+            continue
+
         if row[0] == None:
             continue
 
@@ -181,6 +187,9 @@ if __name__ == '__main__':
                 final_bb.append(line + '\n')
                 write_lines.insert(start_line + 1 + i, line + '\n')
                 written += 1
+
+        #for line in final_bb:
+        #    print line
 
         #written = 1
         if written > 0:
@@ -215,10 +224,10 @@ if __name__ == '__main__':
                 errors += 1
                 continue
 
-            print 'comp succesful'
+            #print 'comp succesful'
 
-            proc = subprocess.Popen(['./iaca','-arch','HSW','test.o'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            result = wait_timeout(proc, 10)
+            proc = subprocess.Popen(['./iaca','-arch','HSW','-reduceout','test.o'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = wait_timeout(proc, 20)
 
             
             if result != None:
@@ -233,15 +242,15 @@ if __name__ == '__main__':
  
                 if error_lines == False:
                     success += 1
-                    for line in iter(proc.stderr.readline, ''):
+                    for line in iter(proc.stdout.readline, ''):
                         found = re.search('Block Throughput: ([0-9]+\.?[0-9]*) Cycles.*',line)
+                        #print line
                         if found:
-                            print found.group(0)
+                            #print found.group(0)
                             cycles = float(found.group(1))
                             if cycles != 0:
                                 print cycles
-                                break
-                                #insert_time_value(cnx, row[1], cycles, args.arch) 
+                                insert_time_value(cnx, row[1], cycles, args.arch) 
                 else:
                     for line in final_bb:
                         print line[:-1]
@@ -250,7 +259,7 @@ if __name__ == '__main__':
             else:
                 print 'error not completed'
                 not_finished += 1
-        if total % 100000 == 0:
-            print total, success, errors, not_finished, except_errors
+
+        print total, success, errors, not_finished, except_errors
     
     cnx.close()

@@ -198,9 +198,7 @@ if __name__ == '__main__':
                 write_lines.insert(start_line + 1 + i, line)
                 written += 1
 
-        for line in final_bb:
-            print line[:-1]
-
+ 
 
         #written = 1
         if written > 0:
@@ -226,7 +224,6 @@ if __name__ == '__main__':
                         startTimes = False
                         counters = None
                         for i, line in enumerate(iter(proc.stdout.readline, '')):
-                            print line
                             if 'Clock' in line and startTimes == False and startHeading == False: #still didn't start collecting the actual timing data
                                 startHeading = True
                             if startHeading == True:

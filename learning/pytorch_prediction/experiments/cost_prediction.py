@@ -18,14 +18,14 @@ import models.train as tr
 from tqdm import tqdm
 
 
-def save_data(database, format, savefile):
+def save_data(database, format, savefile, arch):
 
     cnx = ut.create_connection(database)
     
     data = dt.DataInstructionEmbedding()
     
     data.extract_data(cnx, format, ['code_id','code_intel'])
-    data.get_timing_data(cnx, 1)
+    data.get_timing_data(cnx, arch)
 
     torch.save(data.raw_data, savefile)
 
@@ -52,7 +52,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-    train = tr.Train(model, data, epochs = 10, batch_size = 1000, clip=None, opt='SGD', lr = 0.01)
+    train = tr.Train(model, data, epochs = 10, batch_size = 1000, clip=None, opt='Adam', lr = 0.01)
            
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -169,10 +169,6 @@ def graph_model_gettiming(database, format, data_savefile, embed_file, model_fil
     cnx.close()
     
     
-
-    
-
-
 if __name__ == "__main__":
 
     #command line arguments
@@ -185,11 +181,12 @@ if __name__ == "__main__":
     parser.add_argument('--embedfile',action='store',type=str,default='../inputs/code_delim.emb')
     parser.add_argument('--savefile',action='store',type=str,default='../saved/graphCost.mdl')
     parser.add_argument('--loadfile',action='store',type=str,default='../saved/graphCost.mdl')
+    parser.add_argument('--arch',action='store',type=int, default=1)
 
     args = parser.parse_args(sys.argv[1:])
 
     if args.mode == 'save':
-        save_data(args.database, args.format, args.savedatafile)
+        save_data(args.database, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
         graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode)
     elif args.mode == 'validate':
