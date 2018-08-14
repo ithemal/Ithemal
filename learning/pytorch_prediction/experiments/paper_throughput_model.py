@@ -24,7 +24,7 @@ import models.train as tr
 #train using the final value for models (A), (B), (C) - regression
 def train_model_regression(data, model, savemodelfile, resultfile, clip=None, lr=0.01):
 
-    train = tr.Train(model, data, epochs = 3, batch_size = 1000, epoch_len_div = 1, lr=lr, clip=clip)
+    train = tr.Train(model, data, epochs = 3, batch_size = 1000, opt='Adam', epoch_len_div = 6, lr=lr, clip=clip)
 
     train.loss_fn = ls.mse_loss
     train.print_fn = train.print_final
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     parser.add_argument('--format',action='store',type=str,default='text')
     parser.add_argument('--embedfile',action='store',type=str, default='../inputs/code_delim.emb')
     parser.add_argument('--embmode',action='store',type=str, default='none')
-    parser.add_argument('--datafile',action='store',type=str, default='../saved/timing_haswell.data')
+    parser.add_argument('--datafile',action='store',type=str, default='../saved/timing_skylake.data')
     args = parser.parse_args(sys.argv[1:])
 
     #create the abstract data object
@@ -122,6 +122,21 @@ if __name__ == "__main__":
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
     losses.append(loss)
     modelnames.append('Graph RNN')
+
+
+    torch.save(losses, '../results/losses_throughput_3.pkl')
+
+    #get only 300 batches
+
+    temp_losses = []
+    for loss in losses:
+        if len(loss) > 300:
+            temp_losses.append(loss[:100])
+        else:
+            temp_losses.append(loss)
+
+    losses = temp_losses
+
 
     result_name = '../results/paper_throughput.png'
     gr.plot_line_graphs(result_name, losses, modelnames)

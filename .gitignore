@@ -91,3 +91,10 @@ stoke/
 agner/
 testing/*
 \#*\#
+iaca/
+llvm/
+llvm-mca/
+llvm-build/
+zsim/
+keys/
+*.pkl

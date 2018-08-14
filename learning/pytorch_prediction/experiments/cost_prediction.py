@@ -113,7 +113,7 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
             
     f.close()
     
-def graph_model_gettiming(database, format, data_savefile, embed_file, model_file, embedding_mode):
+def graph_model_gettiming(database, format, data_savefile, embed_file, model_file, embedding_mode, arch):
 
     cnx = ut.create_connection(database)
 
@@ -152,7 +152,6 @@ def graph_model_gettiming(database, format, data_savefile, embed_file, model_fil
         
         code_id = data.code_id
         kind = 'predicted'
-        arch = 1
         time = predicted[i]
 
 
@@ -192,7 +191,7 @@ if __name__ == "__main__":
     elif args.mode == 'validate':
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)    
     elif args.mode == 'predict':
-        graph_model_gettiming(args.database, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode)
+        graph_model_gettiming(args.database, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
                
         
 

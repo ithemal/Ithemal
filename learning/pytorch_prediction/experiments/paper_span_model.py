@@ -124,6 +124,21 @@ if __name__ == "__main__":
     losses.append(loss)
     modelnames.append('Graph RNN')
 
+
+    torch.save(losses, '../results/losses_span_3.pkl')
+
+    #get only 100 batches
+
+    temp_losses = []
+    for loss in losses:
+        if len(loss) > 100:
+            temp_losses.append(loss[:100])
+        else:
+            temp_losses.append(loss)
+
+    losses = temp_losses
+
+
     result_name = '../results/paper_span.png'
     gr.plot_line_graphs(result_name, losses, modelnames)
     result_name = '../results/paper_span_error.png'

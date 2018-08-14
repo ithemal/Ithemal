@@ -30,12 +30,11 @@ from sklearn.manifold import TSNE
 
 def plot_histogram(filename, values):
     plt.figure()
-    plt.hist(values, bins=80, range=(30,430), edgecolor='black', linewidth=0.3)
+    plt.hist(values, bins=50, range=(0,1000), edgecolor='black', linewidth=0.3)
     plt.xlabel('throughput for 100 repetitions (cycles)')
     plt.ylabel('count')
     plt.savefig(filename, bbox_inches='tight')
     plt.close()
-
 
 
 class Program:
@@ -43,7 +42,7 @@ class Program:
     def __init__(self, name):
         self.name = name
         self.basicblocks = 0
-        self.times = 0
+        self.times = dict()
 
 class Benchmark:
 
@@ -68,6 +67,7 @@ if __name__ == '__main__':
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--database',action='store', type=str, required=True)
+    parser.add_argument('--arch',action='store', type=int, required=True)
     args = parser.parse_args(sys.argv[1:])
 
     #setting up
@@ -168,52 +168,69 @@ if __name__ == '__main__':
     rows = ut.execute_query(cnx, sql, True)
 
 
-    time_available = 0
-    timevals = []
+    time_available = dict()
+    timevals = dict()
+    
+    for i in range(1, args.arch + 1):
+        time_available[i] = 0
+        timevals[i] = []
+
     
     for row in tqdm(rows):
         
         code_id = row[0]
 
-        sql = 'select time from times where code_id=' + str(code_id) + ' and kind=\'predicted\''
-        times = ut.execute_query(cnx, sql, True)
+        for i in range(1, args.arch + 1):
+
+            sql = 'select time from times where code_id=' + str(code_id) + ' and kind=\'actual\' and arch=' + str(i)
+            times = ut.execute_query(cnx, sql, True)
         
-        if len(times) > 0:
-            time_available += 1
-            timevals.append(times[0][0])
-            for bench in allbench:
-                for program in bench.programs:
-                    if program.name == row[1]:
-                        program.times += 1
+            if len(times) > 0:
+                time_available[i] += 1
+                timevals[i].append(times[0][0])
+                for bench in allbench:
+                    for program in bench.programs:
+                        if program.name == row[1]:
+                            if i in program.times:
+                                program.times[i] += 1
+                            else:
+                                program.times[i] = 1
                         
 
     print time_available
 
-    plot_histogram('figures/timinghist.png', timevals)
 
-    tbbs = 0
-    tprograms = 0
-    ttimes = 0
+    for i in timevals.keys():
+        plot_histogram('figures/timinghist_' + str(i) + '.png', timevals[i])
+
 
     #print it out
-    for bench in allbench:
+
+    for i in range(1, args.arch + 1):
+
+        tbbs = 0
+        tprograms = 0
+        ttimes = 0
+
+        for bench in allbench:
         
-        bbs = 0
-        programs = 0
-        times = 0
+            bbs = 0
+            programs = 0
+            times = 0
 
-        for program in bench.programs:
-            programs += 1
-            bbs += program.basicblocks
-            times += program.times
+            for program in bench.programs:
+                programs += 1
+                bbs += program.basicblocks
+                if i in program.times:
+                    times += program.times[i]
 
-        print bench.name + ' ' + str(programs) + ' ' + str(bbs) + ' ' + str(times)
+            print bench.name + ' ' + str(programs) + ' ' + str(bbs) + ' ' + str(times)
 
-        tbbs += bbs
-        tprograms += programs
-        ttimes += times
+            tbbs += bbs
+            tprograms += programs
+            ttimes += times
 
-    print 'Total ' + str(tprograms) + ' ' + str(tbbs) + ' ' + str(ttimes)
+        print 'Total ' + str(tprograms) + ' ' + str(tbbs) + ' ' + str(ttimes)
     
 
 

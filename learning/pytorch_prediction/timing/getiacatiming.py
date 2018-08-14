@@ -18,7 +18,7 @@ def wait_timeout(proc, seconds):
     """Wait for a process to finish, or raise exception after timeout"""
     start = time.time()
     end = start + seconds
-    interval = min(seconds / 1000.0, .25)
+    interval = min(seconds / 1000.0, .10)
 
     while True:
         result = proc.poll()
@@ -123,28 +123,18 @@ if __name__ == '__main__':
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch',action='store',type=int,required=True)
-    parser.add_argument('--database',action='store',type=str)
-    parser.add_argument('--input',action='store',type=str)
-    parser.add_argument('--output',action='store',type=str)
+    parser.add_argument('--cpu',action='store',type=str,required=True)
+    parser.add_argument('--subd',action='store',type=str,required=True)
+    parser.add_argument('--database',action='store',type=str,required=True)
+    parser.add_argument('--tp',action='store',type=bool,default=False)
     args = parser.parse_args(sys.argv[1:])
 
-
-    assert (args.database != None) or (args.input != None and args.output != None)
-    if args.database != None:
-        mode = 1
-    else:
-        mode = 2
-
-
-    if mode == 1:
-        cnx = ut.create_connection(args.database)
-        sql = 'SELECT code_att, code_id from code'
-        rows = ut.execute_query(cnx, sql, True)
-        print len(rows)
-    elif mode == 2:
-        rows = torch.load(args.input)
-
-    os.chdir('/data/scratch/charithm/projects/cmodel/iaca')
+    cnx = ut.create_connection(args.database)
+    sql = 'SELECT code_att, code_id from code'
+    rows = ut.execute_query(cnx, sql, True)
+    print len(rows)
+    
+    os.chdir('/data/scratch/charithm/projects/cmodel/iaca/' + args.subd)
 
     lines = []
     start_line = -1
@@ -164,16 +154,13 @@ if __name__ == '__main__':
     success = 0
     not_finished = 0
 
+    total_time = 0
+
     
     start = int(len(rows) * 0.8)
-    finished_idx = 0
 
     for row in tqdm(rows[start:]):
     
-        finished_idx += 1
-        if finished_idx < 28000:
-            continue
-
         if row[0] == None:
             continue
 
@@ -226,12 +213,13 @@ if __name__ == '__main__':
 
             #print 'comp succesful'
 
-            proc = subprocess.Popen(['./iaca','-arch','HSW','-reduceout','test.o'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            result = wait_timeout(proc, 20)
+            proc = subprocess.Popen(['../iaca','-arch',args.cpu,'-reduceout','test.o'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+            start_time = time.time()
+            result = wait_timeout(proc, 10)
+            end_time = time.time()
             
             if result != None:
-                
                 
                 error_lines = False
                 for line in iter(proc.stderr.readline, ''):
@@ -244,13 +232,15 @@ if __name__ == '__main__':
                     success += 1
                     for line in iter(proc.stdout.readline, ''):
                         found = re.search('Block Throughput: ([0-9]+\.?[0-9]*) Cycles.*',line)
-                        #print line
                         if found:
                             #print found.group(0)
                             cycles = float(found.group(1))
                             if cycles != 0:
+                                total_time += end_time - start_time
                                 print cycles
-                                insert_time_value(cnx, row[1], cycles, args.arch) 
+                                if not args.tp:
+                                    insert_time_value(cnx, row[1], cycles, args.arch) 
+                            break
                 else:
                     for line in final_bb:
                         print line[:-1]
@@ -260,6 +250,6 @@ if __name__ == '__main__':
                 print 'error not completed'
                 not_finished += 1
 
-        print total, success, errors, not_finished, except_errors
+        print total, success, errors, not_finished, except_errors, total_time
     
     cnx.close()

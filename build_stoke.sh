@@ -28,7 +28,18 @@ export LIBRARY_PATH=$LIBRARY_PATH:/data/scratch/charithm/libraries/src/CBLAS/lib
 export CPATH=$CPATH:/data/scratch/charithm/libraries/src/BLAS-3.8.0
 export LIBRARY_PATH=$LIBRARY_PATH:/data/scratch/charithm/libraries/src/BLAS-3.8.0
 
+#mysql connector
+export CPATH=$CPATH:/data/scratch/charithm/libraries/install/mysql/include
+export LIBRARY_PATH=$LIBRARY_PATH:/data/scratch/charithm/libraries/install/mysql/lib
 
-cd stoke
+#caffe2
+export CPATH=$CPATH:/data/scratch/charithm/libraries/install/caffe2/include
+export LIBRARY_PATH=$LIBRARY_PATH:/data/scratch/charithm/libraries/install/caffe2/lib
+
+cur=$(pwd)
+cd stoke/src/ext/x64asm
 make
-cd ..
+cd $cur
+cd stoke
+make bin/cmodel_test
+cd $cur
