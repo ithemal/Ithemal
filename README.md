@@ -7,7 +7,7 @@ More details about Ithemal's approach can be found in our [paper](https://arxiv.
 # Dependencies
 
 * Data Collection
-..* DynamoRIO - download and build the latest DyanmoRIO version from [here](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
+  * DynamoRIO - download and build the latest DyanmoRIO version from [here](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
 
 # Organization
 
