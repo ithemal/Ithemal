@@ -11,7 +11,16 @@ More details about Ithemal's approach can be found in our [paper](https://arxiv.
 
 * Data Collection
   * DynamoRIO - download and build the latest DyanmoRIO version from [here](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
-  * SQLite - download the latest build from [here](https://www.sqlite.org/download.html).
+  * SQLite - We recommend downloading the latest source from [here](https://www.sqlite.org/download.html) and building it.
+
+* Data Export
+  * MySQL 5.7 - download and build from (here)[https://dev.mysql.com/downloads/mysql/5.7.html] - we do not support MySQL 8
+
+* Training and Inference
+  * Python 2.7
+  * Python packages - we recommend using a python virtual environment when installing these packages 
+    * MySQL python connector 2.1 - we do not support connector 8 API
+    * PyTorch - download the latest source from (here)[https://pytorch.org] and build.
 
 # Organization
 

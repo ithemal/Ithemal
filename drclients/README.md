@@ -6,7 +6,7 @@
 * cmake -DDynamoRIO_DIR=/path/to/dynamorio/cmake/folder ..
 * make
 
-# Running instructions
+# Running Instructions
 
 ## sample invocation of DynamoRIO under a client
 
