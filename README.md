@@ -6,8 +6,12 @@ More details about Ithemal's approach can be found in our [paper](https://arxiv.
 
 # Dependencies
 
+* Common
+  * cmake - version > 3.1
+
 * Data Collection
   * DynamoRIO - download and build the latest DyanmoRIO version from [here](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
+  * SQLite - download the latest build from [here](https://www.sqlite.org/download.html).
 
 # Organization
 
