@@ -1,5 +1,5 @@
 
-# Building Instructions
+# Build Instructions
 
 * Make sure LIBRAY_PATH is prepended to point to the SQLite lib folder and CPATH is prepended to point to the SQLite include folder.
 * mkdir build; cd build
@@ -11,9 +11,9 @@
 ## sample invocation of DynamoRIO under a client
 
 * export DYNAMORIO_HOME=/path/to/dynamorio/home
-* $DYNAMORIO_HOME/build/drrun -c /path/to/client <client_arguments> -- <binary>
+* $DYNAMORIO_HOME/build/drrun -c /path/to/client <client_arguments> \-\- <binary>
 
-## static dr client
+## static DR client
 
 This is used for collecting textual (Intel or AT&T or both) and tokenized representations of the basic blocks. Output can directly
 populate a SQLite database or can dump SQL files.
@@ -28,7 +28,7 @@ populate a SQLite database or can dump SQL files.
   * data folder - where the SQL dump should be created
 
 
-## timing dr client
+## timing DR client
 
 This client is used for timing basic blocks while running under DynamoRIO control. Due to inaccuracies in the timing
 measurements this method is not preferred and not used by Ithemal.
