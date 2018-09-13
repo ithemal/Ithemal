@@ -19,7 +19,7 @@ More details about Ithemal's approach can be found in our [paper](https://arxiv.
 * Training and Inference
   * Python 2.7
   * Python packages - we recommend using a python virtual environment when installing these packages 
-    * MySQL python connector 2.1 - we do not support connector 8 API
+    * MySQL python connector 2.1 - Download from [here](https://dev.mysql.com/downloads/connector/python/). We do not support connector 8 API
     * PyTorch 0.4 or higher - download the latest source from [here](https://pytorch.org) and build.
 
 # Organization
