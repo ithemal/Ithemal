@@ -11,7 +11,7 @@
 ## sample invocation of DynamoRIO under a client
 
 * export DYNAMORIO_HOME=/path/to/dynamorio/home
-* $DYNAMORIO_HOME/build/drrun -c /path/to/client <client_arguments> \-\- <binary>
+* $DYNAMORIO_HOME/build/drrun -c /path/to/client \<client_arguments\> \-\- \<binary\>
 
 ## static DR client
 
