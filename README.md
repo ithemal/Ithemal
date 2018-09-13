@@ -6,21 +6,24 @@ More details about Ithemal's approach can be found in our [paper](https://arxiv.
 
 # Dependencies
 
+We personally recommend downloading the required sources (for the versions mentioned) and building dependencies from scratch, but you are welcome to install using your favourite package manager. We have always built from sources and have not tested the versions included with package managers. Download link to source distributions of dependencies are provided (in most cases).
+
 * Common
-  * cmake - version > 3.1
+  * Boost 1.59 or higher [link](https://www.boost.org/users/download/)
+  * cmake - version > 3.1 [link](https://cmake.org/download/)
 
 * Data Collection
-  * DynamoRIO - download and build the latest DyanmoRIO version from [here](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
-  * SQLite - We recommend downloading the latest source from [here](https://www.sqlite.org/download.html) and building it.
+  * DynamoRIO [link](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
+  * SQLite [link](https://www.sqlite.org/download.html).
 
 * Data Export
-  * MySQL server 5.7 - download and build from [here](https://dev.mysql.com/downloads/mysql/5.7.html) - we do not support MySQL 8
+  * MySQL server 5.7 [link](https://dev.mysql.com/downloads/mysql/5.7.html) - We do not support MySQL 8; build with --with-boost=/path/to/boost
 
 * Training and Inference
   * Python 2.7
   * Python packages - we recommend using a python virtual environment when installing these packages 
-    * MySQL python connector 2.1 - Download from [here](https://dev.mysql.com/downloads/connector/python/). We do not support connector 8 API
-    * PyTorch 0.4 or higher - download the latest source from [here](https://pytorch.org) and build.
+    * MySQL python connector 2.1 [link](https://dev.mysql.com/downloads/connector/python/) - We do not support connector 8 API
+    * PyTorch 0.4 or higher [link](https://pytorch.org).
 
 # Organization
 
