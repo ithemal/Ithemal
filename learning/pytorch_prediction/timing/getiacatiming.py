@@ -127,6 +127,8 @@ if __name__ == '__main__':
     parser.add_argument('--subd',action='store',type=str,required=True)
     parser.add_argument('--database',action='store',type=str,required=True)
     parser.add_argument('--tp',action='store',type=bool,default=False)
+    parser.add_argument('--start',action='store',type=int)
+    parser.add_argument('--end',action='store',type=int)
     args = parser.parse_args(sys.argv[1:])
 
     cnx = ut.create_connection(args.database)
@@ -164,6 +166,10 @@ if __name__ == '__main__':
         if row[0] == None:
             continue
 
+        if args.start and args.end:
+            if row[1] < args.start or row[1] > args.end:
+                continue
+    
         splitted = row[0].split('\n')
         write_lines = [line for line in lines]
         
@@ -184,7 +190,7 @@ if __name__ == '__main__':
             with open('out.s','w+') as f:
                 f.writelines(write_lines)
             proc = subprocess.Popen(['gcc','-c','-o','test.o','out.s'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            result = wait_timeout(proc, 10)
+            result = wait_timeout(proc, 120)
 
             error_comp = False
         

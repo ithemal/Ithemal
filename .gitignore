@@ -84,7 +84,7 @@ names.txt
 out.txt
 
 benchmarks/
-data/
+datasql/
 testing/    
 virtualenv/
 stoke/
@@ -98,3 +98,4 @@ llvm-build/
 zsim/
 keys/
 *.pkl
+costmodel_*.sql

@@ -3,16 +3,16 @@
 #include "static_dump.h"
 #include "common.h"
 
-int insert_config(char * query, const char * compiler, const char * flags, uint32_t mode){
+int insert_config(char * query, const char * compiler, const char * flags, uint32_t mode, uint32_t arch){
   int pos = 0;
   if(mode == SQLITE){
-    pos += sprintf(query, "INSERT INTO config (compiler, flags) VALUES ('%s','%s');", compiler, flags);
+    pos += sprintf(query, "INSERT INTO config (compiler, flags, arch) VALUES ('%s','%s', %d);", compiler, flags, arch);
     pos += sprintf(query + pos,"CREATE TEMP TABLE _config (config_id INTEGER);");
-    pos += sprintf(query + pos,"INSERT INTO _config (config_id) VALUES ((SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s'))", compiler, flags);
+    pos += sprintf(query + pos,"INSERT INTO _config (config_id) VALUES ((SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s' AND arch = %d))", compiler, flags, arch);
   }
   else{
-    pos += sprintf(query, "INSERT INTO config (compiler, flags) VALUES ('%s','%s');", compiler, flags);
-    pos += sprintf(query + pos,"SET @config_id = (SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s')",compiler,flags);
+    pos += sprintf(query, "INSERT INTO config (compiler, flags, arch) VALUES ('%s','%s',%d);", compiler, flags, arch);
+    pos += sprintf(query + pos,"SET @config_id = (SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s' AND arch = %d)",compiler, flags, arch);
   }
   return pos;
 }

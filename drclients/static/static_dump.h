@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-int insert_config(char * query, const char * compiler, const char * flags, uint32_t mode);
+int insert_config(char * query, const char * compiler, const char * flags, uint32_t mode, uint32_t arch);
 int insert_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode, uint32_t size, const char * type);
 int update_code(char * query, const char * program, uint32_t rel_addr, const char * code, uint32_t mode, uint32_t size, const char * type);
 

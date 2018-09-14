@@ -76,7 +76,7 @@ if __name__ == '__main__':
     throughput_losses = torch.load('../results/losses_throughput_3.pkl')
 
 
-    modelnames = ['sequential RNN', 'hierarchical RNN', 'graph NN']
+    modelnames = ['Sequential RNN', 'Hierarchical RNN', 'DAG-RNN']
 
     for loss in additive_losses:
         print len(loss)

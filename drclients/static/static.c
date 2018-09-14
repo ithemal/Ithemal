@@ -103,7 +103,7 @@ thread_init(void * drcontext){
   if(client_args.mode != SNOOP){
     query_t * query = (query_t *)(data->data + START_QUERY);
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
-    int sz = insert_config(query, client_args.compiler, client_args.flags, client_args.mode);
+    int sz = insert_config(query, client_args.compiler, client_args.flags, client_args.mode, proc_get_model());
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
     //dr_printf("%s\n",query);
     if(client_args.mode == SQLITE){

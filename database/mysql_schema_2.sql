@@ -7,8 +7,9 @@ CREATE TABLE config (
   config_id int(11) NOT NULL AUTO_INCREMENT,
   compiler varchar(255) DEFAULT NULL,
   flags varchar(255) DEFAULT NULL,
+  arch int(11) NOT NULL,
   PRIMARY KEY (config_id),
-  UNIQUE KEY (compiler,flags)
+  UNIQUE KEY (compiler,flags,arch)
 );
 
 
@@ -17,7 +18,6 @@ CREATE TABLE code (
   code_id int(32) NOT NULL AUTO_INCREMENT,
   program varchar(255) NOT NULL,
   config_id int(11) NOT NULL,
-  arch int(11) NOT NULL,
   rel_addr int(32) NOT NULL,
   code_intel TEXT,
   code_att TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE code (
   num_instr int(11),
   span int(11),
   PRIMARY KEY (code_id),
-  UNIQUE KEY (program,config_id,arch,rel_addr),
+  UNIQUE KEY (program,config_id,rel_addr),
   CONSTRAINT code_ibfk_1 FOREIGN KEY (config_id) REFERENCES config(config_id)
 );
 

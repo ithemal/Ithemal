@@ -87,175 +87,6 @@ class CodeStats:
             if stat.name == name:
                 return stat
 
-
-#plotting and statistics extraction functions
-
-def plot_tsne(embeddings, first_n, sym_dict, id2word, mem_offset, filename):
-
-    tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000, method='exact')
-    low_dim_embs = tsne.fit_transform(embeddings[1:first_n, :])
-    labels = [ut.get_name(id2word[i],sym_dict,mem_offset) for i in xrange(1,first_n)]
-        
-    assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
-    plt.figure(figsize=(18, 18))  # in inches
-    for i, label in enumerate(labels):
-        x, y = low_dim_embs[i, :]
-        plt.scatter(x, y)
-        font = matplotlib.font_manager.FontProperties(size=12)
-        plt.annotate(label,
-                     xy=(x, y),
-                     xytext=(5, 2),
-                     textcoords='offset points',
-                     fontproperties=font,
-                     ha='right',
-                     va='bottom')
-
-    plt.savefig(filename)
-                
-
-def plot_3d_map(x,y,bins,xlabel,filename,xmax=None,ymax=None):
-
-    xs = []
-    ys = []
-
-    errors = 0
-    for xt, yt in zip(x,y):
-        if xt >= 1000 or yt >= 1000:
-            errors += 1
-            continue
-        else:
-            xs.append(xt)
-            ys.append(yt)
-
-    print errors
-
-    #ins count vs actual
-    heatmap, xedges, yedges = np.histogram2d(np.array(xs), np.array(ys), bins=bins)
-
-    print xedges
-    print yedges
-
-    if xmax == None:
-        xmax = xedges[-1]
-    if ymax == None:
-        ymax = yedges[-1]
-
-    extent = [xedges[0], xmax, yedges[0], ymax]
-    lognorm = matplotlib.colors.LogNorm(vmin = 20, vmax = heatmap.T.max(), clip = False)
-
-    y_str = 'measured throughput (cycles)'
-    x_str = 'predicted throughput'
-    cmap = plt.get_cmap('Reds')
-    #cmap.set_clim(50, heatmap.T.max())
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    plt.imshow(heatmap.T, cmap=cmap, norm=lognorm, extent=extent, origin='lower', clim=(20, heatmap.T.max()))
-    cbar = plt.colorbar()
-    plt.tick_params(labelsize=10)
-    cbar.ax.tick_params(labelsize=10)
-    ax.set_aspect(xmax/ymax)
-    ax.set_xlabel(x_str, fontsize=14)
-    ax.set_ylabel(y_str, fontsize=14)
-    plt.savefig(filename)
-    plt.close()
-
-
-    #fig = plt.figure()
-    #ax = fig.add_subplot(111, projection='3d')
-    #ax = Axes3D(fig)
-    #z = heatmap.T
-    #x, y = np.meshgrid(range(z.shape[1]), range(z.shape[0]))
-    #cset = ax.contour(x,y,z, 16, cmap=cmap, norm=lognorm, extend3d = True)
-    #ax.clabel(cset, fontsize=9, inline=1)
-    #plt.savefig(filename.split('.')[0] + '_height.png')
-    #plt.close()
-
-
-
-def get_basic_statistics(rows, sym_dict, costs):
-
-    #basic statistics printing
-    stats = CodeStats()
-    stats.insert_field('ins')
-    stats.insert_field('span')
-    stats.insert_field('opcodes')
-
-    total_ins = 0
-
-    for row in tqdm(rows):
-        
-        if row[1] != '' and row[2] != None:
-            
-            block = ut.create_basicblock(row[0])
-            num_instrs = block.num_instrs()
-            num_span = block.num_span(costs)
-            
-            total_ins += num_instrs
-
-            for instr in block.instrs:
-                stats.insert_value('opcodes', instr.opcode)
-            
-            stats.insert_value('ins', num_instrs)
-            stats.insert_value('span', num_span)
-            
-    stats.get_stat('ins').plot_values(30)
-    stats.get_stat('span').plot_values(30)
-    stats.get_stat('opcodes').plot_values(1300)
-
-    #opcode popularity printing
-    opcode_stats = stats.get_stat('opcodes')
-    opcode_dict = opcode_stats.value_dict
-
-    total_ins = len(opcode_stats.values)
-    print 'total instructions : ' + str(total_ins)
-    print 'basic block density : ' + str(total_ins / float(len(rows)))
-
-    sorted_keys = sorted(opcode_dict, key = opcode_dict.get, reverse=True)
-    
-    x = []
-    y = []
-    
-    for key in sorted_keys:
-        x.append(sym_dict[key])
-        y.append(opcode_dict[key] / float(total_ins))
-
-
-    x_pos = np.arange(len(x))
-
-    maxnum = 30
-    plt.figure()
-    plt.bar(x_pos[:maxnum], y[:maxnum], align='center', alpha=0.5)
-    plt.xticks(x_pos[:maxnum], x[:maxnum], rotation=80)
-    plt.ylabel('percentage')
-    plt.title('Opcode popularity')
-    plt.savefig('figures/opcode_pop.png', bbox_inches='tight')
-    plt.close()
-
-
-#main functions which collect the information
-
-def get_embedding_visualization(model_file, embed_file):
-
-    data = dt.DataInstructionEmbedding()
-    data.set_embedding(embed_file)
-    data.read_meta_data()
-
-    num_classes = 1
-    embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
-    model.set_learnable_embedding(mode = 'none', dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
-
-
-    train = tr.Train(model, data)
-    train.load_checkpoint(model_file)
-    embeddings = model.final_embeddings.weight.detach().numpy()
-    plot_tsne(embeddings, 200, data.sym_dict, data.id2word, data.mem_start, 'figures/tsne_none.png')
-
-    embeddings = data.final_embeddings
-    plot_tsne(embeddings, 200, data.sym_dict, data.id2word, data.mem_start, 'figures/tsne_word2vec.png')
-
-
 class TimeDist:
 
     def __init__(self, times):
@@ -308,48 +139,42 @@ class Time:
             times = self.times[key]
             self.dist[key] = TimeDist(times)
 
+
+#############################################
+# dataset generation functions
+#############################################
+
+
 #in array of struct format, a code_id can have many times
-def get_times(cnx, rows, arch, save=None, load=None):
+def get_times(cnx, rows, arch):
 
     times = []
-
-    if load != None:
-        f = open(load,'r')
-        times = pickle.load(f)
-        f.close()
-        return times
-    else:
-
-        for row in tqdm(rows):
+ 
+    for row in tqdm(rows):
         
-            if row[2] != '' :
+        if row[2] != '' :
             
-                sql = 'select kind, time from times where code_id=' + str(row[1]) + ' and arch=' + str(arch)
-                times_r = ut.execute_query(cnx, sql, True)
-                
-                time = Time(row[1])
-                times.append(time)
+            sql = 'select kind, time from times where code_id=' + str(row[1]) + ' and arch=' + str(arch)
+            times_r = ut.execute_query(cnx, sql, True)
             
-                for time_r in times_r:
-                    if time_r[0] == 'actual':
-                        if time_r[1] < 10000 and time_r[1] > 20:
-                            time.add_time(time_r[0], time_r[1])
-                    else:
+            time = Time(row[1])
+            times.append(time)
+            
+            for time_r in times_r:
+                if time_r[0] == 'actual':
+                    if time_r[1] < 10000 and time_r[1] > 20:
                         time.add_time(time_r[0], time_r[1])
+                else:
+                    time.add_time(time_r[0], time_r[1])
                     
-                block = ut.create_basicblock(row[0])
-                num_instrs = block.num_instrs()
-                time.add_time('num_instr',num_instrs)
+            block = ut.create_basicblock(row[0])
+            num_instrs = block.num_instrs()
+            time.add_time('num_instr',num_instrs)
                      
-        for time in tqdm(times):
-            time.get_dist()
+    for time in tqdm(times):
+        time.get_dist()
         
-        if save != None:
-            f = open(save,'w+')
-            pickle.dump(times, f)
-            f.close()
-
-        return times
+    return times
 
 #outputs filtered sets in struct of arrays format
 #total set, test set
@@ -459,120 +284,153 @@ def rmse(xs,ys):
     return statistics.mean(error)
 
 
-def get_timing_statistics(times, percentage, filter_fn, total_kinds, test_kinds):
+def filter_timing_sets(times, percentage, filter_fn, total_kinds, test_kinds):
 
     (total_set, test_set) = get_filtered_time_sets(times, percentage, total_kinds, test_kinds)
     
     plot_total_set = get_subset(total_set, filter_fn)
     plot_test_set = get_subset(test_set, filter_fn)
-    
-    #print out statistics
-    print 'total set ' + str(len(total_set['actual']))
-    print 'total plot set ' + str(len(plot_total_set['actual']))
-    print 'test set ' + str(len(test_set['actual']))
-    print 'test plot set ' + str(len(plot_test_set['actual']))
-
-    print '\ntotal time'
-    #total time correlation
-    for kind in total_kinds:
-        corr = np.corrcoef(total_set[kind], total_set['actual'])[0][1]
-        print 'correlation with ' + kind + ' : ' + str(corr)
-        e = rmse(total_set[kind], total_set['actual'])
-        print 'rmse ' + kind + ' : ' + str(e)
-
-
-    #test time correlation
-    print '\ntest time'
-    for kind in test_kinds:
-        corr = np.corrcoef(test_set[kind], test_set['actual'])[0][1]
-        print 'correlation with ' + kind + ' : ' + str(corr)
-        e = rmse(test_set[kind], test_set['actual'])
-        print 'rmse ' + kind + ' : ' + str(e)
-    
-    #plot total time correlation
-    print '\nplot total time'
-    for kind in total_kinds:
-        corr = np.corrcoef(plot_total_set[kind], plot_total_set['actual'])[0][1]
-        print 'correlation with ' + kind + ' : ' + str(corr)
-        e = rmse(plot_total_set[kind], plot_total_set['actual'])
-        print 'rmse ' + kind + ' : ' + str(e)
-
-
-    #plot test time correlation
-    print '\nplot test time'
-    for kind in test_kinds:
-        corr = np.corrcoef(plot_test_set[kind], plot_test_set['actual'])[0][1]
-        print 'correlation with ' + kind + ' : ' + str(corr)
-        e = rmse(plot_test_set[kind], plot_test_set['actual'])
-        print 'rmse ' + kind + ' : ' + str(e)
-
 
     return (total_set, test_set, plot_total_set, plot_test_set)
     
 
-def get_timing_statistics_portability(cnx, rows, save=None, load=None):
-    
-    total_kinds = ['actual','predicted']
-    test_kinds = ['actual','predicted']
-
-    percentage = 0.8
-    threshold = (lambda time : time >= 1000)
-
-    if save != None:
-        save = save.split('.')[0]
-    if load != None:
-        load = load.split('.')[0]
-
-    load_arch = None
-    save_arch = None
-
+def generate_timing_sets(cnx, rows, arch, kinds, percentage):
 
     #get haswell times
-    if save != None:
-        save_arch = save + '_1.pkl'
-    if load != None:
-        load_arch = load + '_1.pkl'
-    h_times = get_times(cnx, rows, 1, save=save_arch, load=load_arch)
-    (h_total_set, h_test_set, h_plot_total_set, h_plot_test_set) = get_timing_statistics(h_times, percentage, threshold, total_kinds, test_kinds)
-    #get_timing_statistics(h_times, percentage, lambda time : time >= 3000, total_kinds, test_kinds)
 
-    #get skylake times
-    if save != None:
-        save_arch = save + '_2.pkl'
-    if load != None:
-        load_arch = load + '_2.pkl'
-    s_times = get_times(cnx, rows, 2, save=save_arch, load=load_arch)
-    (s_total_set, s_test_set, s_plot_total_set, s_plot_test_set) = get_timing_statistics(s_times, percentage, threshold, total_kinds, test_kinds)
-    #get_timing_statistics(s_times, percentage, lambda time : time >= 3000, total_kinds, test_kinds)
+    print 'generating timing sets for arch ' + str(arch)
+
+    times = get_times(cnx, rows, arch) 
+
+    time_filename = 'saved/times_' + str(arch) + '.pkl'
+    with open(time_filename, 'w+') as f:
+        pickle.dump(times, f)
+
+    iaca_kinds = ['actual','iaca']
+
+    all_kinds_times = filter_timing_sets(times, percentage, lambda time : time >= 1000, kinds, kinds)
+    iaca_times = filter_timing_sets(times, 0.0, lambda time : time >= 1000, iaca_kinds, iaca_kinds)
+    
+    all_kinds_times_filename = 'saved/all_kinds_times_' + str(arch) + '.pkl'
+    with open(all_kinds_times_filename, 'w+') as f:
+        pickle.dump(all_kinds_times, f)
+
+    iaca_times_filename = 'saved/iaca_times_' + str(arch) + '.pkl'
+    with open(iaca_times_filename, 'w+') as f:
+        pickle.dump(iaca_times, f)
+
+def generate_static_statistics(rows, costs):
+
+    #basic statistics printing
+    stats = CodeStats()
+    stats.insert_field('ins')
+    stats.insert_field('span')
+    stats.insert_field('opcodes')
+
+    total_ins = 0
+
+    for row in tqdm(rows):
+        
+        if row[1] != '' and row[2] != None:
+            
+            block = ut.create_basicblock(row[0])
+            num_instrs = block.num_instrs()
+            num_span = block.num_span(costs)
+            
+            total_ins += num_instrs
+
+            for instr in block.instrs:
+                stats.insert_value('opcodes', instr.opcode)
+            
+            stats.insert_value('ins', num_instrs)
+            stats.insert_value('span', num_span)
+            
+    with open('saved/static_stats.pkl','w+') as f:
+        pickle.dump(stats, f)
+
+#############################################
+# plotting and statistic extraction functions
+#############################################
+
+def plot_tsne(embeddings, first_n, sym_dict, id2word, mem_offset, filename):
+
+    tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000, method='exact')
+    low_dim_embs = tsne.fit_transform(embeddings[1:first_n, :])
+    labels = [ut.get_name(id2word[i],sym_dict,mem_offset) for i in xrange(1,first_n)]
+        
+    assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
+    plt.figure(figsize=(18, 18))  # in inches
+    for i, label in enumerate(labels):
+        x, y = low_dim_embs[i, :]
+        plt.scatter(x, y)
+        font = matplotlib.font_manager.FontProperties(size=12)
+        plt.annotate(label,
+                     xy=(x, y),
+                     xytext=(5, 2),
+                     textcoords='offset points',
+                     fontproperties=font,
+                     ha='right',
+                     va='bottom')
+
+    plt.savefig(filename)
+                
+
+def plot_3d_map(x,y,arch,bins,xlabel,filename,xmax=None,ymax=None):
+
+    arch_strings = ['Haswell','Skylake','Nehalem']
+
+    xs = []
+    ys = []
+
+    errors = 0
+    for xt, yt in zip(x,y):
+        if xt >= 1000 or yt >= 1000:
+            errors += 1
+            continue
+        else:
+            xs.append(xt)
+            ys.append(yt)
+
+    print errors
+
+    #ins count vs actual
+    heatmap, xedges, yedges = np.histogram2d(np.array(xs), np.array(ys), bins=bins)
+
+    #print xedges
+    #print yedges
+
+    if xmax == None:
+        xmax = xedges[-1]
+    if ymax == None:
+        ymax = yedges[-1]
+
+    extent = [xedges[0], xmax, yedges[0], ymax]
+    lognorm = matplotlib.colors.LogNorm(vmin = 20, vmax = heatmap.T.max(), clip = False)
+
+    y_str = 'Predicted Throughput'
+    x_str = 'Measured Throughput'
+    cmap = plt.get_cmap('Reds')
+    #cmap.set_clim(50, heatmap.T.max())
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.imshow(heatmap.T, cmap=cmap, norm=lognorm, extent=extent, origin='lower', clim=(20, heatmap.T.max()))
+    cbar = plt.colorbar()
+    plt.tick_params(labelsize=10)
+    cbar.ax.tick_params(labelsize=10)
+    ax.set_aspect(xmax/ymax)
+    ax.set_xlabel(x_str, fontsize=14)
+    ax.set_ylabel(y_str, fontsize=14)
+    ax.set_title(arch_strings[arch-1], fontsize=16)
+    plt.savefig(filename)
+    plt.close()
 
 
-    #get nehalem times
-    if save != None:
-        save_arch = save + '_3.pkl'
-    if load != None:
-        load_arch = load + '_3.pkl'
-    n_times = get_times(cnx, rows, 3, save=save_arch, load=load_arch)
-    (n_total_set, n_test_set, n_plot_total_set, n_plot_test_set) = get_timing_statistics(n_times, percentage, threshold, total_kinds, test_kinds)
-    #get_timing_statistics(s_times, percentage, lambda time : time >= 3000, total_kinds, test_kinds)
-
-
-
-    #total set
-    plot_3d_map(h_plot_total_set['predicted'],h_plot_total_set['actual'],50,'Data driven model','figures/predictedheatmap_haswell.png',xmax=1000,ymax=1000)
-    plot_3d_map(s_plot_total_set['predicted'],s_plot_total_set['actual'],50,'Data driven model','figures/predictedheatmap_skylake.png',xmax=1000,ymax=1000)
-    plot_3d_map(n_plot_total_set['predicted'],n_plot_total_set['actual'],50,'Data driven model','figures/predictedheatmap_nehalem.png',xmax=1000,ymax=1000)
-
-    #test set
-    plot_3d_map(h_plot_test_set['predicted'],h_plot_test_set['actual'],50,'Data driven model','figures/predictedheatmap_haswell_test.png',xmax=1000,ymax=1000)
-    plot_3d_map(s_plot_test_set['predicted'],s_plot_test_set['actual'],50,'Data driven model','figures/predictedheatmap_skylake_test.png',xmax=1000,ymax=1000)
-    plot_3d_map(n_plot_test_set['predicted'],n_plot_test_set['actual'],50,'Data driven model','figures/predictedheatmap_nehalem_test.png',xmax=1000,ymax=1000)
-
-
-def get_error_graphs(filename, times, iaca, kinds, labels, max, bins):
-
+def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
 
     interval = max / bins
-    plt.figure()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
     
     
     for kind, label in zip(kinds, labels):
@@ -587,6 +445,10 @@ def get_error_graphs(filename, times, iaca, kinds, labels, max, bins):
 
         errors = [0] * bins
         count = [0] * bins
+        errors_all = dict()
+
+        for i in range(bins):
+            errors_all[i] = [0]
 
         for x,y in zip(x, y):
             
@@ -596,31 +458,56 @@ def get_error_graphs(filename, times, iaca, kinds, labels, max, bins):
             if bin >= bins:
                 print error,y, bin
 
+
             errors[bin] = (errors[bin] * count[bin] + error) / float(count[bin] + 1)
             count[bin] += 1
 
-        plt.plot(range(0,max,interval),errors, '.-', linewidth=0.5, markersize=3, label=label)
+            errors_all[bin].append(error)
 
+        error_high = [0] * bins
+        error_low = [0] * bins
+
+        for i in range(bins):
+            error_low[i] = errors[i] - np.percentile(errors_all[i],25)
+            error_high[i] = np.percentile(errors_all[i],75) - errors[i]
+
+        #plt.plot(range(0,max,interval),errors, '.-', linewidth=0.5, markersize=3, label=label)
+        ax.errorbar(range(0,max,interval), errors, fmt='.-', linewidth=0.5, markersize=3, label=label, yerr=[error_low, error_high])
         
     x = iaca['iaca']
     y = iaca['actual']
 
-    errors = [0] * bins
-    count = [0] * bins
+    if len(x) > 0:
+        errors = [0] * bins
+        count = [0] * bins
+        errors_all = dict()
 
-    for x,y in zip(x, y):
+        for i in range(bins):
+            errors_all[i] = [0]
+
+
+        for x,y in zip(x, y):
             
-        error = abs(x - y) / float(y)
-        
-        bin = int(math.floor(float(y) / interval))
+            error = abs(x - y) / float(y)
+            
+            bin = int(math.floor(float(y) / interval))
 
-        errors[bin] = (errors[bin] * count[bin] + error) / float(count[bin] + 1)
-        count[bin] += 1
+            errors[bin] = (errors[bin] * count[bin] + error) / float(count[bin] + 1)
+            count[bin] += 1
 
-    plt.plot(range(0,max,interval),errors, '.-', linewidth=0.5, markersize=3, label='IACA')
+            errors_all[bin].append(error)
+
+            
+        for i in range(bins):
+            error_low[i] = errors[i] - np.percentile(errors_all[i],25)
+            error_high[i] = np.percentile(errors_all[i],75) - errors[i]
+
+
+        #plt.plot(range(0,max,interval),errors, '.-', linewidth=0.5, markersize=3, label='IACA')
+        ax.errorbar(range(0,max,interval), errors, fmt='.-', linewidth=0.5, markersize=3, label='IACA', yerr=[error_low, error_high])
 
     plt.legend()
-    plt.ylabel('Average error')
+    plt.ylabel('Average Error')
     plt.xlabel('Throughput (cycles)')
 
     cur_xmin, cur_xmax = plt.xlim()
@@ -632,63 +519,171 @@ def get_error_graphs(filename, times, iaca, kinds, labels, max, bins):
     plt.ylim(ymax = ymax)
     plt.savefig(filename)
     plt.close()
+  
 
-def get_timing_statistics_accuracy(cnx, rows, save=None, load=None):
+def compute_errors_cross_correlations(times, kinds, arch):
 
-    #get haswell times
-    times = get_times(cnx, rows, 1, save=save, load=load) 
-    total_kinds = ['num_instr','actual','add','predicted','llvm']
-    test_kinds = ['num_instr','actual','add','predicted','llvm']
-    iaca_kinds = ['actual','iaca']
+    (total_set, test_set, plot_total_set, plot_test_set) = times
 
-    (total_set, test_set, plot_total_set, plot_test_set) = get_timing_statistics(times, 0.8, lambda time : time >= 1000, total_kinds, test_kinds)
+    #print out statistics
+    print 'total set ' + str(len(total_set['actual']))
+    print 'total plot set ' + str(len(plot_total_set['actual']))
+    print 'test set ' + str(len(test_set['actual']))
+    print 'test plot set ' + str(len(plot_test_set['actual']))
+
+    print '\ntotal time ' + str(arch) 
+    #total time correlation
+    for kind in kinds:
+        corr = np.corrcoef(total_set[kind], total_set['actual'])[0][1]
+        print 'correlation with ' + kind + ' : ' + str(corr)
+        e = rmse(total_set[kind], total_set['actual'])
+        print 'rmse ' + kind + ' : ' + str(e)
 
 
-    (_,_,plot_iaca_total_set,plot_iaca_test_set) = get_timing_statistics(times, 0.0, lambda time : time >= 1000, iaca_kinds, iaca_kinds)
+    #test time correlation
+    print '\ntest time ' + str(arch)
+    for kind in kinds:
+        corr = np.corrcoef(test_set[kind], test_set['actual'])[0][1]
+        print 'correlation with ' + kind + ' : ' + str(corr)
+        e = rmse(test_set[kind], test_set['actual'])
+        print 'rmse ' + kind + ' : ' + str(e)
     
-    #get_timing_statistics(times, 0.8, lambda time : time < 1000, total_kinds, test_kinds)
-    #get_timing_statistics(times, 0.8, lambda time : time >= 2000, total_kinds, test_kinds)
-    #get_timing_statistics(times, 0.0, lambda time : time >= 2000, iaca_kinds, iaca_kinds)
+    #plot total time correlation
+    print '\nplot total time ' + str(arch)
+    for kind in kinds:
+        corr = np.corrcoef(plot_total_set[kind], plot_total_set['actual'])[0][1]
+        print 'correlation with ' + kind + ' : ' + str(corr)
+        e = rmse(plot_total_set[kind], plot_total_set['actual'])
+        print 'rmse ' + kind + ' : ' + str(e)
+
+
+    #plot test time correlation
+    print '\nplot test time ' + str(arch)
+    for kind in kinds:
+        corr = np.corrcoef(plot_test_set[kind], plot_test_set['actual'])[0][1]
+        print 'correlation with ' + kind + ' : ' + str(corr)
+        e = rmse(plot_test_set[kind], plot_test_set['actual'])
+        print 'rmse ' + kind + ' : ' + str(e)
+
+
+def plot_heatmaps_and_error_curves(times, iaca_times, arch):
+
+    (total_set, test_set, plot_total_set, plot_test_set) = times
+    (iaca_total_set,iaca_test_set,plot_iaca_total_set,plot_iaca_test_set) = iaca_times
 
     #get error graphs
- 
-    filename = 'figures/allsystems_errors.png'
+    filename = 'figures/allsystems_errors_' + str(arch) + '.png'
     kinds = ['predicted','llvm']
-    labels = ['NN model','llvm-mca']
-    get_error_graphs(filename, plot_test_set, plot_iaca_test_set, kinds, labels, 1000, 50)
-
-
-    #additive cost histogram
-    plt.figure()
-    plt.hist(plot_total_set['add'], bins=50, range=(0,50), edgecolor='black', linewidth=0.3)
-    plt.xlabel('additive times')
-    plt.ylabel('count')
-    plt.title('additive cost count histogram')
-    plt.savefig('figures/additivehist.png')
-    plt.close()
+    labels = ['Ithemal','llvm-mca']
+    plot_error_graphs(filename, plot_test_set, plot_iaca_test_set, kinds, labels, 1000, 50)
 
     #total heatmaps
-    #ins count vs actual
-
-    plot_3d_map(plot_total_set['num_instr'],plot_total_set['actual'],50,'instruction count','figures/inscountheatmap.png',xmax=None,ymax=None)
-    #additive count vs actual
-    plot_3d_map(plot_total_set['add'],plot_total_set['actual'],(20,50),'STOKE additive model','figures/additiveheatmap.png',xmax=None,ymax=None)
     #predicted vs actual
-    plot_3d_map(plot_total_set['predicted'],plot_total_set['actual'],50,'Data driven model','figures/predictedheatmap.png',xmax=None,ymax=None)
+    plot_3d_map(plot_total_set['actual'],plot_total_set['predicted'],arch,50,'Data driven model','figures/predictedheatmap_' + str(arch) + '.png',xmax=1000,ymax=1000)
     #llvm vs actual
-    plot_3d_map(plot_total_set['llvm'],plot_total_set['actual'],50,'LLVM machine  model','figures/llvmheatmap.png',xmax=None,ymax=None)
+    plot_3d_map(plot_total_set['actual'],plot_total_set['llvm'],arch,50,'LLVM machine  model','figures/llvmheatmap_' + str(arch) + '.png',xmax=1000,ymax=1000)
 
     #test heatmaps
-    #ins count vs actual - 40
-    plot_3d_map(plot_test_set['num_instr'],plot_test_set['actual'],50,'instruction count','figures/inscountheatmap_test.png',xmax=None,ymax=None)
-    #additive count vs actual - 200
-    plot_3d_map(plot_test_set['add'],plot_test_set['actual'],(20,50),'STOKE additive model','figures/additiveheatmap_test.png',xmax=None,ymax=None)
     #predicted vs actual
-    plot_3d_map(plot_test_set['predicted'],plot_test_set['actual'],50,'Data driven model','figures/predictedheatmap_test.png',xmax=None,ymax=None)
-    #llvm vs actual - 1000
-    plot_3d_map(plot_test_set['llvm'],plot_test_set['actual'],50,'LLVM machine  model','figures/llvmheatmap_test.png',xmax=None,ymax=None)
-    #iaca vs actual - 1000
-    #plot_3d_map(plot_iaca_test_set['iaca'],plot_iaca_test_set['actual'],50,'IACA  model','figures/iacaheatmap_test.png',xmax=1000,ymax=None)
+    plot_3d_map(plot_test_set['actual'],plot_test_set['predicted'],arch,50,'Data driven model','figures/predictedheatmap_' + str(arch) + '_test.png',xmax=1000,ymax=1000)
+    #llvm vs actual
+    plot_3d_map(plot_test_set['actual'],plot_test_set['llvm'],arch,50,'LLVM machine  model','figures/llvmheatmap_' + str(arch) + '_test.png',xmax=1000,ymax=1000)
+    #iaca vs actual
+    if len(plot_iaca_test_set['iaca']) > 0:
+        plot_3d_map(plot_iaca_test_set['actual'],plot_iaca_test_set['iaca'],arch,50,'IACA  model','figures/iacaheatmap_' + str(arch) + '_test.png',xmax=1000,ymax=1000)
+
+
+############################################################
+# main entry functions for getting plots and collecting data
+############################################################
+
+def get_accuracy():
+
+
+    all_kinds = ['predicted','llvm']
+    iaca_kinds = ['iaca']
+
+    for arch in range(1,4):
+
+        with open('saved/all_kinds_times_' + str(arch) + '.pkl','r') as f:
+            all_times = pickle.load(f)
+        
+        with open('saved/iaca_times_' + str(arch) + '.pkl','r') as f:
+            iaca_times = pickle.load(f)
+        
+        compute_errors_cross_correlations(all_times,all_kinds,arch)
+        if len(iaca_times[3]['iaca']) > 0:
+            compute_errors_cross_correlations(iaca_times,iaca_kinds,arch)
+        else:
+            print 'iaca times not available for arch ' + str(arch)
+
+        plot_heatmaps_and_error_curves(all_times,iaca_times,arch)
+    
+
+def get_embedding_visualization(model_file, embed_file):
+
+    data = dt.DataInstructionEmbedding()
+    data.set_embedding(embed_file)
+    data.read_meta_data()
+
+    num_classes = 1
+    embedding_size = data.final_embeddings.shape[1]
+    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
+    model.set_learnable_embedding(mode = 'none', dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
+
+
+    train = tr.Train(model, data)
+    train.load_checkpoint(model_file)
+    embeddings = model.final_embeddings.weight.detach().numpy()
+    plot_tsne(embeddings, 200, data.sym_dict, data.id2word, data.mem_start, 'figures/tsne_none.png')
+
+    embeddings = data.final_embeddings
+    plot_tsne(embeddings, 200, data.sym_dict, data.id2word, data.mem_start, 'figures/tsne_word2vec.png')
+
+
+def get_basic_statistics(sym_dict):
+
+    with open('saved/static_stats.pkl','r') as f:
+        stats = pickle.load(f)
+    
+    instr_counts = stats.get_stat('ins')
+
+    total_ins = 0
+    for count in instr_counts.values:
+        total_ins += count
+
+    stats.get_stat('ins').plot_values(30)
+    stats.get_stat('span').plot_values(30)
+    stats.get_stat('opcodes').plot_values(1300)
+
+    #opcode popularity printing
+    opcode_stats = stats.get_stat('opcodes')
+    opcode_dict = opcode_stats.value_dict
+
+    total_ins = len(opcode_stats.values)
+    print 'total instructions : ' + str(total_ins)
+    print 'basic block density : ' + str(total_ins / float(len(instr_counts.values)))
+
+    sorted_keys = sorted(opcode_dict, key = opcode_dict.get, reverse=True)
+    
+    x = []
+    y = []
+    
+    for key in sorted_keys:
+        x.append(sym_dict[key])
+        y.append(opcode_dict[key] / float(total_ins))
+
+
+    x_pos = np.arange(len(x))
+
+    maxnum = 30
+    plt.figure()
+    plt.bar(x_pos[:maxnum], y[:maxnum], align='center', alpha=0.5)
+    plt.xticks(x_pos[:maxnum], x[:maxnum], rotation=80)
+    plt.ylabel('percentage')
+    plt.title('Opcode popularity')
+    plt.savefig('figures/opcode_pop.png', bbox_inches='tight')
+    plt.close()
 
 
 def find_mispredicted_blocks(cnx, rows, save=None, load=None):
@@ -780,7 +775,7 @@ if __name__ == '__main__':
 
     #command line arguments
     parser = argparse.ArgumentParser()
-    #parser.add_argument('--mode',action='store')
+    parser.add_argument('--mode',action='store',type=int,default=2)
     args = parser.parse_args(sys.argv[1:])
 
     #setting up
@@ -803,22 +798,35 @@ if __name__ == '__main__':
 
     ###### collecting evaluation results from here on - assuming everything's populated in the database#######
 
-    cnx = ut.create_connection('costmodel')
-    rows = ut.get_data(cnx, 'text', ['code_id','code_intel'])
+    if args.mode == 1:
+        cnx = ut.create_connection('costmodel')
+        rows = ut.get_data(cnx, 'text', ['code_id','code_intel'])
 
-    #visualizing learnt and word2vec embedding for the code sequences
-    #get_embedding_visualization('../saved/graphCostNone.mdl', '../inputs/code_delim.emb')
+        #generate timing sets
+        kinds = ['actual','predicted','llvm']
+        n_kinds = ['actual','predicted','llvm']
 
-    #statistics about the basic blocks we have collected - dataset
-    #get_basic_statistics(rows, sym_dict, costs)
+        for arch in range(1,4):
+            if arch != 3:
+                generate_timing_sets(cnx, rows, arch, kinds, 0.8)
+            else:
+                generate_timing_sets(cnx, rows, arch, n_kinds, 0.8)
 
-    #generates correlations, root mean square errors and heatmaps/3d height maps - accuracy claim
-    get_timing_statistics_accuracy(cnx, rows)
+        #generate static stats
+        generate_static_statistics(rows, costs)
 
-    #generates correlations, root mean square errors and heatmaps/3d height maps - portability claim
-    #get_timing_statistics_portability(cnx, rows)
+        cnx.close()
 
-    #miscellanious - for other paper parts
-    #find_mispredicted_blocks(cnx, rows[800000:])    
+    elif args.mode == 2:
+        #statistics about the basic blocks we have collected - dataset
+        #get_basic_statistics(sym_dict)
+
+        #visualizing learnt and word2vec embedding for the code sequences
+        #get_embedding_visualization('../saved/graph_none_haswell.mdl', '../inputs/code_delim.emb')
+
+        #heatmaps and errors
+        get_accuracy()
+
+        #miscellanious - for other paper parts
+        #find_mispredicted_blocks(cnx, rows[800000:])    
     
-    cnx.close()

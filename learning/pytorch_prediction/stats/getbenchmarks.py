@@ -170,15 +170,20 @@ if __name__ == '__main__':
 
     time_available = dict()
     timevals = dict()
+    timevals_test = dict()
     
     for i in range(1, args.arch + 1):
         time_available[i] = 0
         timevals[i] = []
+        timevals_test[i] = []
 
-    
+    start_test = int(len(rows) * 0.8)
+    idx = 0
+
     for row in tqdm(rows):
         
         code_id = row[0]
+        idx += 1
 
         for i in range(1, args.arch + 1):
 
@@ -188,6 +193,8 @@ if __name__ == '__main__':
             if len(times) > 0:
                 time_available[i] += 1
                 timevals[i].append(times[0][0])
+                if idx > start_test:
+                    timevals_test[i].append(times[0][0])
                 for bench in allbench:
                     for program in bench.programs:
                         if program.name == row[1]:
@@ -202,6 +209,7 @@ if __name__ == '__main__':
 
     for i in timevals.keys():
         plot_histogram('figures/timinghist_' + str(i) + '.png', timevals[i])
+        plot_histogram('figures/timinghist_test_' + str(i) + '.png', timevals_test[i])
 
 
     #print it out
