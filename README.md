@@ -30,6 +30,10 @@ We personally recommend downloading the required sources (for the versions menti
     * matplotlib 2.2.3
     * psutil 5.4.7
     * tqdm 4.26
+    * scikit-learn 0.19.2
+    * numpy 1.15
+    * scipy 1.1.0
+    * statistics 1.0.3
 
 # Organization
 
