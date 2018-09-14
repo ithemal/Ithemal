@@ -10,21 +10,26 @@ We personally recommend downloading the required sources (for the versions menti
 
 * Common
   * Boost 1.59 [(link)](https://www.boost.org/users/download/)
-  * cmake - version 3.1 or higher [(link)](https://cmake.org/download/)
+  * cmake 3.1 or higher [(link)](https://cmake.org/download/)
   * libncurses5-dev (PM)
+  * python-dev (PM)
 
 * Data Collection
-  * DynamoRIO [(link)](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
-  * SQLite [(link)](https://www.sqlite.org/download.html).
+  * DynamoRIO 7.0.0 [(link)](https://github.com/DynamoRIO/dynamorio/wiki/Downloads).
+  * SQLite3 [(link)](https://www.sqlite.org/download.html).
 
 * Data Export
   * MySQL server 5.7 [(link)](https://dev.mysql.com/downloads/mysql/5.7.html) - We do not support MySQL 8; build with -DWITH_BOOST=/path/to/boost, note that higher versions of boost doesn't work.
 
 * Training and Inference
   * Python 2.7
-  * Python packages - We recommend using a python virtual environment when installing these packages 
+  * virtualenv
+  * Python packages - We recommend using a python virtual environment when installing these packages; you can use pip install. 
     * MySQL python connector 2.1 [(link)](https://dev.mysql.com/downloads/connector/python/) - We do not support connector 8 API
     * PyTorch 0.4 or higher [(link)](https://pytorch.org).
+    * matplotlib 2.2.3
+    * psutil 5.4.7
+    * tqdm 4.26
 
 # Organization
 
