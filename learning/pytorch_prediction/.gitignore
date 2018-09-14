@@ -7,3 +7,4 @@ saved/
 *.jpg
 *.pdf
 #*#
+!offsets.txt
