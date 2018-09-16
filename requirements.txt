@@ -1,8 +1,0 @@
-matplotlib==2.2.3
-mysql-connector==2.1.6
-numpy==1.15
-psutil==5.4.7
-scikit-learn==0.19.2
-scipy==1.1.0
-tqdm==4.26
-statistics==1.0.3.5
