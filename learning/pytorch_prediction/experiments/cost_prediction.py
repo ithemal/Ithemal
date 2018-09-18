@@ -66,8 +66,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
 def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode):
 
-    data = dt.DataInstructionEmbedding()
-    
+    data = dt.DataInstructionEmbedding()    
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
     data.read_meta_data()

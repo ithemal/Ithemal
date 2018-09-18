@@ -87,6 +87,7 @@ benchmarks/
 datasql/
 testing/    
 virtualenv/
+venv/
 stoke/
 agner/
 testing/*
@@ -99,3 +100,4 @@ zsim/
 keys/
 *.pkl
 costmodel_*.sql
+*.mdl
