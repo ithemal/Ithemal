@@ -89,12 +89,12 @@ testing/
 virtualenv/
 venv/
 stoke/
-agner/
+#agner/
 testing/*
 \#*\#
-iaca/
+#iaca/
 llvm/
-llvm-mca/
+#llvm-mca/
 llvm-build/
 zsim/
 keys/
