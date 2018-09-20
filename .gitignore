@@ -102,3 +102,4 @@ keys/
 costmodel_*.sql
 *.mdl
 build_scripts/
+local/
