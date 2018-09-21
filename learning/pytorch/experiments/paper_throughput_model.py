@@ -8,8 +8,8 @@ import argparse
 import matplotlib
 matplotlib.use('Agg')
 
-import common.utilities as ut
-import common.graphs as gr
+import utilities as ut
+import graphs as gr
 import numpy as np
 import torch
 

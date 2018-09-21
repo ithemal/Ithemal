@@ -3,7 +3,6 @@ sys.path.append('..')
 
 
 import numpy as np
-import common.utilities as ut
 import torch
 import mysql.connector
 import argparse
@@ -11,15 +10,12 @@ import matplotlib
 
 matplotlib.use('Agg')
 
-import common.utilities as ut
+import utilities as ut
 import numpy as np
 import word2vec.word2vec as w2v
 
-
-
 if __name__ == "__main__":
    
-
     #commandline arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)

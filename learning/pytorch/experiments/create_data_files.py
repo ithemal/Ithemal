@@ -10,8 +10,8 @@ import argparse
 import matplotlib
 matplotlib.use('Agg')
 
-import common.utilities as ut
-import common.graphs as gr
+import utilities as ut
+import graphs as gr
 import numpy as np
 import torch
 
@@ -22,10 +22,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
+
     parser.add_argument('--database',action='store',default='text',type=str)
+    parser.add_argument('--user',action='store',type=str)
+    parser.add_argument('--password',action='store',type=str)
+    parser.add_argument('--port',action='store',type=int)
+
     args = parser.parse_args(sys.argv[1:])
 
-    cnx = ut.create_connection(args.database)
+    cnx = ut.create_connection(database=args.database, user=args.user, password=args.password, port=args.port)
 
     raw_data = ut.get_data(cnx, args.format, [])
  
