@@ -1,7 +1,5 @@
 *.pyc
 *.txt
-results/
-saved/
 *~
 *.png
 *.jpg
@@ -10,3 +8,4 @@ saved/
 !offsets.txt
 timing/
 common/
+other/
