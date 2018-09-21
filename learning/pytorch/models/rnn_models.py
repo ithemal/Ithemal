@@ -2,7 +2,7 @@
 #plus it has the training framework for those models given data - each model has its own data requirements
 
 import numpy as np
-import common.utilities as ut
+import utilities as ut
 import random  
 import word2vec.word2vec as w2v
 import torch.nn as nn
