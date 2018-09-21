@@ -44,5 +44,4 @@ else
     echo "llvm-mca already built"
 fi
 
-
-
+cd $cur
