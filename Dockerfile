@@ -5,15 +5,16 @@ RUN groupadd -g 999 ithemal && \
 
 RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-	build-essential             \
-	qt5-default                 \
-	cmake                       \
-	coreutils                   \
-	curl                        \
-	git                         \
+        libsqlite3-dev              \
+        build-essential             \
+        cmake                       \
+        coreutils                   \
+        curl                        \
+        git                         \
         gnupg                       \
         man                         \
         python-dev                  \
+        qt5-default                 \
         sqlite3                     \
         sudo                        \
         vim                         \
@@ -42,3 +43,5 @@ RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotl
 RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz
 
 RUN bash -lc 'source activate ithemal; jupyter notebook --generate-config'
+RUN echo 'export DYNAMORIO_HOME=/home/ithemal/DynamoRIO-Linux-7.0.0-RC1' >> /home/ithemal/.bashrc
+RUN echo 'source activate ithemal' >> /home/ithemal/.bashrc

@@ -20,7 +20,7 @@ function container_id() {
 CONTAINER="$(container_id)"
 
 if [[ -z "${CONTAINER}" ]]; then
-    read -p "Container is not currently running. Would you like to start it? " -r
+    read -p "Container is not currently running. Would you like to start it? (y/n) " -r
 
     if [[ !($REPLY =~ ^[Yy]) ]]; then
 	echo "Not starting."
