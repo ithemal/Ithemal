@@ -40,7 +40,7 @@ def execute_query(cnx, sql, fetch):
         return None
 
 
-#dynamorio specific encoding details
+#dynamorio specific encoding details - tokenizing
 def get_opcode_opnd_dict(opcode_start, opnd_start, filename):
     sym_dict = dict()
     with open(filename,'r') as f:
@@ -149,7 +149,6 @@ def get_percentage_error(predicted, actual):
         
 
 #calculating static properties of instructions and basic blocks
-
 def create_basicblock(tokens):
 
     opcode = None
