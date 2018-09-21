@@ -19,11 +19,15 @@ services:
        - type: bind
          source: .
          target: /home/ithemal/ithemal
+       - type: bind
+         source: ./.docker_bash_history
+         target: /home/ithemal/.bash_history
      image: ithemal:latest
      tty: true
      environment:
        MYSQL_HOST: db
        MYSQL_TCP_PORT: 3306
+       HIST_FILE: /home/ithemal/.bash_history
      ports:
        - "8888:8888"
 

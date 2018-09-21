@@ -2,6 +2,11 @@
 
 source "$(dirname $0)/_docker_utils.sh"
 
+BASH_HISTORY_FILE="$(dirname $0)/.docker_bash_history"
+if [ ! -f "${BASH_HISTORY_FILE}" ]; then
+    touch "${BASH_HISTORY_FILE}"
+fi
+
 DEFAULT_USER="ithemal"
 USER="${DEFAULT_USER}"
 
