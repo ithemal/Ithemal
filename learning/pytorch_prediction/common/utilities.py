@@ -8,9 +8,21 @@ import os
 
 #mysql specific functions
 def create_connection(database):
-    cnx = None
+    # build args as a separate dict to be able to conditionally add 'database'
+    args = {
+        'option_files': list(filter(os.path.exists, [
+            '/etc/my.cnf',
+            '~/.my.cnf',
+        ])),
+        'user': 'root',
+        'password': 'ithemal',
+    }
+
+    if database:
+        args['database'] = database
+
     try:
-        cnx = mysql.connector.connect(user='root',password='mysql7788#',database=database,port='43562');
+        return mysql.connector.connect(**args)
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
             print("Something is wrong with your user name or password")
@@ -18,7 +30,8 @@ def create_connection(database):
             print("Database does not exist")
         else:
             print(err)
-    return cnx
+
+        raise
 
 #dynamorio specific encoding details
 def get_opcode_opnd_dict(opcode_start, opnd_start, filename):
@@ -49,12 +62,12 @@ def read_offsets(filename):
         f.close()
     assert len(offsets) == 5
     return offsets
-    
+
 def get_sym_dict(offsets_filename,encoding_filename):
 
     offsets = read_offsets(offsets_filename)
     sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1], filename = encoding_filename)
-   
+
     sym_dict[offsets[2]] = 'int_immed'
     sym_dict[offsets[3]] = 'float_immed'
 
@@ -86,7 +99,7 @@ def execute_query(cnx, sql, fetch):
         return cur.fetchall()
     else:
         return None
- 
+
 #data reading function
 def get_data(cnx, format, cols):
     try:
@@ -115,11 +128,11 @@ def get_data(cnx, format, cols):
                 if len(row[0]) % 2 != 0:
                     row = cur.fetchone()
                     continue
-                for i in range(0,len(row[0]),2): 
+                for i in range(0,len(row[0]),2):
                     slice = row[0][i:i+2]
                     convert = struct.unpack('h',slice)
                     code.append(int(convert[0]))
-            
+
             item.append(code)
             for i in range(len(cols)):
                 item.append(row[i + 1])
@@ -134,17 +147,17 @@ def get_percentage_error(predicted, actual):
 
     errors = []
     for pitem, aitem in zip(predicted, actual):
-        
+
         if type(pitem) == list:
             pitem = pitem[-1]
             aitem = aitem[-1]
-        
+
         error = abs(float(pitem) - float(aitem)) * 100.0 / float(aitem)
 
         errors.append(error)
 
     return errors
-        
+
 
 #calculating static properties of instructions and basic blocks
 
@@ -181,7 +194,7 @@ def create_basicblock(tokens):
 
 
 class Instruction:
-    
+
     def __init__(self, opcode, srcs, dsts, num):
         self.opcode = opcode
         self.num = num
@@ -212,7 +225,7 @@ class BasicBlock:
         return len(self.instrs)
 
     def num_span(self, instr_cost):
-        
+
         for i in range(len(self.instrs)):
             self.span_rec(i, instr_cost)
 
@@ -251,7 +264,7 @@ class BasicBlock:
                 if found:
                     break
             dsts = list(set(dsts) - set(dst_instr.dsts)) #remove dead destinations
-        
+
         if src_instr.opcode in instr_cost:
             cost = instr_cost[src_instr.opcode]
         else:
@@ -262,7 +275,7 @@ class BasicBlock:
 
         self.span_values[n] = span + cost
         return self.span_values[n]
-                        
+
 
     def find_uses(self, n):
 
@@ -286,7 +299,7 @@ class BasicBlock:
                     if not src_instr in instr.parents:
                         instr.parents.append(src_instr)
                     break
-        
+
     def create_dependencies(self):
 
         for n in range(len(self.instrs)):
@@ -302,13 +315,13 @@ class BasicBlock:
 
         return roots
 
-        
+
 
 if __name__ == "__main__":
-    
+
     cnx = create_connection('costmodel0404')
     cur = cnx.cursor(buffered = True)
-    
+
     sql = 'SELECT code_id, code from  code where program = \'2mm\' and rel_addr = 4136'
 
     cur.execute(sql)
@@ -332,4 +345,3 @@ if __name__ == "__main__":
 
     times = [int(t[0]) for t in rows]
     print sorted(times)
-        
