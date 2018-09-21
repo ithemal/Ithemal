@@ -1,7 +1,7 @@
 #main data file
 
 import numpy as np
-import common.utilities as ut
+import utilities as ut
 import random  
 import word2vec.word2vec as w2v
 import torch.nn as nn
@@ -79,10 +79,8 @@ class Data(object):
 
     def read_meta_data(self):
         
-        offsets_filename = '../inputs/offsets.txt'
-        encoding_filename = '../inputs/encoding.h'
-        self.sym_dict,_ = ut.get_sym_dict(offsets_filename, encoding_filename)
-        self.offsets = ut.read_offsets(offsets_filename)
+        self.sym_dict,_ = ut.get_sym_dict()
+        self.offsets = ut.read_offsets()
 
         self.opcode_start = self.offsets[0]
         self.operand_start = self.offsets[1]

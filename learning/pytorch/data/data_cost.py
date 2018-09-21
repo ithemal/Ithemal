@@ -1,5 +1,4 @@
 import numpy as np
-import common.utilities as ut
 import random  
 import word2vec.word2vec as w2v
 import torch.nn as nn
@@ -14,7 +13,7 @@ import statistics
 import sys
 sys.path.append('..')
 
-import common.utilities as ut
+import utilities as ut
 
 
 class DataItem:
