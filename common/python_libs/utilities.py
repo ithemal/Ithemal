@@ -41,8 +41,11 @@ def execute_query(cnx, sql, fetch):
 
 
 #dynamorio specific encoding details - tokenizing
-def get_opcode_opnd_dict(opcode_start, opnd_start, filename):
+def get_opcode_opnd_dict(opcode_start, opnd_start):
     sym_dict = dict()
+
+    filename = os.environ['ITHEMAL_HOME'] + '/common/inputs/encoding.h'
+
     with open(filename,'r') as f:
         opcode_num = opcode_start
         opnd_num = opnd_start
@@ -59,8 +62,8 @@ def get_opcode_opnd_dict(opcode_start, opnd_start, filename):
 
     return sym_dict
 
-def read_offsets(filename):
-    offsets_filename = filename
+def read_offsets():
+    offsets_filename = os.environ['ITHEMAL_HOME'] + '/common/inputs/offsets.txt'
     offsets = list()
     with open(offsets_filename,'r') as f:
         for line in f:
@@ -70,10 +73,10 @@ def read_offsets(filename):
     assert len(offsets) == 5
     return offsets
     
-def get_sym_dict(offsets_filename,encoding_filename):
+def get_sym_dict():
 
-    offsets = read_offsets(offsets_filename)
-    sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1], filename = encoding_filename)
+    offsets = read_offsets()
+    sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1])
    
     sym_dict[offsets[2]] = 'int_immed'
     sym_dict[offsets[3]] = 'float_immed'
@@ -307,16 +310,16 @@ class BasicBlock:
 
 if __name__ == "__main__":
     
-    cnx = create_connection('costmodel0404')
+    cnx = create_connection('costmodel','root','mysql7788#',43562)
     cur = cnx.cursor(buffered = True)
     
-    sql = 'SELECT code_id, code from  code where program = \'2mm\' and rel_addr = 4136'
+    sql = 'SELECT code_id, code_token from  code where program = \'2mm\' and rel_addr = 4136'
 
     cur.execute(sql)
 
     rows = cur.fetchall()
 
-    sym_dict, mem_start = get_sym_dict('/data/scratch/charithm/projects/cmodel/database/offsets.txt')
+    sym_dict, mem_start = get_sym_dict()
 
     for row in rows:
         print row[0]
