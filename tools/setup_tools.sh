@@ -11,6 +11,11 @@ else
 fi
 
 cd $cur
+cd agner
+#copy files
+cp a64-out.sh testp/PMCTest
+cp PMCTestB64.nasm testp/PMCTest
+cd $cur
 
 #give instructions to download IACA
 if [ -f "iaca/iacaMarks.h" ] && [ -f "iaca/iaca" ]; then
