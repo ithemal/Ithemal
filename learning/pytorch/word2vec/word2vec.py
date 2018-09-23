@@ -8,7 +8,7 @@ import torch.optim as optim
 from tqdm import tqdm
 import sys
 from sklearn.metrics.pairwise import cosine_similarity
-import common.utilities as ut
+import utilities as ut
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 

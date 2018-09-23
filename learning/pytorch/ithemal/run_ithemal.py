@@ -1,6 +1,5 @@
 import sys
 sys.path.append('..')
-
 import mysql.connector
 import struct
 import word2vec as w2v
@@ -173,18 +172,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
     parser.add_argument('--mode',action='store',type=str)
-    parser.add_argument('--savedatafile',action='store',type=str,default='../saved/timing.data')
+
+    parser.add_argument('--savedatafile',action='store',type=str,default='../inputs/data/timing.data')
     parser.add_argument('--embmode',action='store',type=str,default='learnt')
-    parser.add_argument('--embedfile',action='store',type=str,default='../inputs/code_delim.emb')
-    parser.add_argument('--savefile',action='store',type=str,default='../saved/graphCost.mdl')
-    parser.add_argument('--loadfile',action='store',type=str,default='../saved/graphCost.mdl')
+    parser.add_argument('--embedfile',action='store',type=str,default='../inputs/embeddings/code_delim.emb')
+    parser.add_argument('--savefile',action='store',type=str,default='../inputs/models/graphCost.mdl')
+    parser.add_argument('--loadfile',action='store',type=str,default='../inputs/models/graphCost.mdl')
     parser.add_argument('--arch',action='store',type=int, default=1)
 
     parser.add_argument('--database',action='store',type=str)
     parser.add_argument('--user',action='store',type=str)
     parser.add_argument('--password',action='store',type=str)
     parser.add_argument('--port',action='store',type=int)
-
 
     args = parser.parse_args(sys.argv[1:])
 
