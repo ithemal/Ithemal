@@ -85,12 +85,11 @@ out.txt
 
 benchmarks/
 datasql/
-testing/    
+datasql/*    
 virtualenv/
 venv/
 stoke/
 #agner/
-testing/*
 \#*\#
 #iaca/
 llvm/
