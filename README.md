@@ -40,10 +40,13 @@ We personally recommend downloading the required sources (for the versions menti
 This repo contains software to extract basic blocks from existing binary programs, time them using Agner Fog's timing scripts
 (should be separately downloaded), populate databases and train neural network models to learn throughput prediction.
 
-## Data Collection
+## Data Collection (`data_collection` folder)
 
 Ithemal dynamically collects all the basic blocks run by binaries using the dynamic binary instrumentation framework, [DynamoRIO](http://dynamorio.org). DynamoRIO clients needed to perform basic block collection are located within `data_collection` folder. DynamoRIO `static` client dumps collected basic block data into a collection of SQL files which can be exported into a database.
 
 ## Data Export
 
 Folder `schemas` contains the SQL schemas which describe the database structure of the dumped SQL files. They describe the composition of each table and field of the database. Folder `scripts` contains convenience scripts which can be used to export SQL files collected during data collection to a database.
+
+## Learning
+
