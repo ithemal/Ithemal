@@ -35,6 +35,9 @@ We personally recommend downloading the required sources (for the versions menti
     * scipy 1.1.0
     * statistics 1.0.3
 
+* Testing
+  * pytest-3.8.1
+
 # Organization
 
 This repo contains software to extract basic blocks from existing binary programs, time them using Agner Fog's timing scripts
