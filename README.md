@@ -56,6 +56,18 @@ Ithemal's core learning routines are located in the `learning` folder. It contai
 
 We compare Ithemal with llvm-mca and Intel's IACA. `timing_tools` folder contains scripts we used for collecting throughput predictions using these systems. Further, we include scripts we used to collect ground truth throughput values.
 
-# Building Ithemal
+## Testing
 
-# Running Ithemal
+Folder `testing` contains some sanity checks that should pass before you run any component of Ithemal.
+
+# Building
+
+Only parts which need explicit building are the DynamoRIO clients located within `data_collection` folder. The instructions are located in the README file within its folder.
+
+# Running
+
+Before running any Ithemal related code, please ensure you do the following in the Ithemal root folder.
+
+`source setup.sh`
+
+This sets up some environment variables needed to run components of Ithemal successfully.
