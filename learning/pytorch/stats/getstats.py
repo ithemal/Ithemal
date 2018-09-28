@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('..')
 
-import common.utilities as ut
-import common.graphs as gr
+import utilities as ut
+import graphs as gr
 import models.graph_models as md
 import models.train as tr
 import data.data_cost as dt
