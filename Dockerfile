@@ -38,7 +38,7 @@ WORKDIR /home/ithemal
 
 RUN /opt/conda/bin/conda create --name ithemal python=2.7
 RUN /opt/conda/bin/conda install -q -n ithemal -c pytorch pytorch torchvision
-RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotlib=2.2.3 psutil=5.4.7 tqdm scikit-learn=0.19 numpy=1.15 scipy=1.1.0 statistics=1.0.3.5 ipython-notebook ipython pyqt
+RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotlib=2.2.3 psutil=5.4.7 tqdm scikit-learn=0.19 numpy=1.15 scipy=1.1.0 statistics=1.0.3.5 ipython-notebook ipython pandas pyqt
 
 RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz
 
