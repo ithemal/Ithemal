@@ -2,7 +2,7 @@ import numpy
 import collections
 import random
 numpy.random.seed(12345)
-import utilities as ut
+import common_libs.utilities as ut
 
 
 #this holds summaries of data, but does not hold data itself

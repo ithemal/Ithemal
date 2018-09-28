@@ -6,7 +6,7 @@ import struct
 import word2vec as w2v
 import argparse
 import matplotlib
-import utilities as ut
+import common_libs.utilities as ut
 import numpy as np
 import torch
 torch.backends.cudnn.enabled = False

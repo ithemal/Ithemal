@@ -1,5 +1,5 @@
 import numpy as np
-import common.utilities as ut
+import common_libs.utilities as ut
 import torch
 import mysql.connector
 import argparse
@@ -8,7 +8,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 import sys
-import common.utilities as ut
+import common.common_libs.utilities as ut
 import numpy as np
 import word2vec.word2vec as w2v
 
