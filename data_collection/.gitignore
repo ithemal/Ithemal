@@ -82,3 +82,4 @@ simd-examples/
 build/
 names.txt
 out.txt
+old/

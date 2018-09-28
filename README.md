@@ -35,11 +35,44 @@ We personally recommend downloading the required sources (for the versions menti
     * scipy 1.1.0
     * statistics 1.0.3
 
+* Testing
+  * pytest-3.8.1
+
 # Organization
 
-This repo contains software to generate basic blocks from existing binary programs, time them using Agner Fog's timing scripts
-(should be separately downloaded), populate databases and neural network models to learn throughput prediction.
+This repo contains software to extract basic blocks from existing binary programs, time them using Agner Fog's timing scripts
+(should be separately downloaded), populate databases and train neural network models to learn throughput prediction.
 
-## Basic Block collection
+### Data Collection
 
-Ithemal dynamically collects all the basic blocks run by binaries using the dynamic binary instrumentation framework, [DynamoRIO](http://dynamorio.org). DynamoRIO clients needed to perform basic block collection are located within drclients folder.
+Ithemal dynamically collects all the basic blocks run by binaries using the dynamic binary instrumentation framework, [DynamoRIO](http://dynamorio.org). DynamoRIO clients needed to perform basic block collection are located within `data_collection` folder. DynamoRIO `static` client dumps collected basic block data into a collection of SQL files which can be exported into a database.
+
+### Data Export
+
+Folder `data_export` contains tools used for exporting collected SQL files into a database. Subfolder `schemas` contains the SQL schemas which describe the database structure of the dumped SQL files. They describe the composition of each table and field of the database. Subfolder `scripts` contains convenience scripts which can be used to export SQL files to a database.
+
+### Learning
+
+Ithemal's core learning routines are located in the `learning` folder. It contains code to build neural network models, preprocess data to be fed into those models, training scripts as well as validation scripts. Ithemal uses Pytorch Neural Network framework for building the DAG-RNN used for prediction.
+
+### Comparison Tools
+
+We compare Ithemal with llvm-mca and Intel's IACA. `timing_tools` folder contains scripts we used for collecting throughput predictions using these systems. Further, we include scripts we used to collect ground truth throughput values.
+
+### Testing
+
+Folder `testing` contains some sanity checks that should pass before you run any component of Ithemal.
+
+# Building
+
+Only parts which need explicit building are the DynamoRIO clients located within `data_collection` folder. The instructions are located in the README file within its folder.
+
+# Running
+
+Before running any Ithemal related code, please ensure you do the following in the Ithemal root folder. This sets up some environment variables needed to run components of Ithemal successfully. 
+
+`source setup.sh`
+
+Running instructions for each component can be found in each respective folder.
+
+Also, remember to define `DYNAMORIO_HOME` environment variable to point to the home directory of your DynamoRIO installation.

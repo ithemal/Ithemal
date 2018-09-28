@@ -90,7 +90,6 @@ virtualenv/
 venv/
 stoke/
 #agner/
-testing/*
 \#*\#
 #iaca/
 llvm/
