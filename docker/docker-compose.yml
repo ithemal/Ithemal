@@ -28,6 +28,8 @@ services:
        MYSQL_HOST: db
        MYSQL_TCP_PORT: 3306
        HIST_FILE: /home/ithemal/.bash_history
+       ITHEMAL_HOME: /home/ithemal/ithemal
+       DYNAMORIO_HOME: /home/ithemal/DynamoRIO-Linux-7.0.0-RC1
      ports:
        - "8888:8888"
 
