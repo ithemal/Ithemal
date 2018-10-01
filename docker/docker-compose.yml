@@ -17,7 +17,7 @@ services:
        - db
      volumes:
        - type: bind
-         source: .
+         source: ..
          target: /home/ithemal/ithemal
        - type: bind
          source: ./.docker_bash_history
