@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import sys
 sys.path.append('..')
-import utilities as ut
+import common_libs.utilities as ut
 import torch.autograd as autograd
 import torch.optim as optim
 import math

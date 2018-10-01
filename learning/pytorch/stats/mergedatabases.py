@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('..')
 
-import common.utilities as ut
+import common_libs.utilities as ut
 import models.graph_models as md
 import models.train as tr
 import data.data_cost as dt
