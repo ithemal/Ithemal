@@ -12,7 +12,12 @@ if [[ -z "${DYNAMORIO_HOME}" ]]; then
     exit 1
 fi
 
-mkdir "${ITHEMAL_HOME}/data_collection/build"
-cd "${ITHEMAL_HOME}/data_collection/build"
+BUILD_DIR="${ITHEMAL_HOME}/data_collection/build"
+
+if [ ! -d "${BUILD_DIR}" ]; then
+    mkdir "${BUILD_DIR}"
+fi
+
+cd "${BUILD_DIR}"
 cmake -D -DDynamoRIO_DIR="${DYNAMORIO_HOME}/cmake" ..
 make -j"$(nproc --all)"
