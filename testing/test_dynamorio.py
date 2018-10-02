@@ -52,9 +52,11 @@ class TestDynamoRIO:
         with open(files[0],'r') as f:
             
             line = f.readline()
-            assert line == "INSERT INTO config (compiler, flags, arch) VALUES ('gcc','none',63);SET @config_id = (SELECT config_id FROM config WHERE compiler = 'gcc' AND flags = 'none' AND arch = 63);\n"
+            assert "INSERT INTO config (compiler, flags, arch)" in line
             line = f.readline()
-            assert "INSERT INTO code " in line
+            assert "INSERT INTO code" in line
+            line = f.readline()
+            assert "UPDATE code SET" in line
 
 
                 
