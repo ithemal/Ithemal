@@ -37,23 +37,23 @@ void close_memory_map_file(mmap_file_t * file_map, size_t size){
 //raw writing to a file - for appending data to a file
 #define NUM_PAGES 4
 
-static int get_raw_filename(void * drcontext, const char * folder, const char * subfolder, const char *type, char * filename, size_t max_size){
+static int get_raw_filename(void * drcontext, const char * folder, const char *type, char * filename, size_t max_size){
 
     thread_id_t id = dr_get_thread_id(drcontext);
     dr_time_t time;
     dr_get_time(&time);
 
-    return dr_snprintf(filename, max_size, "%s/%s/%s_%s_%d_%d_%d.sql", folder, subfolder, type, dr_get_application_name(), id, time.hour, time.minute);
+    return dr_snprintf(filename, max_size, "%s/%s_%s_%d_%d_%d.sql", folder, type, dr_get_application_name(), id, time.hour, time.minute);
 
 }
 
 
-void create_raw_file(void * drcontext, const char * folder, const char * subfolder, const char * type,  mmap_file_t * file){
+void create_raw_file(void * drcontext, const char * folder, const char * type,  mmap_file_t * file){
  
   size_t page = dr_page_size();
   
   //obtain the filename
-  get_raw_filename(drcontext,folder,subfolder,type,file->filename,NUM_PAGES * page);
+  get_raw_filename(drcontext,folder,type,file->filename,NUM_PAGES * page);
   file->file = dr_open_file(file->filename, DR_FILE_WRITE_OVERWRITE | DR_FILE_READ);
   file->offs = 0;
   file->filled = 0; 
