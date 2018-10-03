@@ -71,11 +71,8 @@ if __name__ == '__main__':
     args = parser.parse_args(sys.argv[1:])
 
     #setting up
-    offsets_filename = '../inputs/offsets.txt'
-    encoding_filename = '../inputs/encoding.h'
-
-    sym_dict,_ = ut.get_sym_dict(offsets_filename, encoding_filename)
-    offsets = ut.read_offsets(offsets_filename)
+    sym_dict,_ = ut.get_sym_dict()
+    offsets = ut.read_offsets()
     
     print offsets
     opcode_start = offsets[0]

@@ -19,6 +19,11 @@ class TestDatabase:
         cnx = ut.create_connection(user=db_config['user'],password=db_config['password'],port=db_config['port'],database=None)
         assert cnx != None
 
+    def test_connectivity_from_config(self):
+
+        cnx = ut.create_connection_from_config('test_data/db_config.cfg')
+        assert cnx != None
+
     def test_create_database(self,db_config):
 
         create_script = os.environ['ITHEMAL_HOME'] + '/data_export/scripts/create_and_populate_db.sh'
