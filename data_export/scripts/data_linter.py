@@ -1,11 +1,15 @@
 from os import listdir
 from os.path import isfile, join
 import re
+import argparse
 
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--path',action='store',default='text',type=str)
+    args = parser.parse_args(sys.argv[1:])
 
-    mypath = '/data/scratch/charithm/projects/cmodel/data/test_static'
+    mypath = args.path
 
     files = [join(mypath,f) for f in listdir(mypath) if (isfile(join(mypath, f)) and 'static' in f)]
 

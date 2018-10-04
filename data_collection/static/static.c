@@ -96,7 +96,7 @@ thread_init(void * drcontext){
   if(client_args.mode == RAW_SQL){
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
     bk->static_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
-    create_raw_file(drcontext,DATA_FOLDER,client_args.data_folder,"static",bk->static_file);
+    create_raw_file(drcontext,client_args.data_folder,"static",bk->static_file);
   }
 
   //insert the config string (query)

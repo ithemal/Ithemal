@@ -1,5 +1,6 @@
 import sys
-sys.path.append('..')
+import os
+sys.path.append(os.environ['ITHEMAL_HOME'] + '/learning/pytorch')
 import mysql.connector
 import struct
 import word2vec as w2v
@@ -17,9 +18,9 @@ import models.train as tr
 from tqdm import tqdm
 
 
-def save_data(database, user, password, port, format, savefile, arch):
+def save_data(database, config, format, savefile, arch):
 
-    cnx = ut.create_connection(database=database, user=user, password=password, port=port)
+    cnx = ut.create_connection_from_config(database=database, config_file=config)
     
     data = dt.DataInstructionEmbedding()
     
@@ -60,7 +61,9 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     train.num_losses = 1
 
     train.train(savefile=savefile)
-    results = train.validate('../results/realtime_results.txt')
+    
+    resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
+    results = train.validate(resultfile)
     
 
 def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode):
@@ -89,8 +92,8 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
     train.num_losses = 1
 
     #train.data.test = train.data.test[:10000]
-
-    resultfile = '../results/realtime_results.txt'
+    
+    resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
     
     training_size = len(data.train)
@@ -111,9 +114,9 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
             
     f.close()
     
-def graph_model_gettiming(database, user, password, port, format, data_savefile, embed_file, model_file, embedding_mode, arch):
+def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch):
 
-    cnx = ut.create_connection(database=database, user=user, password=password, port=port)
+    cnx = ut.create_connection(database=database, config_file=config)
 
     data = dt.DataInstructionEmbedding()
     data.raw_data = torch.load(data_savefile)
@@ -141,7 +144,7 @@ def graph_model_gettiming(database, user, password, port, format, data_savefile,
 
 
   
-    resultfile = '../results/realtime_results.txt'
+    resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
     
 
@@ -181,20 +184,18 @@ if __name__ == "__main__":
     parser.add_argument('--arch',action='store',type=int, default=1)
 
     parser.add_argument('--database',action='store',type=str)
-    parser.add_argument('--user',action='store',type=str)
-    parser.add_argument('--password',action='store',type=str)
-    parser.add_argument('--port',action='store',type=int)
-
+    parser.add_argument('--config',action='store',type=str)
+    
     args = parser.parse_args(sys.argv[1:])
 
     if args.mode == 'save':
-        save_data(args.database, args.user, args.password, args.port, args.format, args.savedatafile, args.arch)
+        save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
         graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode)
     elif args.mode == 'validate':
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)    
     elif args.mode == 'predict':
-        graph_model_gettiming(args.database, args.user, args.password, args.port, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
+        graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
                
         
 

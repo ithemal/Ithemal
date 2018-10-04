@@ -5,7 +5,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
-sys.path.append('..')
+import os
+sys.path.append(os.environ['ITHEMAL_HOME'] + '/learning/pytorch')
 
 import common_libs.utilities as ut
 import models.graph_models as md
@@ -63,21 +64,17 @@ class Benchmark:
     
 if __name__ == '__main__':
 
-
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--database',action='store', type=str, required=True)
+    parser.add_argument('--config',action='store', type=str, required=True)
     parser.add_argument('--arch',action='store', type=int, required=True)
     args = parser.parse_args(sys.argv[1:])
 
     #setting up
-    offsets_filename = '../inputs/offsets.txt'
-    encoding_filename = '../inputs/encoding.h'
-
-    sym_dict,_ = ut.get_sym_dict(offsets_filename, encoding_filename)
-    offsets = ut.read_offsets(offsets_filename)
+    sym_dict,_ = ut.get_sym_dict()
+    offsets = ut.read_offsets()
     
-    print offsets
     opcode_start = offsets[0]
     operand_start = offsets[1]
     int_immed = offsets[2]
@@ -100,13 +97,12 @@ if __name__ == '__main__':
 
     allbench = [linux, spec2006, spec2017, nas, polybench, tsvc, cortexsuite, simd]
 
-    cnx = ut.create_connection(args.database)
+    cnx = ut.create_connection_from_config(args.config,args.database)
 
     sql = 'select distinct program from code'
     rows = ut.execute_query(cnx, sql, True)
 
-
-    print len(rows)
+    print 'distinct programs found : ' + str(len(rows))
 
     tsvc.add_program('runvec')
     tsvc.add_program('runnovec')
@@ -139,18 +135,17 @@ if __name__ == '__main__':
                     found = True
                     break
         if not found:
-            print row[0]
+            print 'not in any benchmark : ' + str(row[0])
 
 
     total = 0
     for bench in allbench:
         total += len(bench.programs)
 
-    print total
+    print 'all programs (pre-populated included) : ' + str(total)
 
 
     #ok now for the statistics
-
     for bench in allbench:
         for program in bench.programs:
             
@@ -203,18 +198,25 @@ if __name__ == '__main__':
                             else:
                                 program.times[i] = 1
                         
-
+                                
+    print 'available times for various architectures'
     print time_available
 
+    ithemal_home = os.environ['ITHEMAL_HOME'] + '/learning/pytorch'
 
     for i in timevals.keys():
-        plot_histogram('figures/timinghist_' + str(i) + '.png', timevals[i])
-        plot_histogram('figures/timinghist_test_' + str(i) + '.png', timevals_test[i])
+        plot_histogram(ithemal_home + '/results/figures/timinghist_' + str(i) + '.png', timevals[i])
+        plot_histogram(ithemal_home + '/results/figures/timinghist_test_' + str(i) + '.png', timevals_test[i])
 
 
     #print it out
 
+    print '\nstatistics for each benchmark'
+    print 'name -- bbs -- timed bbs'
+
     for i in range(1, args.arch + 1):
+
+        print '\narch : ' + str(i) + '\n'
 
         tbbs = 0
         tprograms = 0

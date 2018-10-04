@@ -7,8 +7,9 @@ CREATE TABLE config (
   config_id int(11) NOT NULL AUTO_INCREMENT,
   compiler varchar(255) DEFAULT NULL,
   flags varchar(255) DEFAULT NULL,
+  arch int(11) DEFAULT NULL,
   PRIMARY KEY (config_id),
-  UNIQUE KEY (compiler,flags)
+  UNIQUE KEY (compiler,flags,arch)
 );
 
 

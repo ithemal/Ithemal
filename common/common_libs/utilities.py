@@ -39,24 +39,78 @@ def create_connection(database=None, user=None, password=None, port=None):
 
         raise
 
+def get_mysql_config(filename):
+    
+    config = dict()
+    with open(filename,'r') as f:
+        for line in f:
+            found = re.search('([a-zA-Z\-]+) *= *\"*([a-zA-Z0-9#\./]+)\"*', line)
+            if found:
+                config[found.group(1)] = found.group(2)
+    return config
+
+
+def create_connection_from_config(config_file, database=None):
+
+    config = get_mysql_config(config_file)
+    cnx = create_connection(user=config['user'],password=config['password'],port=config['port'],database=database)
+    return cnx
+
 def execute_many(cnx, sql, values):
     cur = cnx.cursor(buffered=True)
     cur.executemany(sql, values)
 
 
-def execute_query(cnx, sql, fetch):
+def execute_query(cnx, sql, fetch, multi=False):
     cur = cnx.cursor(buffered=True)
-    cur.execute(sql)
-    # if result.with_rows:
-    #     print("Rows produced by statement '{}':".format(
-    #         result.statement))
-    # else:
-    #     print("Number of rows affected by statement '{}': {}".format(
-    #         result.statement, result.rowcount))
+    cur.execute(sql,multi)
     if fetch:
         return cur.fetchall()
     else:
         return None
+
+#data reading function
+def get_data(cnx, format, cols):
+    try:
+        cur = cnx.cursor(buffered=True)
+
+        #code column is mandatory
+        columns = 'code_token'
+        for col in cols:
+            columns += ',' + col
+        columns += ''
+
+        sql = 'SELECT ' + columns + ' FROM code'
+        print sql
+        data = list()
+        cur.execute(sql)
+        print cur.rowcount
+        row = cur.fetchone()
+        while row != None:
+            item = list()
+            code = list()
+            if format == 'text':
+                for value in row[0].split(','):
+                    if value != '':
+                        code.append(int(value))
+            elif format == 'bin':
+                if len(row[0]) % 2 != 0:
+                    row = cur.fetchone()
+                    continue
+                for i in range(0,len(row[0]),2): 
+                    slice = row[0][i:i+2]
+                    convert = struct.unpack('h',slice)
+                    code.append(int(convert[0]))
+            
+            item.append(code)
+            for i in range(len(cols)):
+                item.append(row[i + 1])
+            data.append(item)
+            row = cur.fetchone()
+    except Exception as e:
+        print e
+    else:
+        return data
 
 
 #dynamorio specific encoding details - tokenizing
@@ -110,48 +164,6 @@ def get_name(val,sym_dict,mem_offset):
     else:
         return sym_dict[val]
 
-#data reading function
-def get_data(cnx, format, cols):
-    try:
-        cur = cnx.cursor(buffered=True)
-
-        #code column is mandatory
-        columns = 'code_token'
-        for col in cols:
-            columns += ',' + col
-        columns += ''
-
-        sql = 'SELECT ' + columns + ' FROM code'
-        print sql
-        data = list()
-        cur.execute(sql)
-        print cur.rowcount
-        row = cur.fetchone()
-        while row != None:
-            item = list()
-            code = list()
-            if format == 'text':
-                for value in row[0].split(','):
-                    if value != '':
-                        code.append(int(value))
-            elif format == 'bin':
-                if len(row[0]) % 2 != 0:
-                    row = cur.fetchone()
-                    continue
-                for i in range(0,len(row[0]),2):
-                    slice = row[0][i:i+2]
-                    convert = struct.unpack('h',slice)
-                    code.append(int(convert[0]))
-
-            item.append(code)
-            for i in range(len(cols)):
-                item.append(row[i + 1])
-            data.append(item)
-            row = cur.fetchone()
-    except Exception as e:
-        print e
-    else:
-        return data
 
 def get_percentage_error(predicted, actual):
 
@@ -170,38 +182,6 @@ def get_percentage_error(predicted, actual):
 
 
 #calculating static properties of instructions and basic blocks
-def create_basicblock(tokens):
-
-    opcode = None
-    srcs = []
-    dsts = []
-    mode = 0
-
-    mode = 0
-    instrs = []
-    for item in tokens:
-        if item == -1:
-            mode += 1
-            if mode > 2:
-                mode = 0
-                instr = Instruction(opcode,srcs,dsts,len(instrs))
-                instrs.append(instr)
-                opcode = None
-                srcs = []
-                dsts = []
-                continue
-        else:
-            if mode == 0:
-                opcode = item
-            elif mode == 1:
-                srcs.append(item)
-            else:
-                dsts.append(item)
-
-    block = BasicBlock(instrs)
-    return block
-
-
 class Instruction:
 
     def __init__(self, opcode, srcs, dsts, num):
@@ -324,6 +304,37 @@ class BasicBlock:
 
         return roots
 
+
+def create_basicblock(tokens):
+
+    opcode = None
+    srcs = []
+    dsts = []
+    mode = 0
+
+    mode = 0
+    instrs = []
+    for item in tokens:
+        if item == -1:
+            mode += 1
+            if mode > 2:
+                mode = 0
+                instr = Instruction(opcode,srcs,dsts,len(instrs))
+                instrs.append(instr)
+                opcode = None
+                srcs = []
+                dsts = []
+                continue
+        else:
+            if mode == 0:
+                opcode = item
+            elif mode == 1:
+                srcs.append(item)
+            else:
+                dsts.append(item)
+
+    block = BasicBlock(instrs)
+    return block
 
 
 if __name__ == "__main__":

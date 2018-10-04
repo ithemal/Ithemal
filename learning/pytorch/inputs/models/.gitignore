@@ -1,2 +1,5 @@
 *
 !.gitignore
+!graph_none_skylake.mdl
+!graph_none_haswell.mdl
+!graph_none_nehalem.mdl

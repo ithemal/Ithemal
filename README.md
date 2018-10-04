@@ -69,10 +69,8 @@ Only parts which need explicit building are the DynamoRIO clients located within
 
 # Running
 
-Before running any Ithemal related code, please ensure you do the following in the Ithemal root folder. This sets up some environment variables needed to run components of Ithemal successfully. 
-
-`source setup.sh`
+Before running any Ithemal related code, please ensure you define `ITHEMAL_HOME` environment variable to point to the Ithemal root directory.
 
 Running instructions for each component can be found in each respective folder.
 
-Also, remember to define `DYNAMORIO_HOME` environment variable to point to the home directory of your DynamoRIO installation.
+Also, remember to define `DYNAMORIO_HOME` environment variable to point to the home directory of your DynamoRIO installation when performing data collection.

@@ -37,7 +37,6 @@
  */
 
 #define FILENAMES_FILE "/tmp/names.txt"
-#define DATA_FOLDER   "/data/scratch/charithm/projects/cmodel/data"
 
 #define MAX_THREADS 16
 
