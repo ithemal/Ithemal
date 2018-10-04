@@ -27,8 +27,9 @@ def create_connection(database=None, user=None, password=None, port=None):
     if port:
         args['port'] = port
 
+    cnx = None
     try:
-        return mysql.connector.connect(**args)
+        cnx = mysql.connector.connect(**args)
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
             print("Something is wrong with your user name or password")
@@ -37,7 +38,7 @@ def create_connection(database=None, user=None, password=None, port=None):
         else:
             print(err)
 
-        raise
+    return cnx
 
 def get_mysql_config(filename):
     
