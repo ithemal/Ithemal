@@ -10,10 +10,6 @@ import os
 def create_connection(database=None, user=None, password=None, port=None):
     # build args as a separate dict to be able to conditionally add 'database'
     args = {
-        'option_files': list(filter(os.path.exists, [
-            '/etc/my.cnf',
-            '~/.my.cnf',
-        ])),
         'user': 'root',
         'password': 'ithemal',
     }
@@ -26,6 +22,7 @@ def create_connection(database=None, user=None, password=None, port=None):
         args['password'] = password
     if port:
         args['port'] = port
+
 
     cnx = None
     try:

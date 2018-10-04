@@ -16,7 +16,11 @@ class TestDatabase:
         assert 'user' in db_config.keys()
         assert 'port' in db_config.keys()
 
+        print db_config
+        
         cnx = ut.create_connection(user=db_config['user'],password=db_config['password'],port=db_config['port'],database=None)
+
+
         assert cnx != None
 
     def test_connectivity_from_config(self):
