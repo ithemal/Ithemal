@@ -42,9 +42,9 @@ def execute_many(cnx, sql, values):
     cur.executemany(sql, values)
 
 
-def execute_query(cnx, sql, fetch):
+def execute_query(cnx, sql, fetch, multi=False):
     cur = cnx.cursor(buffered=True)
-    cur.execute(sql)
+    cur.execute(sql,multi)
     if fetch:
         return cur.fetchall()
     else:
