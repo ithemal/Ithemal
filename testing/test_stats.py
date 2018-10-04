@@ -9,7 +9,7 @@ import mysql.connector
 
 @ithemal
 class TestStats:
-
+    
     def test_getbenchmarks(self):
 
         script = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/stats/getbenchmarks.py'

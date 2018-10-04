@@ -6,11 +6,33 @@ from conftest import *
 import common_libs.utilities as ut
 import mysql.connector
 import urllib
+import time
 
-script = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/ithemal/run_ithemal.py'
-database = '--database=costmodel'
+database = '--database=test_costmodel'
 config = '--config=test_data/db_config.cfg'
 arch = '--arch=2'
+
+home = os.environ['ITHEMAL_HOME']
+script = home + '/learning/pytorch/ithemal/run_ithemal.py'
+savedata = home + '/learning/pytorch/inputs/data/time_skylake_test.data'
+embedfile = home + '/learning/pytorch/inputs/embeddings/code_delim.emb'
+savemodel = home + '/learning/pytorch/inputs/models/test_skylake.mdl'
+
+
+def wait_timeout(proc, seconds):
+    """Wait for a process to finish, or raise exception after timeout"""
+    start = time.time()
+    end = start + seconds
+    interval = 30
+
+    while True:
+        result = proc.poll()
+        if result is not None:
+            return result
+        if time.time() >= end:
+            proc.kill()
+            return None
+        time.sleep(interval)
         
 
 @ithemal
@@ -45,19 +67,35 @@ class TestIthemal:
         rows = ut.execute_query(cnx,'select count(*) from code',True)
         assert rows[0][0] == 100000
 
-    # def test_training(self):
+    def test_savedata(self):
 
-    #     savedata = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/inputs/data/timing_skylake.data'
-    #     args = ['python',script, arch, '--mode=train','--savedatafile=' + savedata]
-    #     proc = subprocess.Popen(args,stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-    #     stdout, stderr = proc.communicate()
-
-    #     print stdout
-    #     success = False
-    #     for line in stdout.split('\n'):
-    #         if line == 'Total 44 2934 0':
-    #             success = True
         
-    #     assert success
+        args = ['python',script, config, database, arch, '--mode=save','--savedatafile=' + savedata]
+        proc = subprocess.Popen(args,stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        stdout, stderr = proc.communicate()
+        
+        print stdout
+        success = False
+        for line in stdout.split('\n'):
+            if line == 'timing values registered for 78179 items':
+                success = True
+                
+        assert success
+        
+    @pytest.mark.skip
+    def test_training(self):
 
+        args = ['python',script, '--mode=train','--savedatafile=' + savedata, '--savefile=' + savemodel, '--embedfile=' + embedfile, '--embmode=none']
+
+        proc = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        wait_timeout(proc,300)
+
+        output = []
+        for line in proc.stdout:
+            output.append(line.decode())
+
+        print("".join(output))
+
+        assert False
+                
 
