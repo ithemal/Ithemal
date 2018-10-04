@@ -18,7 +18,7 @@ elif [ "$#" -gt 1 ]; then
 fi
 
 function container_id() {
-    docker ps -q --filter 'name=ithemal$'
+    sudo docker ps -q --filter 'name=ithemal$'
 }
 
 
@@ -37,4 +37,4 @@ if [[ -z "${CONTAINER}" ]]; then
     CONTAINER="$(container_id)"
 fi
 
-docker exec -it -u "${USER}" "${CONTAINER}" bash -l
+sudo docker exec -u "${USER}" -it "${CONTAINER}" bash -l

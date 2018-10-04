@@ -19,15 +19,12 @@ services:
        - type: bind
          source: ..
          target: /home/ithemal/ithemal
-       - type: bind
-         source: ./.docker_bash_history
-         target: /home/ithemal/.bash_history
      image: ithemal:latest
      tty: true
      environment:
        MYSQL_HOST: db
        MYSQL_TCP_PORT: 3306
-       HIST_FILE: /home/ithemal/.bash_history
+       HIST_FILE: /home/ithemal/ithemal/docker/.docker_bash_history
        ITHEMAL_HOME: /home/ithemal/ithemal
        DYNAMORIO_HOME: /home/ithemal/DynamoRIO-Linux-7.0.0-RC1
      ports:

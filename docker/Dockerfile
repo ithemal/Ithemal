@@ -1,8 +1,5 @@
 FROM debian:stretch
 
-RUN groupadd -g 999 ithemal && \
-    useradd -m -r -u 999 -g ithemal ithemal
-
 RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         libsqlite3-dev              \
@@ -32,6 +29,14 @@ RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Mi
     sh /tmp/install_conda.sh -b -p /opt/conda && \
     rm /tmp/install_conda.sh && \
     echo 'export PATH=/opt/conda/bin:$PATH' > /etc/profile
+
+ARG HOST_UID=999
+ENV HOST_UID $HOST_UID
+ARG HOST_GID=999
+ENV HOST_GID $HOST_GID
+
+RUN groupadd -g $HOST_UID ithemal && \
+    useradd -m -r -u $HOST_GID -g ithemal ithemal
 
 USER ithemal
 WORKDIR /home/ithemal
