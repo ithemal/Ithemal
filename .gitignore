@@ -85,7 +85,7 @@ out.txt
 
 benchmarks/
 datasql/
-datasql/*    
+testing/
 virtualenv/
 venv/
 stoke/
@@ -102,3 +102,8 @@ costmodel_*.sql
 *.mdl
 build_scripts/
 local/
+
+#==============================================================================#
+# Custom Ithemal/Docker ignores
+#==============================================================================#
+/docker/.docker_bash_history
