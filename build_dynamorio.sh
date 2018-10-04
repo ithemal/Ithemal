@@ -19,5 +19,5 @@ if [ ! -d "${BUILD_DIR}" ]; then
 fi
 
 cd "${BUILD_DIR}"
-cmake -D -DDynamoRIO_DIR="${DYNAMORIO_HOME}/cmake" ..
+cmake -DDynamoRIO_DIR="${DYNAMORIO_HOME}/cmake" ..
 make -j"$(nproc --all)"
