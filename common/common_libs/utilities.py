@@ -10,14 +10,17 @@ import os
 def create_connection(database=None, user=None, password=None, port=None):
     # build args as a separate dict to be able to conditionally add 'database'
     args = {
-        'option_files': list(filter(os.path.exists, [
-            '/etc/my.cnf',
-            '~/.my.cnf',
-        ])),
         'user': 'root',
         'password': 'ithemal',
     }
 
+    option_files = list(filter(os.path.exists, [
+        '/etc/my.cnf',
+        '~/.my.cnf',
+    ]))
+
+    if option_files:
+        args['option_files'] = option_files
     if database:
         args['database'] = database
     if user:
@@ -41,7 +44,7 @@ def create_connection(database=None, user=None, password=None, port=None):
     return cnx
 
 def get_mysql_config(filename):
-    
+
     config = dict()
     with open(filename,'r') as f:
         for line in f:
@@ -98,11 +101,11 @@ def get_data(cnx, format, cols):
                 if len(row[0]) % 2 != 0:
                     row = cur.fetchone()
                     continue
-                for i in range(0,len(row[0]),2): 
+                for i in range(0,len(row[0]),2):
                     slice = row[0][i:i+2]
                     convert = struct.unpack('h',slice)
                     code.append(int(convert[0]))
-            
+
             item.append(code)
             for i in range(len(cols)):
                 item.append(row[i + 1])
