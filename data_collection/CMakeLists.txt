@@ -157,7 +157,7 @@ function (add_sample_client name source_file_list extension_list)
   foreach (ext ${extension_list})
     use_DynamoRIO_extension(${name} ${ext})
   endforeach (ext)
-  target_link_libraries(${name} sqlite3)
+  #target_link_libraries(${name} sqlite3)
 
   # Provide a hint for how to use the client
   if (NOT DynamoRIO_INTERNAL OR NOT "${CMAKE_GENERATOR}" MATCHES "Ninja")
@@ -197,19 +197,8 @@ endfunction (add_sample_standalone)
 # a function scope, we must set the global vars ahead of time:
 configure_DynamoRIO_global(OFF ON)
 
-# Use ;-separated lists for source files and extensions.
-# include_directories(/data/scratch/charithm/projects/cmodel/drclients/mysql-connector/include)
-# link_directories(/data/scratch/charithm/projects/cmodel/drclients/mysql-connector/lib)
-
-# include_directories(/data/scratch/charithm/libraries/install/mysql-np/include)
-# link_directories(/data/scratch/charithm/libraries/install/mysql-np/lib)
-
-#add_sample_client(timing     "timing.c;utility.c"       "drmgr;drreg;drx")
-#add_sample_client(mmap     "mmap_test.c;utility.c"       "")
-
-include_directories(timing)
 include_directories(common)
-include_directories(/data/scratch/charithm/libraries/install/sqlite3/include)
-link_directories(/data/scratch/charithm/libraries/install/sqlite3/lib)
-add_sample_client(timing  "timing/timing.c;timing/timing_logic.c;timing/timing_dump.c;common/dr_utility.c;common/sqlite3_impl.c;common/code_embedding.c" "")
-add_sample_client(static  "static/static.c;static/static_dump.c;static/static_logic.c;common/dr_utility.c;common/sqlite3_impl.c;common/code_embedding.c" "drcontainers")
+add_sample_client(static  "static/static.c;static/static_dump.c;static/static_logic.c;common/dr_utility.c;common/code_embedding.c" "drcontainers")
+
+#include_directories(timing)
+#add_sample_client(timing  "timing/timing.c;timing/timing_logic.c;timing/timing_dump.c;common/dr_utility.c;common/sqlite3_impl.c;common/code_embedding.c" "")

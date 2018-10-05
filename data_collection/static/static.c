@@ -6,7 +6,6 @@
 #include "dr_api.h"
 #include "static_mmap.h"
 #include "static_dump.h"
-#include "sqlite3_impl.h"
 #include "static_logic.h"
 #include "code_embedding.h"
 #include "common.h"
@@ -72,50 +71,29 @@ thread_init(void * drcontext){
 
     dr_mutex_unlock(mutex);  
   }
-  else if (client_args.mode == SQLITE){ //keep track of data in this mode
-    dr_mutex_lock(mutex);
-    num_threads++;
-    dr_mutex_unlock(mutex);
-  }
 
-  //create the file and memory map it and if sqlite mode then only dump data from thread 1
-  if(client_args.mode != SQLITE || num_threads <= 1){
-    data->file = dr_open_file(data->filename, DR_FILE_WRITE_OVERWRITE | DR_FILE_READ);
-    create_memory_map_file(data,TOTAL_SIZE);
-    memset(data->data,0,TOTAL_SIZE);
-  
-    //processor model information
-    bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
-    bk->arch = proc_get_model();
-  }
-  else{
-    data->data = NULL;
-  }
+  //create the file and memory map it  
+  data->file = dr_open_file(data->filename, DR_FILE_WRITE_OVERWRITE | DR_FILE_READ);
+  create_memory_map_file(data,TOTAL_SIZE);
+  memset(data->data,0,TOTAL_SIZE);
 
   //if mode is raw sql dumping 
   if(client_args.mode == RAW_SQL){
+
+    //processor model information
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
+    bk->arch = proc_get_model();    
     bk->static_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
     create_raw_file(drcontext,client_args.data_folder,"static",bk->static_file);
-  }
-
-  //insert the config string (query)
-  if(client_args.mode != SNOOP){
+  
+    //insert the config string (query)
     query_t * query = (query_t *)(data->data + START_QUERY);
-    bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
     int sz = insert_config(query, client_args.compiler, client_args.flags, client_args.mode, proc_get_model());
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
-    //dr_printf("%s\n",query);
-    if(client_args.mode == SQLITE){
-      query_db(query);
-    }
-    else if(client_args.mode == RAW_SQL){
-      sz = complete_query(query,sz);
-      write_to_file(bk->static_file,query,sz);
-    }
+    sz = complete_query(query,sz);
+    write_to_file(bk->static_file,query,sz);
   }
 
-  //dr_printf("thread %d initialized..\n",dr_get_thread_id(drcontext));
 
 }
 
@@ -142,13 +120,9 @@ bool dump_bb(void * drcontext, code_embedding_t embedding_func, code_info_t * ci
     }
 
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
-    if(client_args.mode == SQLITE){
-      query_db(query);
-    }
-    else if(client_args.mode == RAW_SQL){
-      sz = complete_query(query,sz);
-      write_to_file(bk->static_file,query,sz);
-    }
+    sz = complete_query(query,sz);
+    write_to_file(bk->static_file,query,sz);
+
   }
 
   return true;
@@ -288,9 +262,6 @@ event_exit(void)
     while(files->control != IDLE);
     close_memory_map_file(&filenames_file,sizeof(thread_files_t));
   }
-  if(client_args.mode == SQLITE){
-    connection_close();
-  }
 
 }
 
@@ -315,6 +286,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     strncpy(client_args.flags,argv[5], MAX_STRING_SIZE);
     strncpy(client_args.data_folder,argv[6], MAX_STRING_SIZE);
 
+    DR_ASSERT(client_args.mode != SQLITE);
 
     mutex = dr_mutex_create();
     num_threads = 0;
@@ -328,9 +300,6 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
       filenames_file.file = dr_open_file(filenames_file.filename, DR_FILE_WRITE_OVERWRITE | DR_FILE_READ);
       create_memory_map_file(&filenames_file,sizeof(thread_files_t));
       memset(filenames_file.data,0,sizeof(thread_files_t));
-    }
-    else if(client_args.mode == SQLITE){
-      connection_init();
     }
   
   
