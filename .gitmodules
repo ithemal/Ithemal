@@ -1,0 +1,3 @@
+[submodule "learning/pytorch/inputs/models"]
+	path = learning/pytorch/inputs/models
+	url = https://github.com/psg-mit/Ithemal-models.git
