@@ -247,7 +247,10 @@ int tokenize_text_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op
     value = REG_START + opnd_get_reg(op);
   }
   //immediates
-  else if(opnd_is_immed_int(op)){
+  else if(opnd_is_immed_int(op) || opnd_is_immed_int64(op)){
+    value = INT_IMMED;
+  }
+  else if(opnd_is_rel_addr(op)){ 
     value = INT_IMMED;
   }
   else if(opnd_is_immed_float(op)){
@@ -263,6 +266,7 @@ int tokenize_text_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op
     dr_printf("\n");
   }
 
+  
   DR_ASSERT(value); //should have a non-zero value
   DR_ASSERT(!opnd_is_pc(op)); //we do not consider branch instructions
   
@@ -290,9 +294,9 @@ bool filter_instr(instr_t * instr){
     } 
   }
 
-  uint32_t omitted[9] = {OP_rep_ins, OP_rep_outs, OP_rep_movs, OP_rep_stos, OP_rep_lods, OP_rep_cmps, OP_rep_scas, OP_repne_cmps, OP_repne_scas};
+  uint32_t omitted[10] = {OP_rep_ins, OP_rep_outs, OP_rep_movs, OP_rep_stos, OP_rep_lods, OP_rep_cmps, OP_rep_scas, OP_repne_cmps, OP_repne_scas, OP_xbegin};
 
-  for(i = 0; i <9; i++){
+  for(i = 0; i <10; i++){
     if(instr_get_opcode(instr) == omitted[i]){
       return true;
     }
@@ -320,8 +324,7 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), DELIMITER);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return; }
-    
-
+  
     opnd_t op;
     for(i = 0; i < instr_num_srcs(instr); i++){
       op = instr_get_src(instr,i);
