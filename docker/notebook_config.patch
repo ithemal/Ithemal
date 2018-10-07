@@ -1,0 +1,4 @@
+204c204
+< #c.NotebookApp.ip = 'localhost'
+---
+> c.NotebookApp.ip = '0.0.0.0'
