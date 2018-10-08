@@ -9,6 +9,7 @@ import matplotlib
 import common_libs.utilities as ut
 import numpy as np
 import torch
+import torch.multiprocessing as mp
 torch.backends.cudnn.enabled = False
 
 import models.graph_models as md
@@ -60,7 +61,20 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
-    train.train(savefile=savefile)
+    torch.set_num_threads(2)
+    model.share_memory()
+
+    processes = []
+   
+    # TODO: parameterize number of processes
+    for rank in range(4):
+        p = mp.Process(target=train, args=(rank, ))
+        p.start()
+        print("Starting process %d" % (rank,))
+        processes.append(p)
+  
+    for p in processes:
+        p.join()
     
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     results = train.validate(resultfile)
