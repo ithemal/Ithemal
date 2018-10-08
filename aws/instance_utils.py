@@ -28,7 +28,7 @@ class AwsInstance(object):
         self.identity = identity
         self.pem_key = os.path.expanduser('~/.ssh/{}.pem'.format(identity))
         if require_pem and not os.path.exists(os.path.expanduser(self.pem_key)):
-            print('Cannot create an AWS instance without the key at {}'.format(self.pem_key))
+            raise ValueError('Cannot create an AWS instance without the key at {}'.format(self.pem_key))
 
     def get_running_instances(self):
         args = ['aws', 'ec2', 'describe-instances', '--filters', 'Name=instance-state-name,Values=pending,running']
