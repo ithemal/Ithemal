@@ -22,7 +22,7 @@ class InstanceConnector(AwsInstance):
         print('')
 
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
-        os.execlp('ssh', 'ssh', '-i', self.pem_key, ssh_address)
+        os.execlp('ssh', 'ssh', '-i', self.pem_key, ssh_address, 'sudo docker exec -it ithemal bash -l')
         sys.exit(1)
 
 def interactively_connect_to_instance(aws_instances):
