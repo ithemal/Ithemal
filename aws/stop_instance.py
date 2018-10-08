@@ -93,7 +93,7 @@ def main():
     parser = argparse.ArgumentParser(description='Kill running AWS EC2 instances')
     parser.add_argument('-a', '--all', help='Kill all running instances by default', default=False, action='store_true')
     parser.add_argument('-f', '--force', help="Don't ask for confirmation", default=False, action='store_true')
-    parser.add_argument('-i', '--identity', help='Key identity to filter by', default=None)
+    parser.add_argument('identity', help='Key identity to filter by')
     parser.add_argument('instance_id', help='Instance IDs to manually kill', nargs='*', default=[])
     args = parser.parse_args()
 

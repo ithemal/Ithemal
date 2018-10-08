@@ -59,8 +59,9 @@ class InstanceMaker(AwsInstance):
         git_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], cwd=_DIRNAME).encode('utf-8').strip()
         ls_files = subprocess.Popen(['git', 'ls-files'], cwd=git_root, stdout=subprocess.PIPE)
         tar = subprocess.Popen(['tar', 'Tcz', '-'], cwd=git_root, stdin=ls_files.stdout, stdout=subprocess.PIPE)
+        aws_credentials = subprocess.check_output(['aws', 'ecr', 'get-login', '--no-include-email', '--region', 'us-east-2']).encode('utf-8').strip()
         ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, 'ec2-user@{}'.format(instance['PublicDnsName']),
-                                'mkdir ithemal; cd ithemal; cat | tar xz; aws/remote_setup.sh'], stdin=tar.stdout)
+                                'mkdir ithemal; cd ithemal; cat | tar xz; aws/remote_setup.sh {}'.format(aws_credentials)], stdin=tar.stdout)
         ls_files.wait()
         tar.wait()
         ssh.wait()
