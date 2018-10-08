@@ -36,7 +36,7 @@ class AwsInstance(object):
         if self.identity:
             args.append('Name=key-name,Values={}'.format(self.identity))
 
-        output = subprocess.check_output(args).encode('utf-8')
+        output = subprocess.check_output(args)
         parsed_out = json.loads(output)
 
         # flatten output
