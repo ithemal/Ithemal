@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import base64
 import json
 import os
 import subprocess
@@ -18,8 +19,10 @@ except NameError:
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
-    def __init__(self, identity, force):
+    def __init__(self, identity, name, instance_type, force):
         super(InstanceMaker, self).__init__(identity, require_pem=True)
+        self.name = name
+        self.instance_type = instance_type
         self.force = force
 
     def start_instance(self):
@@ -39,11 +42,17 @@ class InstanceMaker(AwsInstance):
                     print('Not creating a new instance')
                     return
 
-        args = ['aws', 'ec2', 'run-instances', '--instance-type', 't2.large', '--key-name', self.identity, '--image-id', 'ami-0b59bfac6be064b78', '--tag-specifications', 'ResourceType="instance",Tags=[{Key="Name",Value="Ithemal Container"}]', '--security-group-ids', 'sg-0780fe1760c00d96d']
-        output = subprocess.check_output(args).encode('utf-8')
+        name = 'Ithemal'
+        if self.name:
+            name += ': {}'.format(self.name)
+
+        args = ['aws', 'ec2', 'run-instances', '--instance-type', self.instance_type, '--key-name', self.identity, '--image-id', 'ami-0b59bfac6be064b78', '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name), '--security-group-ids', 'sg-0780fe1760c00d96d']
+        output = subprocess.check_output(args)
         parsed_output = json.loads(output)
         instance = parsed_output['Instances'][0]
         instance_id = instance['InstanceId']
+
+        print('Started instance! Waiting for connection...')
 
         subprocess.check_call(['aws', 'ec2', 'wait', 'instance-running', '--instance-ids', instance_id])
 
@@ -54,26 +63,56 @@ class InstanceMaker(AwsInstance):
                               stdout=open(os.devnull, 'w'),
                               stderr=open(os.devnull, 'w'),
         ):
-            time.sleep(5)
+            time.sleep(1)
 
-        git_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], cwd=_DIRNAME).encode('utf-8').strip()
+
+        git_root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], cwd=_DIRNAME).strip()
         ls_files = subprocess.Popen(['git', 'ls-files'], cwd=git_root, stdout=subprocess.PIPE)
         tar = subprocess.Popen(['tar', 'Tcz', '-'], cwd=git_root, stdin=ls_files.stdout, stdout=subprocess.PIPE)
-        aws_credentials = subprocess.check_output(['aws', 'ecr', 'get-login', '--no-include-email', '--region', 'us-east-2']).encode('utf-8').strip()
-        ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, 'ec2-user@{}'.format(instance['PublicDnsName']),
-                                'mkdir ithemal; cd ithemal; cat | tar xz; aws/remote_setup.sh {}'.format(aws_credentials)], stdin=tar.stdout)
+
+        aws_credentials = json.loads(subprocess.check_output(['aws', 'ecr', 'get-authorization-token']).strip())
+        authorization_datum = aws_credentials['authorizationData'][0]
+        aws_authorization = base64.b64decode(authorization_datum['authorizationToken'])
+        aws_authorization_user = aws_authorization[:aws_authorization.index(':')]
+        aws_authorization_token = aws_authorization[aws_authorization.index(':')+1:]
+        aws_endpoint = authorization_datum['proxyEndpoint']
+
+        mysql_credentials_dict = json.loads(subprocess.check_output(['aws', 'secretsmanager', 'get-secret-value', '--secret-id', 'ithemal/mysql']).strip())
+        mysql_credentials = json.loads(mysql_credentials_dict['SecretString'])
+        mysql_user = mysql_credentials['username']
+        mysql_password = mysql_credentials['password']
+        mysql_host = mysql_credentials['host']
+        mysql_port = mysql_credentials['port']
+
+        initialization_command = 'mkdir ithemal; cd ithemal; cat | tar xz; aws/remote_setup.sh {}'.format(' '.join(map(str, [
+            aws_authorization_user,
+            aws_authorization_token,
+            aws_endpoint,
+            mysql_user,
+            mysql_password,
+            mysql_host,
+            mysql_port,
+        ])))
+
+        print(initialization_command)
+        ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, 'ec2-user@{}'.format(instance['PublicDnsName']), initialization_command],
+                               stdin=tar.stdout)
         ls_files.wait()
         tar.wait()
         ssh.wait()
 
+        os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
+
 
 def main():
     parser = argparse.ArgumentParser(description='Create an AWS instance to run Ithemal')
-    parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
     parser.add_argument('identity', help='Key identity to create with')
+    parser.add_argument('-n', '--name', help='Name to start the container with', default=None)
+    parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
+    parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
     args = parser.parse_args()
 
-    instance_maker = InstanceMaker(args.identity, args.force)
+    instance_maker = InstanceMaker(args.identity, args.name, args.type, args.force)
     instance_maker.start_instance()
 
 if __name__ == '__main__':
