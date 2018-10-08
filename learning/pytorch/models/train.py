@@ -11,6 +11,7 @@ import os
 import gc
 import psutil
 from tqdm import tqdm
+import time
 
 def memReport():
     num_obj = 0
@@ -156,6 +157,18 @@ class Train():
 
         return (epoch, batch_num)
 
+    def __call__(self, id) :
+    
+        # TODO: move constants
+        cores = 9
+        threads = 4
+        cpu = (id % 2)
+        offset = (id / 2)
+        os.environ["KMP_AFFINITY"] = "verbose,granularity=fine,compact,1,%d" % (cpu * cores + threads * offset, ) 
+     
+        # TODO: set seed based on id
+        self.train()
+
     """
     Training loop - to do make the average loss for general
     """
@@ -184,9 +197,10 @@ class Train():
         for i in range(self.epochs):
                 
             average_loss = [0] * self.num_losses
-            
+           
             for j in range(epoch_len):
  
+                start = time.time()
                 if i <= restored_epoch and j <= restored_batch_num:
                     continue
 
@@ -259,7 +273,7 @@ class Train():
                     #remove refs; so the gc remove unwanted tensors
                     self.model.remove_refs(item)
                   
-                    
+                end = time.time()    
                 if savefile != None:
                     self.save_checkpoint(i,j,savefile)
                 
@@ -271,8 +285,9 @@ class Train():
                 for av in average_loss_per_batch:
                     p_str += str(av) + ' '
                 p_str += str(self.correct) + ' ' + str(self.batch_size)
+                p_str += "time: %s" % (end-start, ) 
                 print p_str
-
+                
                 #losses accumulation to visualize learning
                 losses = []
                 for av in average_loss:
