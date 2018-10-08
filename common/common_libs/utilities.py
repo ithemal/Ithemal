@@ -8,16 +8,12 @@ import os
 
 #mysql specific functions
 def create_connection(database=None, user=None, password=None, port=None):
-    # build args as a separate dict to be able to conditionally add 'database'
-    args = {
-        'user': 'root',
-        'password': 'ithemal',
-    }
+    args = {}
 
-    option_files = list(filter(os.path.exists, [
+    option_files = list(filter(os.path.exists, map(os.path.abspath, map(os.path.expanduser, [
         '/etc/my.cnf',
         '~/.my.cnf',
-    ]))
+    ]))))
 
     if option_files:
         args['option_files'] = option_files
