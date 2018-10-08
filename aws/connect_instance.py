@@ -23,12 +23,14 @@ class InstanceConnector(AwsInstance):
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
         ssh_args = ['ssh', '-i', self.pem_key, '-t', ssh_address]
 
+        conn_com = "bash -lc '~/ithemal/aws/tmux_attach.sh'"
+
         if self.host:
-            ssh_args.append('bash -l')
+            ssh_args.append(conn_com)
         elif self.root:
-            ssh_args.append('sudo docker exec -u root -it ithemal bash -l')
+            ssh_args.append('sudo docker exec -u root -it ithemal {}'.format(conn_com))
         else:
-            ssh_args.append('sudo docker exec -u ithemal -it ithemal bash -l')
+            ssh_args.append('sudo docker exec -u ithemal -it ithemal {}'.format(conn_com))
 
         os.execvp('ssh', ssh_args)
         sys.exit(1)
