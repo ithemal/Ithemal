@@ -35,6 +35,8 @@ if [[ -z "${CONTAINER}" ]]; then
     docker_compose up -d --force-recreate
 
     CONTAINER="$(container_id)"
+
+    sudo docker exec -u ithemal "${CONTAINER}" bash -lc 'ithemal/build_all.sh'
 fi
 
 sudo docker exec -u "${USER}" -it "${CONTAINER}" bash -l
