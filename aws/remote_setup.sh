@@ -10,7 +10,7 @@ MYSQL_PASSWORD="$1"; shift
 MYSQL_HOST="$1"; shift
 MYSQL_PORT="$1"; shift
 
-sudo yum install -y docker
+sudo yum install -y docker tmux
 sudo service docker start
 
 IMAGE_ID="654586875650.dkr.ecr.us-east-2.amazonaws.com/ithemal:latest"
