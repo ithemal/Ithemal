@@ -3,6 +3,7 @@ FROM debian:stretch
 RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 	libsqlite3-dev              \
+	locales                     \
 	build-essential             \
 	cmake                       \
 	coreutils                   \
@@ -14,10 +15,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 	qt5-default                 \
 	sqlite3                     \
 	sudo                        \
+	tmux                        \
 	vim                         \
 	wget
 
-	# install mysql
+# install mysql
 RUN wget -O /tmp/RPM-GPG-KEY-mysql https://repo.mysql.com/RPM-GPG-KEY-mysql
 RUN apt-key add /tmp/RPM-GPG-KEY-mysql
 RUN /bin/echo -e "deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7\ndeb-src http://repo.mysql.com/apt/debian/ stretch mysql-5.7" > /etc/apt/sources.list.d/mysql.list
@@ -55,6 +57,8 @@ ENV DYNAMORIO_HOME "/opt/DynamoRIO-Linux-7.0.0-RC1"
 RUN chown -R root:root "${DYNAMORIO_HOME}" && \
 	find "${DYNAMORIO_HOME}" -type d -exec chmod 755 {} \; && \
 	find "${DYNAMORIO_HOME}" -type f -exec chmod 644 {} \;
+
+RUN locale-gen en_US.UTF-8
 
 ARG HOST_UID=1000
 ENV HOST_UID $HOST_UID
