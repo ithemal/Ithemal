@@ -14,15 +14,23 @@ except NameError:
     pass
 
 class InstanceConnector(AwsInstance):
-    def __init__(self, identity):
+    def __init__(self, identity, host, root):
         super(InstanceConnector, self).__init__(identity, require_pem=True)
+        self.host = host
+        self.root = root
 
     def connect_to_instance(self, instance):
-        print('Connecting!')
-        print('')
-
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
-        os.execlp('ssh', 'ssh', '-i', self.pem_key, ssh_address, 'sudo docker exec -it ithemal bash -l')
+        ssh_args = ['ssh', '-i', self.pem_key, '-t', ssh_address]
+
+        if self.host:
+            ssh_args.append('bash -l')
+        elif self.root:
+            ssh_args.append('sudo docker exec -u root -it ithemal bash -l')
+        else:
+            ssh_args.append('sudo docker exec -u ithemal -it ithemal bash -l')
+
+        os.execvp('ssh', ssh_args)
         sys.exit(1)
 
 def interactively_connect_to_instance(aws_instances):
@@ -33,6 +41,7 @@ def interactively_connect_to_instance(aws_instances):
             return
         elif len(instances) == 1:
             aws_instances.connect_to_instance(instances[0])
+            return
 
         print('Active instances:')
         for i, instance in enumerate(instances):
@@ -61,13 +70,20 @@ def interactively_connect_to_instance(aws_instances):
             instance = instances[index_to_connect - 1]
             aws_instances.connect_to_instance(instance)
 
+            return
+
 def main():
-    parser = argparse.ArgumentParser(description='Kill running AWS EC2 instances')
+    parser = argparse.ArgumentParser(description='Connect to a running AWS EC2 instance')
+
+    user_group = parser.add_mutually_exclusive_group()
+    user_group.add_argument('--host', help='Connect directly to the host', default=False, action='store_true')
+    user_group.add_argument('--root', help='Connect to root in the Docker instance', default=False, action='store_true')
+
     parser.add_argument('identity', help='Identity to use to connect')
     parser.add_argument('instance_id', help='Instance IDs to manually connect to', nargs='?', default=None)
     args = parser.parse_args()
 
-    aws_instances = InstanceConnector(args.identity)
+    aws_instances = InstanceConnector(args.identity, args.host, args.root)
 
     if args.instance_id:
         instance = next(instance for instance in aws_instances.get_running_instances() if instance['InstanceId'] == args.instance_id)
