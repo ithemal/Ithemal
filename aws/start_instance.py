@@ -46,7 +46,15 @@ class InstanceMaker(AwsInstance):
         if self.name:
             name += ': {}'.format(self.name)
 
-        args = ['aws', 'ec2', 'run-instances', '--instance-type', self.instance_type, '--key-name', self.identity, '--image-id', 'ami-0b59bfac6be064b78', '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name), '--security-group-ids', 'sg-0780fe1760c00d96d']
+        args = [
+            'aws', 'ec2', 'run-instances',
+            '--instance-type', self.instance_type,
+            '--key-name', self.identity,
+            '--image-id', 'ami-0b59bfac6be064b78',
+            '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name),
+            '--security-group-ids', 'sg-0780fe1760c00d96d',
+            '--block-device-mappings', '[{"DeviceName": "/dev/xvda", "Ebs": {"VolumeSize": 16}}]',
+        ]
         output = subprocess.check_output(args)
         parsed_output = json.loads(output)
         instance = parsed_output['Instances'][0]
