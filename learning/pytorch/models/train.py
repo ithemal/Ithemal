@@ -51,7 +51,6 @@ class Train():
                  clip = 2,
                  opt = 'SGD'
     ):
-
         self.model = model
         print self.model
         self.data = data
@@ -68,6 +67,8 @@ class Train():
             exit(-1)
 
         #training parameters
+        self.partition = (0, len(self.data.train))
+        
         self.epochs = epochs
         self.batch_size = batch_size
         self.epoch_len_div = epoch_len_div
@@ -157,7 +158,8 @@ class Train():
 
         return (epoch, batch_num)
 
-    def __call__(self, id) :
+    def __call__(self, id, partition) :
+        self.partition = partition
         self.train()
 
     """
@@ -167,16 +169,21 @@ class Train():
     def train(self, savefile=None, loadfile=None):
 
         self.per_epoch_loss = []
+        
         self.loss = []
 
-        epoch_len = (len(self.data.train) // self.batch_size)
+        train_length = self.partition[1] - self.partition[0]
+
+        # XXX: potentially drops self.batch_size - 1 elements
+        # if train_length is not an even multiple
+        epoch_len = (train_length // self.batch_size)
         epoch_len = epoch_len / self.epoch_len_div
 
         print 'start training...'
         print 'epochs ' + str(self.epochs)
+        print "partition = (%d, %d)" % (self.partition)
         print 'epoch length ' + str(epoch_len)
         print 'batch size (sampled) ' + str(self.batch_size)
-
 
         restored_epoch = -1
         restored_batch_num = -1
@@ -197,18 +204,20 @@ class Train():
                 if i <= restored_epoch and j <= restored_batch_num:
                     continue
 
-                self.data.generate_batch(self.batch_size)
+                self.data.generate_batch(self.batch_size, self.partition)
 
                 average_loss_per_batch = [0] * self.num_losses
                 self.correct = 0
+ 
+                #zero out grads
+                self.optimizer.zero_grad()
+
+                loss = torch.FloatTensor([0]).squeeze()
+              
 
                 #we use batches of size one for actual training
                 for batch_j, item in enumerate(self.data.batch):
-                    
-                    #zero out grads
-                    self.optimizer.zero_grad()
-  
-                    #get predicted value
+                                       #get predicted value
                     output = self.model(item)
 
                     #check if output is nan, if so return
@@ -227,44 +236,39 @@ class Train():
                     #get the loss value
                     losses = self.loss_fn(output, target)
 
-                    if batch_j == self.batch_size / 2:
-                        self.print_fn(sys.stdout, output, target)
-
                     #check how many are correct
                     self.correct_fn(output, target)
 
-                        
                     #accumulate the losses
                     for c,l in enumerate(losses):
                         item_num = j * self.batch_size + batch_j 
                         average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
                         average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
                     
-                    loss = losses[0]
-                    for loss_num in range(1,len(losses)):
-                        loss += losses[loss_num]
+                    for loss_num in range(0,len(losses)):
+                        loss = loss + losses[loss_num]
 
 
-                    #propagate gradients
-                    loss.backward()
+                #propagate gradients
+                loss.backward()
 
-                    #clip the gradients
-                    if self.clip != None:
-                        torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-                    
-                    for param in self.model.parameters():
-                        isnan = torch.isnan(param.grad)
-                        if isnan.any():
-                            print 'gradient values are nan...'
-                            #append the loss before returning
-                            self.loss.append(self.per_epoch_loss)
-                            return
+                #clip the gradients
+                if self.clip != None:
+                    torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+                
+                for param in self.model.parameters():
+                    isnan = torch.isnan(param.grad)
+                    if isnan.any():
+                        print 'gradient values are nan...'
+                        #append the loss before returning
+                        self.loss.append(self.per_epoch_loss)
+                        return
 
-                    #optimizer step to update parameters
-                    self.optimizer.step()
+                #optimizer step to update parameters
+                self.optimizer.step()
 
-                    #remove refs; so the gc remove unwanted tensors
-                    self.model.remove_refs(item)
+                # remove refs; so the gc remove unwanted tensors
+                # self.model.remove_refs(item)
                   
                 end = time.time()    
                 if savefile != None:
@@ -272,13 +276,13 @@ class Train():
                 
                 
                 #per batch training messages
-                p_str = str(i) + ' ' + str(j) + ' '
+                p_str = 'PID: %d ' % ( os.getpid(), ) + str(i) + ' ' + str(j) + ' '
                 for av in average_loss:
-                    p_str += str(av) + ' '
+                    p_str += "%.4f" % (av,) + ' '
                 for av in average_loss_per_batch:
-                    p_str += str(av) + ' '
+                    p_str += "%.4f" % (av,) + ' '
                 p_str += str(self.correct) + ' ' + str(self.batch_size)
-                p_str += " time: %s" % (end-start, ) 
+                p_str += " time: %.2f" % (end-start, ) 
                 print p_str
                 
                 #losses accumulation to visualize learning

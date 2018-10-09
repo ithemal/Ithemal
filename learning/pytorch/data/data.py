@@ -9,6 +9,7 @@ import torch.autograd as autograd
 import torch.optim as optim
 import torch
 import matplotlib.pyplot as plt
+import os
 
 
 class Data(object):
@@ -107,9 +108,18 @@ class Data(object):
         print 'train ' + str(len(self.train)) + ' test ' + str(len(self.test))
                 
 
-    def generate_batch(self, batch_size):
-        population = range(len(self.train))
+    def generate_batch(self, batch_size, partition=None):
+        
+        if partition is None :
+            partition = (0, len(self.train))
+        # TODO: this seems like it would be expensive for a large data set
+        (start, end) = partition
+        population = range(start, end)
         selected = random.sample(population,batch_size)
+        
+        # Test to see if each process accesses different data
+        # print "pid: %d, %s" %(os.getpid(), selected)
+        
         self.batch = []
         for index in selected:
             self.batch.append(self.train[index])
