@@ -2,6 +2,7 @@ import mysql.connector
 import struct
 import sys
 from mysql.connector import errorcode
+import random
 import re
 import os
 
@@ -210,6 +211,8 @@ class BasicBlock:
         self.instrs = instrs
         self.span_values = [0] * len(self.instrs)
 
+        self.crit_paths = None
+
     def num_instrs(self):
         return len(self.instrs)
 
@@ -303,6 +306,24 @@ class BasicBlock:
                 roots.append(instr)
 
         return roots
+
+    def random_critical_path(self):
+        if self.crit_paths is None:
+            frontier_paths = [[x] for x in self.instrs if len(x.parents) == 0]
+            final_paths = []
+
+            while frontier_paths:
+                path = frontier_paths.pop()
+                if not len(path[-1].children):
+                    final_paths.append(path)
+                else:
+                    for child in path[-1].children:
+                        frontier_paths.append(path + [child])
+
+            max_path_len = max(map(len, final_paths))
+            self.crit_paths = [p for p in final_paths if len(p) == max_path_len]
+
+        return random.choice(self.crit_paths)
 
 
 def create_basicblock(tokens):
