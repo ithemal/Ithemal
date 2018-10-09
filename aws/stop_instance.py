@@ -39,7 +39,7 @@ class InstanceKiller(AwsInstance):
                 return False
 
         instance_ids = [instance if isinstance(instance, str) else instance['InstanceId'] for instance in instances_to_kill]
-        args = ['aws', 'ec2', 'stop-instances', '--instance-ids'] + instance_ids
+        args = ['aws', 'ec2', 'terminate-instances', '--instance-ids'] + instance_ids
         subprocess.check_call(args)
 
 
