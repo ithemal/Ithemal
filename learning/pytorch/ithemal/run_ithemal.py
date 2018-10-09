@@ -30,8 +30,53 @@ def save_data(database, config, format, savefile, arch):
 
     torch.save(data.raw_data, savefile)
 
-    
+class MPConfig :
 
+    THREADS_KEY = "OMP_NUM_THREADS";
+    AFFINITY_KEY = "KMP_AFFINITY";
+    PYTORCH_THREAD_OFFSET = 2;
+
+    def __init__(self, trainers, threads) :
+        assert 0 < trainers
+        assert 4 <= threads
+
+        self.trainers = trainers
+        self.threads = threads
+        self.saved_env = None
+
+    def __enter__(self) :
+        
+        threads = None
+        if MPConfig.THREADS_KEY in os.environ :
+            threads = os.environ[MPConfig.THREADS_KEY]
+
+        affinity = None
+        if MPConfig.AFFINITY_KEY in os.environ :
+            affinity = os.environ[MPConfig.AFFINITY_KEY]
+
+        self.saved_env = (threads, affinity)
+
+    def set_env(self, trainer_id) :
+        assert trainer_id < self.trainers
+    
+        os.environ[MPConfig.THREADS_KEY] = str(self.threads - MPConfig.PYTORCH_THREAD_OFFSET);
+        os.environ[MPConfig.AFFINITY_KEY] = "verbose,granularity=fine,compact,1,%d" % (trainer_id * self.threads, ) 
+    
+    def __exit__(self,exc_type, exc_value, traceback)  :
+        
+        assert self.saved_env is not None
+
+        (threads, affinity) = self.saved_env
+        if threads is not None :
+            os.environ[MPConfig.THREADS_KEY] = threads
+
+        if affinity is not None :
+            os.environ[MPConfig.AFFINITY_KEY] = affinity
+
+        self.saved_env = None
+
+   
+    
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     
@@ -64,15 +109,20 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     torch.set_num_threads(2)
     model.share_memory()
 
+    mp_config = MPConfig(args.trainers, args.threads)
+
     processes = []
    
-    # TODO: parameterize number of processes
-    for rank in range(4):
-        p = mp.Process(target=train, args=(rank, ))
-        p.start()
-        print("Starting process %d" % (rank,))
-        processes.append(p)
-  
+    with mp_config :
+        for rank in range(mp_config.trainers):
+            
+            mp_config.set_env(rank)
+
+            p = mp.Process(target=train, args=(rank, ))
+            p.start()
+            print("Starting process %d" % (rank,))
+            processes.append(p)
+    
     for p in processes:
         p.join()
     
@@ -200,6 +250,10 @@ if __name__ == "__main__":
     parser.add_argument('--database',action='store',type=str)
     parser.add_argument('--config',action='store',type=str)
     
+    parser.add_argument('--trainers',action='store',type=int,default=1)
+    parser.add_argument('--threads',action='store',type=int, default=4)
+
+
     args = parser.parse_args(sys.argv[1:])
 
     if args.mode == 'save':
