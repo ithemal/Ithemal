@@ -58,7 +58,10 @@ RUN chown -R root:root "${DYNAMORIO_HOME}" && \
 	find "${DYNAMORIO_HOME}" -type d -exec chmod 755 {} \; && \
 	find "${DYNAMORIO_HOME}" -type f -exec chmod 644 {} \;
 
-RUN locale-gen en_US.UTF-8
+RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 ARG HOST_UID=1000
 ENV HOST_UID $HOST_UID
