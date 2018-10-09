@@ -98,7 +98,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-    train = tr.Train(model, data, epochs = 10, batch_size = 1000, clip=None, opt='Adam', lr = 0.01)
+    train = tr.Train(model, data, epochs = 10, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
            
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -111,6 +111,8 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     mp_config = MPConfig(args.trainers, args.threads)
 
+    partition_size = len(data.train) // mp_config.trainers
+    
     processes = []
    
     with mp_config :
@@ -118,7 +120,11 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
             
             mp_config.set_env(rank)
 
-            p = mp.Process(target=train, args=(rank, ))
+            # XXX: this drops data on the floor, namely the tail of the file
+            # if the examples are not evenly divisble by the number of trainers
+            partition = (rank * partition_size, (rank + 1) * partition_size)
+
+            p = mp.Process(target=train, args=(rank, partition))
             p.start()
             print("Starting process %d" % (rank,))
             processes.append(p)
@@ -198,14 +204,13 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
     model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-    train = tr.Train(model, data, epochs = 10, batch_size = 1000, clip=None, opt='Adam', lr = 0.01)    
+    train = tr.Train(model, data, epochs = 10, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)    
            
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
     train.print_fn = train.print_final 
     train.correct_fn = train.correct_regression
     train.num_losses = 1
-
 
   
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
@@ -252,7 +257,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--trainers',action='store',type=int,default=1)
     parser.add_argument('--threads',action='store',type=int, default=4)
-
+    parser.add_argument('--batch-size',action='store',type=int, default=100)
 
     args = parser.parse_args(sys.argv[1:])
 
