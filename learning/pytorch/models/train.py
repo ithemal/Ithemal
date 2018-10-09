@@ -158,15 +158,6 @@ class Train():
         return (epoch, batch_num)
 
     def __call__(self, id) :
-    
-        # TODO: move constants
-        cores = 9
-        threads = 4
-        cpu = (id % 2)
-        offset = (id / 2)
-        os.environ["KMP_AFFINITY"] = "verbose,granularity=fine,compact,1,%d" % (cpu * cores + threads * offset, ) 
-     
-        # TODO: set seed based on id
         self.train()
 
     """
@@ -197,7 +188,9 @@ class Train():
         for i in range(self.epochs):
                 
             average_loss = [0] * self.num_losses
-           
+          
+            epoch_start = time.time();
+
             for j in range(epoch_len):
  
                 start = time.time()
@@ -285,7 +278,7 @@ class Train():
                 for av in average_loss_per_batch:
                     p_str += str(av) + ' '
                 p_str += str(self.correct) + ' ' + str(self.batch_size)
-                p_str += "time: %s" % (end-start, ) 
+                p_str += " time: %s" % (end-start, ) 
                 print p_str
                 
                 #losses accumulation to visualize learning
@@ -303,7 +296,8 @@ class Train():
                         for param_group in self.optimizer.param_groups:
                             param_group['lr'] = self.lr
                         
-            print i
+            epoch_end = time.time()
+            print "Completed epoch %d  time: %s" % (i, epoch_end - epoch_start,)
 
             #loss accumulation
             self.loss.append(self.per_epoch_loss)
