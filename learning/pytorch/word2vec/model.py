@@ -14,14 +14,14 @@ class SkipGramModel(nn.Module):
         self.emb_dimension = emb_dimension
         self.u_embeddings = nn.Embedding(emb_size, emb_dimension)
         self.v_embeddings = nn.Embedding(emb_size, emb_dimension)
-        #self.linear = nn.Linear(emb_dimension,emb_size) 
+        #self.linear = nn.Linear(emb_dimension,emb_size)
         self.init_emb()
 
     def init_emb(self):
         initrange = 0.5 / self.emb_dimension
         self.u_embeddings.weight.data.uniform_(-initrange, initrange)
         self.v_embeddings.weight.data.normal_(0, 1.0/math.sqrt(self.emb_dimension))
-        
+
     def forward(self, pos_u, pos_v, neg_v, batch_size):
         #print pos_u, pos_v, neg_v
         emb_u = self.u_embeddings(pos_u)
@@ -41,7 +41,7 @@ class SkipGramModel(nn.Module):
             embedding = self.u_embeddings.weight.cpu().data
         else:
             embedding = self.u_embeddings.weight.data
-        
+
         #normalize the embeddings
         norm = torch.sqrt(torch.sum(torch.mul(embedding,embedding),dim = 1,keepdim=True))
         #print norm.shape, embedding.shape

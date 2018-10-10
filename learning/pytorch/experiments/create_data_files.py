@@ -33,7 +33,7 @@ if __name__ == "__main__":
     cnx = ut.create_connection(database=args.database, user=args.user, password=args.password, port=args.port)
 
     raw_data = ut.get_data(cnx, args.format, [])
- 
+
     torch.save(raw_data,'saved/ins.data')
 
     data = dt_abs.Data()
@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     data.generate_costdict(20)
     torch.save(data.costs, '../saved/cost20.data')
-    
+
     data.generate_costdict(50)
     torch.save(data.costs, '../saved/cost50.data')
 

@@ -212,7 +212,6 @@ class DataCost(Data):
 
             final_value = statistics.mean(values)
 
-            final_value = ut.execute_query(cnx,sql, True)[0]
             data.append((row[0],final_value,row[2],row[1]))
 
 

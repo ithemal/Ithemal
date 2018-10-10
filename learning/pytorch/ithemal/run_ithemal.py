@@ -24,7 +24,6 @@ def save_data(database, config, fmt, savefile, arch):
     data.single_pass_extract_data(cnx, fmt, ['code_intel'], arch)
     torch.save(data.raw_data, savefile)
 
-
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
 

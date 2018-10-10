@@ -38,7 +38,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=None, lr
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(loadfile=savemodelfile, resultfile=resultfile)    
+    results = train.validate(loadfile=savemodelfile, resultfile=resultfile)
 
     return (losses, results)
 
@@ -70,16 +70,16 @@ if __name__ == "__main__":
     errors = []
     modelnames = []
     eamount = 200
-    
+
     #task 1 - seq model
     dataToken = dt.DataTokenEmbedding(data)
     dataToken.prepare_data()
     dataToken.generate_datasets()
-    
+
     print 'running token based RNN ...'
     model_seq = md.ModelSequentialRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=False)
     model_seq.set_learnable_embedding(mode = args.embmode, dictsize = max(dataToken.word2id) + 1, seed = dataToken.final_embeddings)
-    
+
     model_name = '../saved/paper_seq_span.mdl'
     result_name = '../results/paper_seq_span.txt'
 
@@ -100,13 +100,13 @@ if __name__ == "__main__":
 
     model_name = '../saved/paper_hierarchical_span.mdl'
     result_name = '../results/paper_hierarchical_span.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model_hierarchical, model_name, result_name)
     actual, predicted = results
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
     losses.append(loss)
     modelnames.append('Hierarchical RNN')
- 
+
     print 'running graph neural network model ...'
     dataGraph = dt.DataInstructionEmbedding(data)
     dataGraph.prepare_data()
@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/paper_graph_span.mdl'
     result_name = '../results/paper_graph_span.txt'
-    
+
     (loss, results) = train_model_regression(dataGraph, model_graph, model_name, result_name)
     actual, predicted = results
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))

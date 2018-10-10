@@ -35,6 +35,6 @@ if __name__ == '__main__':
                         valid += 1
 
     print lines, nonempty, valid
-                            
-    
-    
+
+
+
