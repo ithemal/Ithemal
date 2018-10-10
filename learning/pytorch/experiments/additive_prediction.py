@@ -37,7 +37,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=None, lr
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(loadfile=savemodelfile, resultfile=resultfile)    
+    results = train.validate(loadfile=savemodelfile, resultfile=resultfile)
 
     return (losses, results)
 
@@ -79,18 +79,18 @@ if __name__ == "__main__":
     errors = []
     modelnames = []
     eamount = 100
-    
+
     #task 1 - model A
     dataToken = dt.DataTokenEmbedding(data)
     dataToken.prepare_data()
     dataToken.generate_datasets()
-    
+
     if args.run_model == 0 or args.run_model == 1:
         print 'running model A...'
         modelA = md.ModelSequentialRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=False)
 
         modelA.set_learnable_embedding(mode = args.mode, dictsize = max(dataToken.word2id) + 1, seed = dataToken.final_embeddings)
-    
+
         model_name = '../saved/modelAadd' + cost_prefix + '.mdl'
         result_name = '../results/modelAadd' + cost_prefix + '.txt'
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
         model_name = '../saved/modelBadd' + cost_prefix + '.mdl'
         result_name = '../results/modelBadd' + cost_prefix + '.txt'
-    
+
         (loss, results) = train_model_regression(dataToken, modelB, model_name, result_name)
         actual, predicted = results
         errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
         model_name = '../saved/modelCadd' + cost_prefix + '.mdl'
         result_name = '../results/modelCadd' + cost_prefix + '.txt'
-    
+
         (loss, results) = train_model_regression(dataIns, modelC, model_name, result_name)
         actual, predicted = results
         errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))

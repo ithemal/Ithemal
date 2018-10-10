@@ -49,10 +49,10 @@ def insert_time_value(cnx,code_id, time, arch):
     sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'actual\',' + str(time) + ')'
     ut.execute_query(cnx, sql, False)
     cnx.commit()
-    
+
 
 class PMCValue:
-    
+
     def __init__(self, value):
         self.value = value
         self.count = 1
@@ -82,7 +82,7 @@ class PMC:
             self.values.append(val)
 
     def set_mode(self):
-        
+
         max_count = 0
 
         for val in self.values:
@@ -98,11 +98,11 @@ class PMCCounters:
         self.counters = list()
         for name in names:
             self.counters.append(PMC(name))
-    
+
     def add_to_counters(self, line):
         values = line.split()
         #print values
-        
+
         if len(values) != len(self.counters):
             return
 
@@ -110,21 +110,21 @@ class PMCCounters:
             self.counters[i].add_value(int(value))
 
     def set_modes(self):
-        
+
         for counter in self.counters:
             counter.set_mode()
 
     def get_value(self, name):
-        
+
         for counter in self.counters:
             if name == counter.name:
                 return counter.mode
         return None
 
 def check_error(line):
-    
+
     errors = ['error','fault']
-    
+
     for error in errors:
         if error in line:
             return True
@@ -132,11 +132,11 @@ def check_error(line):
 
 if __name__ == '__main__':
 
-    
+
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch',action='store',type=int,required=True)
- 
+
     parser.add_argument('--database',action='store',type=str,required=True)
     parser.add_argument('--user',action='store', type=str, required=True)
     parser.add_argument('--password',action='store', type=str, required=True)
@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
     agner_home = os.environ['ITHEMAL_HOME'] + '/timing_tools/agner/testp/PMCTest'
     os.chdir(agner_home)
-    
+
     lines = []
     start_line = -1
     with open('PMCTestB64.nasm','r') as f:
@@ -163,7 +163,7 @@ if __name__ == '__main__':
             if rep != None:
                 start_line = i
                 break
-    
+
     print start_line
 
     total = 0
@@ -174,13 +174,13 @@ if __name__ == '__main__':
 
 
     for row in rows:
-    
+
         if row[0] == None:
             continue
 
         splitted = row[0].split('\n')
         write_lines = [line for line in lines]
-        
+
         written = 0
         final_bb = []
         for i, line in enumerate(splitted):
@@ -191,19 +191,19 @@ if __name__ == '__main__':
                 write_lines.insert(start_line + 1 + i, line)
                 written += 1
 
- 
+
 
         #written = 1
         if written > 0:
             total += 1
             with open('out.nasm','w+') as f:
                 f.writelines(write_lines)
-            proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)            
+            proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             result = wait_timeout(proc, 10)
 
-            
+
             if result != None:
-                
+
                 try:
                     error_lines = False
                     for line in iter(proc.stderr.readline, ''):
@@ -211,7 +211,7 @@ if __name__ == '__main__':
                         if check_error(line):
                             error_lines = True
                             break
- 
+
                     if error_lines == False:
                         startHeading = False
                         startTimes = False
@@ -246,7 +246,7 @@ if __name__ == '__main__':
             else:
                 print 'error not completed'
                 not_finished += 1
-        
+
         print total, success, errors, not_finished, except_errors
 
     cnx.close()

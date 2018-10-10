@@ -38,7 +38,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=10):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -59,7 +59,7 @@ def train_model_classification(data, model, savemodelfile, resultfile, clip=10):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     raw_data = torch.load('../saved/ins.data')
     print 'loaded data from file %d' % len(raw_data)
-    
+
     #remove all basic blocks < 5 instructions
     final_raw_data = []
     for row in raw_data:
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     dataIns.prepare_data()
     dataIns.generate_datasets()
 
-    
+
     model = md_gr.GraphNN(embedding_size=embedding_size,hidden_size=256,num_classes=1)
 
     model.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanregressbigbb.mdl'
     result_name = '../results/modelDspanregressbigbb.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_regress.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     gr.plot_line_graphs(result_name, losses_regress, modelnames)
     result_name = '../results/spanregressbigbbtesterror.png'
     gr.plot_line_graphs(result_name, errors_regress, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
- 
+
 
     #task - classification
     print 'classification model D...'
@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanclassificationbigbb.mdl'
     result_name = '../results/modelDspanclassificationbigbb.txt'
-    
+
     (loss, results) = train_model_classification(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_classification.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))

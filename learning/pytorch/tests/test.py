@@ -28,13 +28,13 @@ def test_rankingloss():
     output = torch.ones(5)
 
     loss = nn.MarginRankingLoss()
-    
+
     print input1
     print input2
     print output
 
     print loss(input1, input2, output)
-    
+
 
 def test_mseloss():
 
@@ -43,7 +43,7 @@ def test_mseloss():
     loss2 = nn.MSELoss(reduce = False)
     input = torch.randn(3,5)
     target = torch.randn(3,5)
-    
+
     print input, target
 
     output = loss(input, target)

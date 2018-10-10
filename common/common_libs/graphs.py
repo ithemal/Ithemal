@@ -23,7 +23,7 @@ def plot_line_graphs(filename, losses, legend, ylabel='loss', xlabel='batch', ti
         y = loss
         x = np.arange(len(loss))
         h = plt.plot(x,y, '.-', linewidth=1, markersize=2, label=label)
- 
+
     plt.legend()
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     ys = []
     labels = ['graph1', 'graph2']
-    
+
     for _ in range(2):
         y = []
         for i in range(random.randint(1,100)):
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     plot_line_graphs('test.png',ys,labels, xmin=0, xmax=50, ymin=0, ymax=40)
 
 
-        
 
-    
-    
+
+
+

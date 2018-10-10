@@ -15,7 +15,7 @@ import numpy as np
 import word2vec.word2vec as w2v
 
 if __name__ == "__main__":
-   
+
     #commandline arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',action='store',default='text',type=str)
@@ -24,8 +24,8 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
 
     #create database connection
-    cnx = ut.create_connection('static0512')    
-    
+    cnx = ut.create_connection('static0512')
+
     embedder = w2v.Word2Vec(num_steps = args.num_steps)
 
     raw_data = ut.get_data(cnx,args.format,[])
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     data = embedder.generate_dataset(token_data,sym_dict,mem_start)
     embedder.train(data,sym_dict,mem_start)
     final_embeddings = embedder.get_embedding()
-  
+
     embedder.print_associated_words(final_embeddings,200,sym_dict,mem_start)
     embedder.plot_with_labels(final_embeddings,200,sym_dict,mem_start)
 
@@ -52,6 +52,6 @@ if __name__ == "__main__":
 
     with open(embed_file,'w') as f:
         torch.save(save_obj,f)
-   
- 
-    
+
+
+

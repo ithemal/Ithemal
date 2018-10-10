@@ -37,7 +37,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=None):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     errors = []
     eamount = 100
     modelnames = ['cost-20', 'cost-50', 'cost-100']
-    
+
     #task - additive model learning for different cost variances
     dataIns = dt.DataInstructionEmbedding(data)
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelCadd' + cost_prefix + '.mdl'
     result_name = '../results/modelCadd' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelCadd' + cost_prefix + '.mdl'
     result_name = '../results/modelCadd' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelCadd' + cost_prefix + '.mdl'
     result_name = '../results/modelCadd' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
