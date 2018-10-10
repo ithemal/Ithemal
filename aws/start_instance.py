@@ -19,10 +19,11 @@ except NameError:
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
-    def __init__(self, identity, name, instance_type, force):
+    def __init__(self, identity, name, instance_type, db, force):
         super(InstanceMaker, self).__init__(identity, require_pem=True)
         self.name = name
         self.instance_type = instance_type
+        self.db = db
         self.force = force
 
     def start_instance(self):
@@ -85,7 +86,7 @@ class InstanceMaker(AwsInstance):
         aws_authorization_token = aws_authorization[aws_authorization.index(':')+1:]
         aws_endpoint = authorization_datum['proxyEndpoint']
 
-        mysql_credentials_dict = json.loads(subprocess.check_output(['aws', 'secretsmanager', 'get-secret-value', '--secret-id', 'ithemal/mysql']).strip())
+        mysql_credentials_dict = json.loads(subprocess.check_output(['aws', 'secretsmanager', 'get-secret-value', '--secret-id', 'ithemal/mysql-{}'.format(self.db)]).strip())
         mysql_credentials = json.loads(mysql_credentials_dict['SecretString'])
         mysql_user = mysql_credentials['username']
         mysql_password = mysql_credentials['password']
@@ -118,9 +119,22 @@ def main():
     parser.add_argument('-n', '--name', help='Name to start the container with', default=None)
     parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
     parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--prod-ro-db', help='Use the read-only prod database (default)', action='store_true')
+    group.add_argument('--prod-db', help='Use the writeable prod database', action='store_true')
+    group.add_argument('--dev-db', help='Use the development database', action='store_true')
+
     args = parser.parse_args()
 
-    instance_maker = InstanceMaker(args.identity, args.name, args.type, args.force)
+    if args.prod_db:
+        db = 'prod'
+    elif args.dev_db:
+        db = 'dev'
+    else:
+        db = 'prod-ro'
+
+    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force)
     instance_maker.start_instance()
 
 if __name__ == '__main__':
