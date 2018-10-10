@@ -7,8 +7,7 @@ import os
 
 
 #mysql specific functions
-def create_connection(database=None, user=None, password=None, port=None):
-    # build args as a separate dict to be able to conditionally add 'database'
+def create_connection(database=None, user=None, password=None, port=None, config_file=None):
     args = {
         'user': 'root',
         'password': 'ithemal',
@@ -17,6 +16,7 @@ def create_connection(database=None, user=None, password=None, port=None):
     option_files = list(filter(os.path.exists, [
         '/etc/my.cnf',
         '~/.my.cnf',
+        str(config_file) # if this is None, os.path.exists will ignore it
     ]))
 
     if option_files:
@@ -41,23 +41,6 @@ def create_connection(database=None, user=None, password=None, port=None):
         else:
             print(err)
 
-    return cnx
-
-def get_mysql_config(filename):
-
-    config = dict()
-    with open(filename,'r') as f:
-        for line in f:
-            found = re.search('([a-zA-Z\-]+) *= *\"*([a-zA-Z0-9#\./]+)\"*', line)
-            if found:
-                config[found.group(1)] = found.group(2)
-    return config
-
-
-def create_connection_from_config(config_file, database=None):
-
-    config = get_mysql_config(config_file)
-    cnx = create_connection(user=config['user'],password=config['password'],port=config['port'],database=database)
     return cnx
 
 def execute_many(cnx, sql, values):
