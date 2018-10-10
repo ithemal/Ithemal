@@ -31,7 +31,7 @@ def validate_regression(data, model, loadfile, resultfile):
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
-    train.validate(loadfile=loadfile, resultfile=resultfile)    
+    train.validate(loadfile=loadfile, resultfile=resultfile)
 
 
 if __name__ == "__main__":
@@ -66,11 +66,11 @@ if __name__ == "__main__":
     modelA = md.ModelSequentialRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=True)
 
     modelA.set_learnable_embedding(mode = args.mode, dictsize = max(dataToken.word2id) + 1, seed = dataToken.final_embeddings)
-    
-    
+
+
     validate_regression(dataToken, modelA, '../saved/modeAins.mdl', '../results/modelAinsinter.txt')
 
-   
+
     #task 2 - model C on intermediate results
     dataIns = dt.DataInstructionEmbedding(data)
     dataIns.prepare_data()
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     modelC = md.ModelHierarchicalRNN(embedding_size=embedding_size,hidden_size=256,num_classes=1,intermediate=True)
 
     modelC.set_learnable_embedding(mode = args.mode, dictsize = max(dataIns.word2id) + 1, seed = dataIns.final_embeddings)
-    
+
     validate_regression(dataIns, modelC, '../saved/modeCins.mdl', '../results/modelCinsinter.txt')
 
 

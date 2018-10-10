@@ -9,14 +9,14 @@ from conftest import *
 class TestDynamoRIO:
 
     drexec = os.environ['DYNAMORIO_HOME'] + '/bin64/drrun'
-        
+
     def test_dynamorio_installation(self):
-        
+
         proc = subprocess.Popen([TestDynamoRIO.drexec,'--','ls'],stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         drout, _ = proc.communicate()
         proc = subprocess.Popen(['ls'],stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         normalout, _ = proc.communicate()
-        
+
         assert drout == normalout
 
     @ithemal
@@ -32,20 +32,20 @@ class TestDynamoRIO:
         drout, _ = proc.communicate()
         proc = subprocess.Popen(['ls'],stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         normalout, _ = proc.communicate()
-        
+
         assert drout == normalout
         assert len(glob.glob('/tmp/static_*')) == 1
 
     @ithemal
     def test_created_sql_file(self):
-        
-        files = glob.glob('/tmp/static_*') 
-        
+
+        files = glob.glob('/tmp/static_*')
+
         assert len(files) == 1
 
         #check one line of the SQL file to see if it makes sense
         with open(files[0],'r') as f:
-            
+
             line = f.readline()
             assert "INSERT INTO config (compiler, flags, arch)" in line
             line = f.readline()
@@ -54,4 +54,4 @@ class TestDynamoRIO:
             assert "UPDATE code SET" in line
 
 
-                
+

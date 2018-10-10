@@ -9,7 +9,7 @@ import common_libs.utilities as ut
 #and processing functions
 
 class Data:
-    
+
     def __init__(self,
                  num_skips,
                  skip_window,
@@ -23,10 +23,10 @@ class Data:
         self.word2id = dict()
         self.id2word = dict()
         self.word_frequency = dict()
-  
-       
+
+
     def get_common_words(self, words, sym_dict, mem_offset):
-        
+
         word_frequency = dict()
         for w in words:
             try:
@@ -46,7 +46,7 @@ class Data:
                     self.id2word[wid] = w
                     self.word_frequency[wid] = c
                     wid += 1
-            
+
         elif self.min_count == None: #we are filtering based on the first n most common words
             sorted_freq = sorted(word_frequency.items(), key=lambda x: x[1], reverse=True)
             for i,(w,c) in enumerate(sorted_freq):
@@ -62,10 +62,10 @@ class Data:
 
         #for (w,c) in sorted_freq:
         #    if self.word2id.get(w,0) != 0:
-        #        print ut.get_name(w,sym_dict,mem_offset) + ' (' + str(self.word2id.get(w,0)) + ') : ' + str(c)  
+        #        print ut.get_name(w,sym_dict,mem_offset) + ' (' + str(self.word2id.get(w,0)) + ') : ' + str(c)
         #    else:
         #        print 'unknown (0) : ' + str(c)
-   
+
         data = []
         for w in words:
             data.append(self.word2id.get(w,0))
@@ -82,7 +82,7 @@ class Data:
             self.sample_table += [wid] * int(c)
         self.sample_table = numpy.array(self.sample_table)
 
-        # num skips = amount of context words sampled for given target word  
+        # num skips = amount of context words sampled for given target word
     def generate_pos_pairs(self, data, batch_size):
         assert batch_size % self.num_skips == 0
         assert self.num_skips <= 2 * self.skip_window
@@ -109,10 +109,10 @@ class Data:
                 self.data_index += 1
         # Backtrack a little bit to avoid skipping words in the end of a batch
         self.data_index = (self.data_index + len(data) - span) % len(data)
-    
+
         return batch, labels
 
-    
+
     def generate_neg_words(self, batch_size, count):
 
         neg_v = numpy.random.choice(
@@ -120,4 +120,4 @@ class Data:
         return neg_v
 
 
-    
+

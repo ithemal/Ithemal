@@ -38,7 +38,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=None):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -59,7 +59,7 @@ def train_model_classification(data, model, savemodelfile, resultfile, clip=None
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -108,12 +108,12 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_regress.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
     losses_regress.append(loss)
-    
+
     #50
     print 'cost 50....'
     dataIns.costs = torch.load('../saved/cost50.data')
@@ -128,12 +128,12 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_regress.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
     losses_regress.append(loss)
-    
+
 
     #100
     print 'cost 100....'
@@ -148,7 +148,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_regress.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     gr.plot_line_graphs(result_name, losses_regress, modelnames)
     result_name = '../results/spanregressvariancetesterror.png'
     gr.plot_line_graphs(result_name, errors_regress, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
-    
+
 
 
     print 'running span variance testing classification...'
@@ -179,7 +179,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_classification(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_classification.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     actual, predicted = results
     errors_classification.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
     losses_classification.append(loss)
-    
+
 
     #100
     dataIns.costs = torch.load('../saved/cost100.data')
@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_classification(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_classification.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
