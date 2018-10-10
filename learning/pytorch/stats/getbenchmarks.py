@@ -58,10 +58,10 @@ class Benchmark:
     def add_programs(self, names):
         for name in names:
             self.add_program(name)
-    
 
 
-    
+
+
 if __name__ == '__main__':
 
     #command line arguments
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     #setting up
     sym_dict,_ = ut.get_sym_dict()
     offsets = ut.read_offsets()
-    
+
     opcode_start = offsets[0]
     operand_start = offsets[1]
     int_immed = offsets[2]
@@ -111,10 +111,10 @@ if __name__ == '__main__':
     linux.add_program('echo')
     cortexsuite.add_programs(['sphinx','a.out'])
     spec2006.add_program('specxz')
-    
+
 
     for row in rows:
-        
+
         if '_r_' in row[0] or '_s_' in row[0] or 'mytest-m64' in row[0]:
             spec2017.add_program(row[0])
         elif '.A' in row[0]:
@@ -127,7 +127,7 @@ if __name__ == '__main__':
             linux.add_program(row[0])
         elif '-small' in row[0]:
             cortexsuite.add_program(row[0])
- 
+
         found = False
         for bench in allbench:
             for program in bench.programs:
@@ -148,11 +148,11 @@ if __name__ == '__main__':
     #ok now for the statistics
     for bench in allbench:
         for program in bench.programs:
-            
+
             sql = 'select count(*) from code where program=\'' + program.name + '\''
             #print sql
             row = ut.execute_query(cnx, sql, True)
-            
+
             assert len(row) == 1
 
             program.basicblocks = int(row[0][0])
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     time_available = dict()
     timevals = dict()
     timevals_test = dict()
-    
+
     for i in range(1, args.arch + 1):
         time_available[i] = 0
         timevals[i] = []
@@ -176,7 +176,7 @@ if __name__ == '__main__':
     idx = 0
 
     for row in tqdm(rows):
-        
+
         code_id = row[0]
         idx += 1
 
@@ -184,7 +184,7 @@ if __name__ == '__main__':
 
             sql = 'select time from times where code_id=' + str(code_id) + ' and kind=\'actual\' and arch=' + str(i)
             times = ut.execute_query(cnx, sql, True)
-        
+
             if len(times) > 0:
                 time_available[i] += 1
                 timevals[i].append(times[0][0])
@@ -197,8 +197,8 @@ if __name__ == '__main__':
                                 program.times[i] += 1
                             else:
                                 program.times[i] = 1
-                        
-                                
+
+
     print 'available times for various architectures'
     print time_available
 
@@ -223,7 +223,7 @@ if __name__ == '__main__':
         ttimes = 0
 
         for bench in allbench:
-        
+
             bbs = 0
             programs = 0
             times = 0
@@ -241,7 +241,7 @@ if __name__ == '__main__':
             ttimes += times
 
         print 'Total ' + str(tprograms) + ' ' + str(tbbs) + ' ' + str(ttimes)
-    
+
 
 
     cnx.close()

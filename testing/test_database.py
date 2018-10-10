@@ -43,4 +43,4 @@ class TestDatabase:
         assert len(rows[0]) == 1
 
         assert rows[0][0] == 3287
-        
+

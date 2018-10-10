@@ -1,5 +1,5 @@
 import numpy as np
-import random  
+import random
 import word2vec.word2vec as w2v
 import torch.nn as nn
 import torch.autograd as autograd
@@ -44,7 +44,7 @@ class DataCost(Data):
 
         self.times = []
         for row in times:
-            if row[0] <= self.min_time_threshold or row[0] > self.max_time_threshold: 
+            if row[0] <= self.min_time_threshold or row[0] > self.max_time_threshold:
                 continue
             inserted = False
             try:
@@ -72,7 +72,7 @@ class DataCost(Data):
                     self.mode_count = time[1]
 
             self.mode_count = self.mode_count * 100.0 / self.count
-            
+
         if self.count > 0 and (self.mode_count >= self.threshold):
             return self.mode_time, self.mode_count
         else:
@@ -92,7 +92,7 @@ class DataCost(Data):
         mode_dist = dict()
         for row in tqdm(rows):
             sql = 'SELECT time, count FROM times WHERE code_id = ' + str(row[0])
-            times = ut.execute_query(cnx, sql, True)                
+            times = ut.execute_query(cnx, sql, True)
             mode, count = self.get_time_mode(times)
 
             if mode != None:
@@ -128,14 +128,14 @@ class DataCost(Data):
         region_size = 10
 
         self.max_time = min(1000, self.max_time)
- 
+
         omitted = 0
         for item in self.data:
             y = item.y
             if y > self.max_time:
                 omitted += 1
                 continue
-                
+
             region = y // region_size
             if region in per_region_count:
                 per_region_count[region] += 1
@@ -146,9 +146,9 @@ class DataCost(Data):
                 temp_data.append(item)
 
         print 'omitted ' + str(omitted)
-        
+
         self.data = temp_data
-        
+
         print 'after removing skew...'
         print len(self.data)
 
@@ -172,7 +172,7 @@ class DataCost(Data):
                 costs[item.y] += 1
             else:
                 costs[item.y] = 1
-    
+
         for key in sorted(costs.iterkeys()):
             sys.stdout.write("%d: %d, " % (key, costs[key]))
         sys.stdout.write('\n')
@@ -194,25 +194,25 @@ class DataCost(Data):
 
         #assumes code_token and code_id
         for row in tqdm(self.raw_data):
-            
+
             if len(row[0]) == 0:
                 continue
 
             code_id = row[1]
 
             sql = 'SELECT kind, time from times where code_id=' + str(code_id) + ' and arch=' + str(arch)
-            
+
             values = []
             times = ut.execute_query(cnx,sql, True)
             for time in times:
                 if time[0] == 'actual':
                     values.append(time[1])
-            
+
             if len(values) == 0:
                 continue
 
             final_value = statistics.mean(values)
-            
+
             data.append((row[0],final_value,row[2],row[1]))
 
 
@@ -222,10 +222,10 @@ class DataCost(Data):
 
 
 class DataTokenEmbedding(DataCost):
-    
+
     def __init__(self, data=None):
         super(DataTokenEmbedding, self).__init__(data)
-        
+
     def prepare_data(self):
 
         self.data = []
@@ -235,13 +235,13 @@ class DataTokenEmbedding(DataCost):
             if len(row[0]) > 0 and row[1] != None:
                 code = []
                 for token in row[0]:
-                    code.append(self.word2id.get(token,0)) 
-       
+                    code.append(self.word2id.get(token,0))
+
                 mode = row[1]
-                
+
                 if mode <= 20 or mode > 10000:
                     continue
-      
+
                 if mode in times:
                     times[mode] += 1
                 else:
@@ -253,19 +253,19 @@ class DataTokenEmbedding(DataCost):
                     item.code_id = row[3]
 
                 self.data.append(item)
- 
+
         self.max_time = max(times)
         print len(self.raw_data), len(self.data)
-              
+
 
 
 
 class DataInstructionEmbedding(DataCost):
-    
+
     def __init__(self, data=None):
         super(DataInstructionEmbedding, self).__init__(data)
- 
-        
+
+
     def prepare_data(self):
 
         self.data = []
@@ -280,17 +280,17 @@ class DataInstructionEmbedding(DataCost):
                         if len(ins) != 0:
                             code.append(ins)
                             ins = []
-                    ins.append(self.word2id.get(token,0)) 
+                    ins.append(self.word2id.get(token,0))
                 if len(ins) != 0:
                     code.append(ins)
                     ins = []
 
-       
+
                 mode = row[1]
-                
+
                 if mode <= 20 or mode > 10000:
                     continue
-      
+
                 block = ut.create_basicblock(row[0])
                 block.create_dependencies()
 
@@ -306,6 +306,6 @@ class DataInstructionEmbedding(DataCost):
                     item.code_id = row[3]
 
                 self.data.append(item)
- 
+
         self.max_time = max(times)
         print len(self.raw_data), len(self.data)

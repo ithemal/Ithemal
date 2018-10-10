@@ -60,9 +60,9 @@ class Stat:
         plt.savefig('figures/' + self.name + '.png')
         plt.close()
 
-        
+
 class CodeStats:
-    
+
     def __init__(self):
         self.stats = []
 
@@ -110,9 +110,9 @@ class TimeDist:
         self.mode = -1
         self.count = -1
         self.mode_valid = True
-        
+
         for count, time in zip(self.counts, self.times):
-            
+
             if count > self.count:
                 self.count = count
                 self.mode = time
@@ -120,7 +120,7 @@ class TimeDist:
             elif count == self.count:
                 self.mode_valid = False
 
-    
+
 class Time:
 
     def __init__(self,code_id):
@@ -135,7 +135,7 @@ class Time:
             self.times[kind] = [time]
 
     def get_dist(self):
-        for key in self.times.keys():            
+        for key in self.times.keys():
             times = self.times[key]
             self.dist[key] = TimeDist(times)
 
@@ -149,31 +149,31 @@ class Time:
 def get_times(cnx, rows, arch):
 
     times = []
- 
+
     for row in tqdm(rows):
-        
+
         if row[2] != '' :
-            
+
             sql = 'select kind, time from times where code_id=' + str(row[1]) + ' and arch=' + str(arch)
             times_r = ut.execute_query(cnx, sql, True)
-            
+
             time = Time(row[1])
             times.append(time)
-            
+
             for time_r in times_r:
                 if time_r[0] == 'actual':
                     if time_r[1] < 10000 and time_r[1] > 20:
                         time.add_time(time_r[0], time_r[1])
                 else:
                     time.add_time(time_r[0], time_r[1])
-                    
+
             block = ut.create_basicblock(row[0])
             num_instrs = block.num_instrs()
             time.add_time('num_instr',num_instrs)
-                     
+
     for time in tqdm(times):
         time.get_dist()
-        
+
     return times
 
 #outputs filtered sets in struct of arrays format
@@ -190,7 +190,7 @@ def get_filtered_time_sets(times, percentage, total_kinds, test_kinds):
         valid_times[i] = False
         if 'actual' in time.times:
             actual_dist = time.dist['actual']
-            
+
             #if there are contradicting values throw them away - cleaning the dataset
             if actual_dist.mode_valid:
                 assert actual_dist.mode > 20 and actual_dist.mode < 10000
@@ -208,13 +208,13 @@ def get_filtered_time_sets(times, percentage, total_kinds, test_kinds):
 
     for kind in total_kinds:
         total_set[kind] = []
-    
+
     for kind in test_kinds:
         test_set[kind] = []
-    
+
     #ok now let's get the sets
     for i, time in enumerate(times):
-        if valid_times[i]:            
+        if valid_times[i]:
 
             #total set and plot total set
             is_total = True
@@ -229,7 +229,7 @@ def get_filtered_time_sets(times, percentage, total_kinds, test_kinds):
                         total_set[kind].append(time.dist[kind].mode)
                     else: #otherwise get the latest
                         total_set[kind].append(time.times[kind][-1])
-                    
+
             #test set and plot test set
 
             if time_idx >= test_start:
@@ -246,9 +246,9 @@ def get_filtered_time_sets(times, percentage, total_kinds, test_kinds):
                             test_set[kind].append(time.dist[kind].mode)
                         else:
                             test_set[kind].append(time.times[kind][-1])
-             
+
             time_idx += 1
-            
+
     return (total_set, test_set)
 
 
@@ -266,7 +266,7 @@ def get_subset(times, filter_fn):
     actual_times = times['actual']
 
     for i, time in enumerate(actual_times):
-        
+
         if not filter_fn(time):
             for kind in kinds:
                 new_times[kind].append(times[kind][i])
@@ -274,7 +274,7 @@ def get_subset(times, filter_fn):
     return new_times
 
 def rmse(xs,ys):
-    
+
     error = []
 
     for x, y in zip(xs, ys):
@@ -287,12 +287,12 @@ def rmse(xs,ys):
 def filter_timing_sets(times, percentage, filter_fn, total_kinds, test_kinds):
 
     (total_set, test_set) = get_filtered_time_sets(times, percentage, total_kinds, test_kinds)
-    
+
     plot_total_set = get_subset(total_set, filter_fn)
     plot_test_set = get_subset(test_set, filter_fn)
 
     return (total_set, test_set, plot_total_set, plot_test_set)
-    
+
 
 def generate_timing_sets(cnx, rows, arch, kinds, percentage):
 
@@ -300,7 +300,7 @@ def generate_timing_sets(cnx, rows, arch, kinds, percentage):
 
     print 'generating timing sets for arch ' + str(arch)
 
-    times = get_times(cnx, rows, arch) 
+    times = get_times(cnx, rows, arch)
 
     time_filename = 'saved/times_' + str(arch) + '.pkl'
     with open(time_filename, 'w+') as f:
@@ -310,7 +310,7 @@ def generate_timing_sets(cnx, rows, arch, kinds, percentage):
 
     all_kinds_times = filter_timing_sets(times, percentage, lambda time : time >= 1000, kinds, kinds)
     iaca_times = filter_timing_sets(times, 0.0, lambda time : time >= 1000, iaca_kinds, iaca_kinds)
-    
+
     all_kinds_times_filename = 'saved/all_kinds_times_' + str(arch) + '.pkl'
     with open(all_kinds_times_filename, 'w+') as f:
         pickle.dump(all_kinds_times, f)
@@ -330,21 +330,21 @@ def generate_static_statistics(rows, costs):
     total_ins = 0
 
     for row in tqdm(rows):
-        
+
         if row[1] != '' and row[2] != None:
-            
+
             block = ut.create_basicblock(row[0])
             num_instrs = block.num_instrs()
             num_span = block.num_span(costs)
-            
+
             total_ins += num_instrs
 
             for instr in block.instrs:
                 stats.insert_value('opcodes', instr.opcode)
-            
+
             stats.insert_value('ins', num_instrs)
             stats.insert_value('span', num_span)
-            
+
     with open('saved/static_stats.pkl','w+') as f:
         pickle.dump(stats, f)
 
@@ -357,7 +357,7 @@ def plot_tsne(embeddings, first_n, sym_dict, id2word, mem_offset, filename):
     tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000, method='exact')
     low_dim_embs = tsne.fit_transform(embeddings[1:first_n, :])
     labels = [ut.get_name(id2word[i],sym_dict,mem_offset) for i in xrange(1,first_n)]
-        
+
     assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
     plt.figure(figsize=(18, 18))  # in inches
     for i, label in enumerate(labels):
@@ -373,7 +373,7 @@ def plot_tsne(embeddings, first_n, sym_dict, id2word, mem_offset, filename):
                      va='bottom')
 
     plt.savefig(filename)
-                
+
 
 def plot_3d_map(x,y,arch,bins,xlabel,filename,xmax=None,ymax=None):
 
@@ -411,7 +411,7 @@ def plot_3d_map(x,y,arch,bins,xlabel,filename,xmax=None,ymax=None):
     x_str = 'Measured Throughput'
     cmap = plt.get_cmap('Reds')
     #cmap.set_clim(50, heatmap.T.max())
-    
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
     plt.imshow(heatmap.T, cmap=cmap, norm=lognorm, extent=extent, origin='lower', clim=(20, heatmap.T.max()))
@@ -431,14 +431,14 @@ def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
     interval = max / bins
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    
-    
+
+
     for kind, label in zip(kinds, labels):
-        
+
 
         if kind not in times:
             continue
-        
+
         y = times['actual']
         x = times[kind]
 
@@ -451,9 +451,9 @@ def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
             errors_all[i] = [0]
 
         for x,y in zip(x, y):
-            
+
             error = abs(x - y) / float(y)
-        
+
             bin = int(math.floor(float(y) / interval))
             if bin >= bins:
                 print error,y, bin
@@ -473,7 +473,7 @@ def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
 
         #plt.plot(range(0,max,interval),errors, '.-', linewidth=0.5, markersize=3, label=label)
         ax.errorbar(range(0,max,interval), errors, fmt='.-', linewidth=0.5, markersize=3, label=label, yerr=[error_low, error_high])
-        
+
     x = iaca['iaca']
     y = iaca['actual']
 
@@ -487,9 +487,9 @@ def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
 
 
         for x,y in zip(x, y):
-            
+
             error = abs(x - y) / float(y)
-            
+
             bin = int(math.floor(float(y) / interval))
 
             errors[bin] = (errors[bin] * count[bin] + error) / float(count[bin] + 1)
@@ -497,7 +497,7 @@ def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
 
             errors_all[bin].append(error)
 
-            
+
         for i in range(bins):
             error_low[i] = errors[i] - np.percentile(errors_all[i],25)
             error_high[i] = np.percentile(errors_all[i],75) - errors[i]
@@ -519,7 +519,7 @@ def plot_error_graphs(filename, times, iaca, kinds, labels, max, bins):
     plt.ylim(ymax = ymax)
     plt.savefig(filename)
     plt.close()
-  
+
 
 def compute_errors_cross_correlations(times, kinds, arch):
 
@@ -531,7 +531,7 @@ def compute_errors_cross_correlations(times, kinds, arch):
     print 'test set ' + str(len(test_set['actual']))
     print 'test plot set ' + str(len(plot_test_set['actual']))
 
-    print '\ntotal time ' + str(arch) 
+    print '\ntotal time ' + str(arch)
     #total time correlation
     for kind in kinds:
         corr = np.corrcoef(total_set[kind], total_set['actual'])[0][1]
@@ -547,7 +547,7 @@ def compute_errors_cross_correlations(times, kinds, arch):
         print 'correlation with ' + kind + ' : ' + str(corr)
         e = rmse(test_set[kind], test_set['actual'])
         print 'rmse ' + kind + ' : ' + str(e)
-    
+
     #plot total time correlation
     print '\nplot total time ' + str(arch)
     for kind in kinds:
@@ -607,10 +607,10 @@ def get_accuracy():
 
         with open('saved/all_kinds_times_' + str(arch) + '.pkl','r') as f:
             all_times = pickle.load(f)
-        
+
         with open('saved/iaca_times_' + str(arch) + '.pkl','r') as f:
             iaca_times = pickle.load(f)
-        
+
         compute_errors_cross_correlations(all_times,all_kinds,arch)
         if len(iaca_times[3]['iaca']) > 0:
             compute_errors_cross_correlations(iaca_times,iaca_kinds,arch)
@@ -618,7 +618,7 @@ def get_accuracy():
             print 'iaca times not available for arch ' + str(arch)
 
         plot_heatmaps_and_error_curves(all_times,iaca_times,arch)
-    
+
 
 def get_embedding_visualization(model_file, embed_file):
 
@@ -645,7 +645,7 @@ def get_basic_statistics(sym_dict):
 
     with open('saved/static_stats.pkl','r') as f:
         stats = pickle.load(f)
-    
+
     instr_counts = stats.get_stat('ins')
 
     total_ins = 0
@@ -665,10 +665,10 @@ def get_basic_statistics(sym_dict):
     print 'basic block density : ' + str(total_ins / float(len(instr_counts.values)))
 
     sorted_keys = sorted(opcode_dict, key = opcode_dict.get, reverse=True)
-    
+
     x = []
     y = []
-    
+
     for key in sorted_keys:
         x.append(sym_dict[key])
         y.append(opcode_dict[key] / float(total_ins))
@@ -688,7 +688,7 @@ def get_basic_statistics(sym_dict):
 
 def find_mispredicted_blocks(cnx, rows, save=None, load=None):
 
-    times = get_times(cnx, rows, 1, save=save, load=load) 
+    times = get_times(cnx, rows, 1, save=save, load=load)
 
     kinds = ['actual','predicted','llvm','iaca']
 
@@ -705,17 +705,17 @@ def find_mispredicted_blocks(cnx, rows, save=None, load=None):
     both = 0
 
     for time in times:
-        
+
         complete = True
         for kind in kinds:
             if kind not in time.times:
                 complete = False
                 break
-        
+
         if complete and time.dist['actual'].mode_valid:
 
             total += 1
-            
+
             actual_time = time.dist['actual'].mode
             llvm_time = time.times['llvm'][-1]
             predicted_time = time.times['predicted'][-1]
@@ -755,7 +755,7 @@ def find_mispredicted_blocks(cnx, rows, save=None, load=None):
 
 
                 both += 1
-                
+
 
 
     print total
@@ -764,13 +764,13 @@ def find_mispredicted_blocks(cnx, rows, save=None, load=None):
     print total_llvm_right
     print total_llvm_wrong
     print both
-    
+
 
 #this file is about extraction of data - not population of data or training
 
 #training done in - experiments
 #population done in - timing
-    
+
 if __name__ == '__main__':
 
     #command line arguments
@@ -784,7 +784,7 @@ if __name__ == '__main__':
 
     sym_dict,_ = ut.get_sym_dict(offsets_filename, encoding_filename)
     offsets = ut.read_offsets(offsets_filename)
-    
+
     print offsets
     opcode_start = offsets[0]
     operand_start = offsets[1]
@@ -828,5 +828,5 @@ if __name__ == '__main__':
         get_accuracy()
 
         #miscellanious - for other paper parts
-        #find_mispredicted_blocks(cnx, rows[800000:])    
-    
+        #find_mispredicted_blocks(cnx, rows[800000:])
+

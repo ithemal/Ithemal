@@ -37,7 +37,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=None):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         block = ut.create_basicblock(row[0])
         if block.num_instrs() >= 5:
             final_raw_data.append(row)
-    
+
     print 'after removing small basic blocks size - ' + str(len(final_raw_data))
     data.raw_data = final_raw_data
     data.fields = []
@@ -90,7 +90,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelCaddbigbb.mdl'
     result_name = '../results/modelCaddbigbb.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))

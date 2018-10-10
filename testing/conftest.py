@@ -13,10 +13,10 @@ ithemal = pytest.mark.skipif('ITHEMAL_HOME' not in os.environ.keys(),
 
 @pytest.fixture(scope="module")
 def db_config():
-    
+
     if not os.path.exists('test_data/db_config.cfg'):
         copyfile('test_data/example_config.cfg','test_data/db_config.cfg')
-    
+
     config = dict()
     with open('test_data/db_config.cfg','r') as f:
         for line in f:
@@ -28,4 +28,4 @@ def db_config():
 
 
 
-            
+

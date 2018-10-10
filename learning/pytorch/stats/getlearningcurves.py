@@ -37,7 +37,7 @@ def plot_learning_curves(filename, losses, legend, ylabel='loss', xlabel='batch'
         y = loss
         x = np.arange(0,3*len(loss),3)
         h = plt.plot(x,y, '.-', linewidth=1, markersize=2, label=label)
- 
+
     plt.legend()
     plt.ylabel(ylabel)
     plt.xlabel(xlabel)
@@ -63,10 +63,10 @@ def smoothen_curves(losses, batch_size):
     for loss in losses:
 
         for i in range(batch_size, len(loss)):
-            
+
             val = (loss[i-1]*(i-1) + loss[i])/i
             loss[i] = val
-           
+
 
 
 if __name__ == '__main__':
@@ -80,10 +80,10 @@ if __name__ == '__main__':
 
     for loss in additive_losses:
         print len(loss)
-    
+
     for loss in span_losses:
         print len(loss)
-    
+
     for loss in throughput_losses:
         print len(loss)
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         val = loss[-1]
         for j in range(len(loss), 100):
             loss.append(val)
-        
+
 
     result_name = '../results/paper_additive_2.png'
     plot_learning_curves(result_name, additive_losses, modelnames)
@@ -111,7 +111,7 @@ if __name__ == '__main__':
 
     loss_gnn = throughput_losses[0]
     loss_srnn = throughput_losses[2]
-    
+
     throughput_losses[0] = loss_srnn
     throughput_losses[2] = loss_gnn
 
@@ -123,5 +123,5 @@ if __name__ == '__main__':
         throughput_losses[i] = throughput_losses[i][:100]
 
     plot_learning_curves(result_name, throughput_losses, modelnames)
- 
-    
+
+
