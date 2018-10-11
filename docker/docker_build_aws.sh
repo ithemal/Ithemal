@@ -2,7 +2,7 @@
 
 set -ex
 
-$(aws ecr get-login --no-include-email --region us-east-2)
+sudo $(aws ecr get-login --no-include-email --region us-east-2)
 
 AWS_HOST_UID=500
 
