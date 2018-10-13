@@ -12,6 +12,9 @@ import gc
 import psutil
 from tqdm import tqdm
 import time
+import torch
+from torch import nn
+from torchviz import make_dot, make_dot_from_trace
 
 def memReport():
     num_obj = 0
@@ -248,6 +251,10 @@ class Train():
                     for loss_num in range(0,len(losses)):
                         loss = loss + losses[loss_num]
 
+
+                # dot = make_dot(loss, params=dict(self.model.named_parameters()))
+                # dot.render("./graph.%d" % (j, ))
+                # print("rendered batch")
 
                 #propagate gradients
                 loss.backward()

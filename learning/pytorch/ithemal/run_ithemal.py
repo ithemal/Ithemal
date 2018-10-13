@@ -106,7 +106,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
-    torch.set_num_threads(2)
+    #torch.set_num_threads(2)
     model.share_memory()
 
     mp_config = MPConfig(args.trainers, args.threads)
