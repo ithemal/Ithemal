@@ -43,7 +43,6 @@ class Train():
     def __init__(self,
                  model,
                  data,
-                 epochs = 3,
                  batch_size = 1000,
                  tolerance = 25,
                  epoch_len_div = 1,
@@ -71,7 +70,6 @@ class Train():
         #training parameters
         self.partition = (0, len(self.data.train))
         
-        self.epochs = epochs
         self.batch_size = batch_size
         self.epoch_len_div = epoch_len_div
 
@@ -160,9 +158,10 @@ class Train():
 
         return (epoch, batch_num)
 
-    def __call__(self, id, partition) :
+    def __call__(self, epoch_id, id, partition, savefile=None) :
+        self.epoch_id = epoch_id
         self.partition = partition
-        self.train()
+        self.train(savefile=savefile)
 
     """
     Training loop - to do make the average loss for general
@@ -182,146 +181,130 @@ class Train():
         epoch_len = epoch_len / self.epoch_len_div
 
         print 'start training...'
-        print 'epochs ' + str(self.epochs)
         print "partition = (%d, %d)" % (self.partition)
         print 'epoch length ' + str(epoch_len)
         print 'batch size (sampled) ' + str(self.batch_size)
 
-        restored_epoch = -1
-        restored_batch_num = -1
-        if loadfile != None:
-            (restored_epoch, restored_batch_num) = self.load_checkpoint(loadfile)
-            print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
+        average_loss = [0] * self.num_losses          
+        epoch_start = time.time();
+
+        for j in range(epoch_len):
+
+            start = time.time()
+
+            self.data.generate_batch(self.batch_size, self.partition)
+
+            average_loss_per_batch = [0] * self.num_losses
+            self.correct = 0
+
+            #zero out grads
+            self.optimizer.zero_grad()
+
+            loss = torch.FloatTensor([0]).squeeze()
+          
+
+            #we use batches of size one for actual training
+            items = []
+            for batch_j, item in enumerate(self.data.batch):
+                #get predicted value
+                output = self.model(item)
+
+                #check if output is nan, if so return
+                isnan = torch.isnan(output)
+
+                if isnan.any():
+                    print 'output nan detected, quit learning, please use the saved model...'
+                    #also add the per epch loss to the main loss accumulation
+                    self.loss.append(self.per_epoch_loss)
+                    return
 
 
-        for i in range(self.epochs):
+                #target as a tensor
+                target = torch.FloatTensor([item.y]).squeeze()
 
-            average_loss = [0] * self.num_losses          
-            epoch_start = time.time();
+                #get the loss value
+                losses = self.loss_fn(output, target)
 
-            for j in range(epoch_len):
- 
-                start = time.time()
+                #check how many are correct
+                self.correct_fn(output, target)
 
-                if i <= restored_epoch and j <= restored_batch_num:
-                    continue
+                #accumulate the losses
+                for c,l in enumerate(losses):
+                    item_num = j * self.batch_size + batch_j
+                    average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
+                    average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
 
-                self.data.generate_batch(self.batch_size, self.partition)
+                for loss_num in range(0,len(losses)):
+                    loss = loss + losses[loss_num]
+                
+                items.append(item)
 
-                average_loss_per_batch = [0] * self.num_losses
-                self.correct = 0
- 
-                #zero out grads
-                self.optimizer.zero_grad()
 
-                loss = torch.FloatTensor([0]).squeeze()
+            #propagate gradients
+            loss.backward()
+
+            #clip the gradients
+            if self.clip != None:
+                torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+            
+            for param in self.model.parameters():
+                isnan = torch.isnan(param.grad)
+                if isnan.any():
+                    print 'gradient values are nan...'
+                    #append the loss before returning
+                    self.loss.append(self.per_epoch_loss)
+                    return
+
+            #optimizer step to update parameters
+            self.optimizer.step()
+
+            # remove refs; so the gc remove unwanted tensors
+            # XXX: it is not clear to me how early this can happen
+            # presumably it must happen after the gradient step.
+            # however that is not clear to me
+            for item in items :
+                self.model.remove_refs(item)
               
+            end = time.time()    
 
-                #we use batches of size one for actual training
-                for batch_j, item in enumerate(self.data.batch):
-                    #get predicted value
-                    output = self.model(item)
+            #per batch training messages
+            p_str = 'PID: %d ' % ( os.getpid(), ) + str(self.epoch_id) + ' ' + str(j) + ' '
+            for av in average_loss:
+                p_str += "%.4f" % (av,) + ' '
+            for av in average_loss_per_batch:
+                p_str += "%.4f" % (av,) + ' '
+            p_str += str(self.correct) + ' ' + str(self.batch_size)
+            p_str += " time: %.2f" % (end-start, ) 
+            print p_str
+            
+            #losses accumulation to visualize learning
+            losses = []
+            for av in average_loss:
+                losses.append(av)
+            self.per_epoch_loss.append(losses)
 
-                    #check if output is nan, if so return
-                    isnan = torch.isnan(output)
-
-                    if isnan.any():
-                        print 'output nan detected, quit learning, please use the saved model...'
-                        #also add the per epch loss to the main loss accumulation
-                        self.loss.append(self.per_epoch_loss)
-                        return
-
-
-                    #target as a tensor
-                    target = torch.FloatTensor([item.y]).squeeze()
-
-                    #get the loss value
-                    losses = self.loss_fn(output, target)
-
-                    #check how many are correct
-                    self.correct_fn(output, target)
-
-                    #accumulate the losses
-                    for c,l in enumerate(losses):
-                        item_num = j * self.batch_size + batch_j
-                        average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
-                        average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
-
-                    for loss_num in range(0,len(losses)):
-                        loss = loss + losses[loss_num]
+            #change learning rates
+            if self.correct_fn == self.correct_regression and self.opt != 'Adam':
+                if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
+                    print 'reducing learning rate....'
+                    self.lr = self.lr * 0.1
+                    print 'learning rate changed ' + str(self.lr)
+                    for param_group in self.optimizer.param_groups:
+                        param_group['lr'] = self.lr
+   
+        epoch_end = time.time()
+        print "PID: %d completed epoch %d  time: %s" % (os.getpid(), self.epoch_id, epoch_end - epoch_start,)
 
 
+        #loss accumulation
+        self.loss.append(self.per_epoch_loss)
+        self.per_epoch_loss = []
 
-                #propagate gradients
-                loss.backward()
-
-                #clip the gradients
-                if self.clip != None:
-                    torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-                
-                for param in self.model.parameters():
-                    isnan = torch.isnan(param.grad)
-                    if isnan.any():
-                        print 'gradient values are nan...'
-                        #append the loss before returning
-                        self.loss.append(self.per_epoch_loss)
-                        return
-
-                #optimizer step to update parameters
-                self.optimizer.step()
-
-                # remove refs; so the gc remove unwanted tensors
-                # self.model.remove_refs(item)
-                  
-                end = time.time()    
-
-                if savefile != None:
-                    self.save_checkpoint(i,j,savefile)
-
-                #per batch training messages
-                p_str = 'PID: %d ' % ( os.getpid(), ) + str(i) + ' ' + str(j) + ' '
-                for av in average_loss:
-                    p_str += "%.4f" % (av,) + ' '
-                for av in average_loss_per_batch:
-                    p_str += "%.4f" % (av,) + ' '
-                p_str += str(self.correct) + ' ' + str(self.batch_size)
-                p_str += " time: %.2f" % (end-start, ) 
-                print p_str
-                
-                #losses accumulation to visualize learning
-                losses = []
-                for av in average_loss:
-                    losses.append(av)
-                self.per_epoch_loss.append(losses)
-
-                #change learning rates
-                if self.correct_fn == self.correct_regression and self.opt != 'Adam':
-                    if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
-                        print 'reducing learning rate....'
-                        self.lr = self.lr * 0.1
-                        print 'learning rate changed ' + str(self.lr)
-                        for param_group in self.optimizer.param_groups:
-                            param_group['lr'] = self.lr
-    
-            epoch_end = time.time()
-            print "Completed epoch %d  time: %s" % (i, epoch_end - epoch_start,)
-
-
-            #loss accumulation
-            self.loss.append(self.per_epoch_loss)
-            self.per_epoch_loss = []
-
-            #learning rate changes
-            self.lr = self.lr * 0.1
-            print 'learning rate changed ' + str(self.lr)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.lr
-
-
-        if savefile != None:
-            print 'final model saved...'
-            self.save_checkpoint(self.epochs - 1,epoch_len - 1,savefile)
-
+        #learning rate changes
+        self.lr = self.lr * 0.1
+        print 'learning rate changed ' + str(self.lr)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.lr
 
     """
     Validation with a test set

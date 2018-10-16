@@ -17,7 +17,7 @@ import data.data_cost as dt
 import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
-
+from mpconfig import MPConfig
 
 def save_data(database, config, format, savefile, arch):
 
@@ -29,53 +29,6 @@ def save_data(database, config, format, savefile, arch):
     data.get_timing_data(cnx, arch)
 
     torch.save(data.raw_data, savefile)
-
-class MPConfig :
-
-    THREADS_KEY = "OMP_NUM_THREADS";
-    AFFINITY_KEY = "KMP_AFFINITY";
-    PYTORCH_THREAD_OFFSET = 2;
-
-    def __init__(self, trainers, threads) :
-        assert 0 < trainers
-        assert 4 <= threads
-
-        self.trainers = trainers
-        self.threads = threads
-        self.saved_env = None
-
-    def __enter__(self) :
-        
-        threads = None
-        if MPConfig.THREADS_KEY in os.environ :
-            threads = os.environ[MPConfig.THREADS_KEY]
-
-        affinity = None
-        if MPConfig.AFFINITY_KEY in os.environ :
-            affinity = os.environ[MPConfig.AFFINITY_KEY]
-
-        self.saved_env = (threads, affinity)
-
-    def set_env(self, trainer_id) :
-        assert trainer_id < self.trainers
-    
-        os.environ[MPConfig.THREADS_KEY] = str(self.threads - MPConfig.PYTORCH_THREAD_OFFSET);
-        os.environ[MPConfig.AFFINITY_KEY] = "verbose,granularity=fine,compact,1,%d" % (trainer_id * self.threads, ) 
-    
-    def __exit__(self,exc_type, exc_value, traceback)  :
-        
-        assert self.saved_env is not None
-
-        (threads, affinity) = self.saved_env
-        if threads is not None :
-            os.environ[MPConfig.THREADS_KEY] = threads
-
-        if affinity is not None :
-            os.environ[MPConfig.AFFINITY_KEY] = affinity
-
-        self.saved_env = None
-
-   
     
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
@@ -98,8 +51,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-
-    train = tr.Train(model, data, epochs = 10, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
+    train = tr.Train(model, data, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
            
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -107,32 +59,44 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
+    restored_epoch = -1
+    restored_batch_num = -1
+
+    if args.loadfile != None:
+        (restored_epoch, restored_batch_num) = train.load_checkpoint(args.loadfile)
+        print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
 
     model.share_memory()
-
+        
     mp_config = MPConfig(args.trainers, args.threads)
 
     partition_size = len(data.train) // mp_config.trainers
     
     processes = []
-   
-    with mp_config :
-        for rank in range(mp_config.trainers):
-            
-            mp_config.set_env(rank)
+  
+    for i in range(args.epochs):
+        i = restored_epoch + 1
 
-            # XXX: this drops data on the floor, namely the tail of the file
-            # if the examples are not evenly divisble by the number of trainers
-            partition = (rank * partition_size, (rank + 1) * partition_size)
+        with mp_config :
+            for rank in range(mp_config.trainers):
+                
+                mp_config.set_env(rank)
 
-            p = mp.Process(target=train, args=(rank, partition))
-            p.start()
-            print("Starting process %d" % (rank,))
-            processes.append(p)
-    
-    for p in processes:
-        p.join()
-    
+                # XXX: this drops data on the floor, namely the tail of the file
+                # if the examples are not evenly divisble by the number of trainers
+                partition = (rank * partition_size, (rank + 1) * partition_size)
+
+                p = mp.Process(target=train, args=(i, rank, partition))
+                p.start()
+                print("Starting process %d" % (rank,))
+                processes.append(p)
+         
+        for p in processes:
+            p.join()
+        
+        if args.savefile is not None :
+            train.save_checkpoint(i, 0, args.savefile)
+
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     results = train.validate(resultfile)
 
@@ -205,7 +169,7 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
 
-    train = tr.Train(model, data, epochs = 10, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)    
+    train = tr.Train(model, data,  batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)    
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -249,12 +213,13 @@ if __name__ == "__main__":
     parser.add_argument('--embmode',action='store',type=str,default='learnt')
     parser.add_argument('--embedfile',action='store',type=str,default='../inputs/embeddings/code_delim.emb')
     parser.add_argument('--savefile',action='store',type=str,default='../inputs/models/graphCost.mdl')
-    parser.add_argument('--loadfile',action='store',type=str,default='../inputs/models/graphCost.mdl')
+    parser.add_argument('--loadfile',action='store',type=str,default=None)
     parser.add_argument('--arch',action='store',type=int, default=1)
 
     parser.add_argument('--database',action='store',type=str)
     parser.add_argument('--config',action='store',type=str)
 
+    parser.add_argument('--epochs',action='store',type=int,default=1)
     
     parser.add_argument('--trainers',action='store',type=int,default=1)
     parser.add_argument('--threads',action='store',type=int, default=4)
