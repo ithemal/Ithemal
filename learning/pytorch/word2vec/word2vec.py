@@ -23,7 +23,7 @@ class Word2Vec:
     def __init__(self,
                  #model related
                  emb_dimension=256,
-                 
+
                  #data generation related
                  batch_size=1024,
                  skip_window=2,
@@ -37,12 +37,12 @@ class Word2Vec:
                  initial_lr=0.001,
                  num_steps = None,
                  neg_words = 32):
-       
+
         self.data = Data(num_skips=num_skips,
                          skip_window=skip_window,
                          min_count=min_count,
                          n_words=n_words)
-        
+
         self.emb_dimension = emb_dimension
         self.batch_size = batch_size
 
@@ -50,8 +50,8 @@ class Word2Vec:
         self.initial_lr = initial_lr
         self.neg_words = neg_words
         self.num_steps = num_steps
-       
-        
+
+
     def generate_dataset(self, words, sym_dict, mem_offset):
         data = self.data.get_common_words(words, sym_dict, mem_offset)
         self.data.init_sample_table()
@@ -59,7 +59,7 @@ class Word2Vec:
         return data
 
     def train(self, data, sym_dict, mem_offset):
-       
+
         try:
             print self.emb_size, self.emb_dimension
             self.skip_gram_model = SkipGramModel(self.emb_size, self.emb_dimension)
@@ -104,7 +104,7 @@ class Word2Vec:
                     process_bar.set_description("Loss: %0.8f, lr: %0.6f" %
                                         (loss.item(),
                                          self.optimizer.param_groups[0]['lr']))
-                
+
                 #lr = self.initial_lr * (1.0 - 0.1 * j)
                 #for param_group in self.optimizer.param_groups:
                 #    param_group['lr'] = lr
@@ -128,7 +128,7 @@ class Word2Vec:
         tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000, method='exact')
         low_dim_embs = tsne.fit_transform(embeddings[1:first_n, :])
         labels = [ut.get_name(self.data.id2word[i],sym_dict,mem_offset) for i in xrange(1,first_n)]
-        
+
         assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
         plt.figure(figsize=(18, 18))  # in inches
         for i, label in enumerate(labels):

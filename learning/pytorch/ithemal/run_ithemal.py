@@ -22,9 +22,9 @@ from tqdm import tqdm
 def save_data(database, config, format, savefile, arch):
 
     cnx = ut.create_connection_from_config(database=database, config_file=config)
-    
+
     data = dt.DataInstructionEmbedding()
-    
+
     data.extract_data(cnx, format, ['code_id','code_intel'])
     data.get_timing_data(cnx, arch)
 
@@ -79,9 +79,9 @@ class MPConfig :
     
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
-    
+
     data = dt.DataInstructionEmbedding()
-    
+
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
     data.read_meta_data()
@@ -91,22 +91,23 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     #regression
     num_classes = 1
- 
+
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
     model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
+
     train = tr.Train(model, data, epochs = 10, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
            
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final 
+    train.print_fn = train.print_final
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
-    #torch.set_num_threads(2)
+
     model.share_memory()
 
     mp_config = MPConfig(args.trainers, args.threads)
@@ -134,56 +135,55 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     results = train.validate(resultfile)
-    
 
 def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode):
 
-    data = dt.DataInstructionEmbedding()    
+    data = dt.DataInstructionEmbedding()
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
     data.read_meta_data()
-    
+
     data.prepare_data()
     data.generate_datasets()
 
     #regression
     num_classes = 1
- 
+
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
     model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
     train = tr.Train(model,data, batch_size = 1000,  clip=None)
-           
+
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final 
+    train.print_fn = train.print_final
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
     #train.data.test = train.data.test[:10000]
-    
+
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
-    
+
     training_size = len(data.train)
 
 
     f = open(resultfile, 'a+')
 
     for i,result in enumerate(zip(actual,predicted)):
-        
+
         (a,p) = result
         if (abs(a -p) * 100.0 / a) > train.tolerance:
-          
+
             text = data.raw_data[i + training_size][2]
             print a, p
             print text
             f.write('%f, %f\n' % (a,p))
             f.write(text + '\n')
-            
+
     f.close()
-    
+
 def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch):
 
     cnx = ut.create_connection(database=database, config_file=config)
@@ -192,34 +192,34 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
     data.read_meta_data()
-    
+
     data.prepare_data()
     data.test = data.data #all data are test data now
 
     #regression
     num_classes = 1
- 
+
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
     model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
+
     train = tr.Train(model, data, epochs = 10, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)    
-           
+
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final 
+    train.print_fn = train.print_final
     train.correct_fn = train.correct_regression
     train.num_losses = 1
 
-  
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
-    
+
 
     #ok now enter the results in the database
     for i, data in enumerate(tqdm(data.test)):
-        
+
         code_id = data.code_id
         kind = 'predicted'
         time = predicted[i]
@@ -233,11 +233,11 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
 
         ut.execute_query(cnx, sql, False)
         cnx.commit()
-        
+
 
     cnx.close()
-    
-    
+
+
 if __name__ == "__main__":
 
     #command line arguments
@@ -254,10 +254,12 @@ if __name__ == "__main__":
 
     parser.add_argument('--database',action='store',type=str)
     parser.add_argument('--config',action='store',type=str)
+
     
     parser.add_argument('--trainers',action='store',type=int,default=1)
     parser.add_argument('--threads',action='store',type=int, default=4)
     parser.add_argument('--batch-size',action='store',type=int, default=100)
+
 
     args = parser.parse_args(sys.argv[1:])
 
@@ -266,9 +268,9 @@ if __name__ == "__main__":
     elif args.mode == 'train':
         graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode)
     elif args.mode == 'validate':
-        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)    
+        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
         graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
-               
-        
+
+
 

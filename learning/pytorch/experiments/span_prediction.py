@@ -38,7 +38,7 @@ def train_model_regression(data, model, savemodelfile, resultfile, clip=10):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
@@ -59,11 +59,11 @@ def train_model_classification(data, model, savemodelfile, resultfile, clip=10):
         for batch_loss in per_epoch_loss:
             losses.append(batch_loss[0])
 
-    results = train.validate(resultfile=resultfile)    
+    results = train.validate(resultfile=resultfile)
 
     return (losses, results)
 
-    
+
 
 if __name__ == "__main__":
 
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelCspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelCspanregress' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_regress.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanregress' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanregress' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_regression(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_regress.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelCspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelCspanclassification' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_classification(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_classification.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
@@ -168,15 +168,15 @@ if __name__ == "__main__":
 
     model_name = '../saved/modelDspanclassification' + cost_prefix + '.mdl'
     result_name = '../results/modelDspanclassification' + cost_prefix + '.txt'
-    
+
     (loss, results) = train_model_classification(dataIns, model, model_name, result_name)
     actual, predicted = results
     errors_classification.append(ut.get_percentage_error(predicted[:eamount], actual[:eamount]))
     losses_classification.append(loss)
-    
+
     result_name = '../results/spanclassification' + cost_prefix + '.png'
     gr.plot_line_graphs(result_name, losses_classification, modelnames)
     result_name = '../results/spanclassificationtesterror' + cost_prefix + '.png'
     gr.plot_line_graphs(result_name, errors_classification, modelnames, xlabel='test case', ylabel='percentage error', title='test set errors', ymin=0, ymax=100)
-  
+
 

@@ -2,7 +2,7 @@ import sys
 sys.path.append('..')
 import numpy as np
 import common_libs.utilities as ut
-import random  
+import random
 import word2vec.word2vec as w2v
 import torch.nn as nn
 import torch.autograd as autograd
@@ -15,7 +15,7 @@ import random
 
 
 class DataItem:
-    
+
     def __init__(self, x, y, block):
         self.x = x
         self.y = y
@@ -31,7 +31,7 @@ class DataSpan(Data):
     def update_span(self, cnx, format):
 
         self.extract_data(cnx, format, ['code_id'])
-    
+
         for row in tqdm(self.raw_data):
             sql = 'UPDATE code SET span=NULL WHERE code_id=' + str(row[1])
             ut.execute_query(cnx, sql, False)
@@ -57,18 +57,18 @@ class DataSpan(Data):
                 spans[item.y] += 1
             else:
                 spans[item.y] = 1
-        
+
         for key in sorted(spans.iterkeys()):
             sys.stdout.write("%d: %d, " % (key, spans[key]))
         sys.stdout.write('\n')
 
     def prepare_for_classification(self):
-        
+
         for item in self.data:
             one_hot = [0] * self.max_span
             one_hot[item.y - 1] = 1
             item.y = one_hot
-                
+
         return self.max_span
 
 
@@ -88,13 +88,13 @@ class DataSpan(Data):
 
             if spans[y] <= max_per_span:
                 temp_data.append(item)
-                
+
         self.data = temp_data
         self.max_span = max(spans)
-        
+
         print 'after removing skew...'
         print len(self.data)
-        
+
         #randomize
         shuffled = range(len(self.data))
         random.shuffle(shuffled)
@@ -104,7 +104,7 @@ class DataSpan(Data):
             temp_data.append(self.data[i])
 
         self.data = temp_data
-        
+
 
 
 
@@ -112,7 +112,7 @@ class DataTokenEmbedding(DataSpan):
 
     def __init__(self, data=None):
         super(DataTokenEmbedding, self).__init__(data)
-            
+
     def prepare_data(self):
 
         self.data = []
@@ -125,8 +125,8 @@ class DataTokenEmbedding(DataSpan):
             if len(row[0]) > 0:
                 code = []
                 for token in row[0]:
-                    code.append(self.word2id.get(token,0)) 
-                    
+                    code.append(self.word2id.get(token,0))
+
                 block = ut.create_basicblock(row[0])
                 span = block.num_span(self.costs)
 
@@ -135,9 +135,9 @@ class DataTokenEmbedding(DataSpan):
                 else:
                     span_wrong += 1
                     continue
-               
+
                 block.create_dependencies()
-                    
+
                 item = DataItem(code, span, block)
                 self.data.append(item)
 
@@ -149,10 +149,10 @@ class DataTokenEmbedding(DataSpan):
 
 
 class DataInstructionEmbedding(DataSpan):
-    
+
     def __init__(self,data=None):
         super(DataInstructionEmbedding, self).__init__(data)
-            
+
     def prepare_data(self):
 
         self.data = []
@@ -170,8 +170,8 @@ class DataInstructionEmbedding(DataSpan):
                         if len(ins) != 0:
                             code.append(ins)
                             ins = []
-                    ins.append(self.word2id.get(token,0)) 
-                    
+                    ins.append(self.word2id.get(token,0))
+
                 if len(ins) != 0:
                     code.append(ins)
                     ins = []
@@ -184,9 +184,9 @@ class DataInstructionEmbedding(DataSpan):
                 else:
                     span_wrong += 1
                     continue
-               
+
                 block.create_dependencies()
-                    
+
                 item = DataItem(code, span, block)
                 self.data.append(item)
 
@@ -195,5 +195,5 @@ class DataInstructionEmbedding(DataSpan):
 
         self.clean_data()
 
-        
-        
+
+

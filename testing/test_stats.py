@@ -9,7 +9,7 @@ import mysql.connector
 
 @ithemal
 class TestStats:
-    
+
     def test_getbenchmarks(self):
 
         script = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/stats/getbenchmarks.py'
@@ -21,11 +21,11 @@ class TestStats:
         proc = subprocess.Popen(args,stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         stdout, stderr = proc.communicate()
 
-       
+
         success = False
         for line in stdout.split('\n'):
             if line == 'Total 44 2934 0':
                 success = True
-        
+
         assert success
 

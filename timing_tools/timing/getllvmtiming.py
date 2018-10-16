@@ -11,7 +11,7 @@ import os
 import re
 import time
 import argparse
-    
+
 
 def wait_timeout(proc, seconds):
     """Wait for a process to finish, or raise exception after timeout"""
@@ -30,7 +30,7 @@ def wait_timeout(proc, seconds):
 
 
 class PMCValue:
-    
+
     def __init__(self, value):
         self.value = value
         self.count = 1
@@ -60,7 +60,7 @@ class PMC:
             self.values.append(val)
 
     def set_mode(self):
-        
+
         max_count = 0
 
         for val in self.values:
@@ -76,11 +76,11 @@ class PMCCounters:
         self.counters = list()
         for name in names:
             self.counters.append(PMC(name))
-    
+
     def add_to_counters(self, line):
         values = line.split()
         #print values
-        
+
         if len(values) != len(self.counters):
             return
 
@@ -88,12 +88,12 @@ class PMCCounters:
             self.counters[i].add_value(int(value))
 
     def set_modes(self):
-        
+
         for counter in self.counters:
             counter.set_mode()
 
     def get_value(self, name):
-        
+
         for counter in self.counters:
             if name == counter.name:
                 return counter.mode
@@ -108,9 +108,9 @@ def insert_time_value(cnx,code_id, time, arch):
 
 
 def check_error(line):
-    
+
     errors = ['error','fault']
-    
+
     for error in errors:
         if error in line:
             return True
@@ -118,7 +118,7 @@ def check_error(line):
 
 if __name__ == '__main__':
 
-    
+
     #command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch',action='store',type=int,required=True)
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     sql = 'SELECT code_att, code_id from code'
     rows = ut.execute_query(cnx, sql, True)
     print len(rows)
-    
+
     llvm_mca_home = os.environ['ITHEMAL_HOME'] + '/timing_tools/llvm-mca/'
     llvm_mca_bin = os.environ['ITHEMAL_HOME'] + '/timing_tools/llvm-build/bin/llvm-mca'
     os.chdir(llvm_mca_home + args.subd)
@@ -151,7 +151,7 @@ if __name__ == '__main__':
             if rep != None:
                 start_line = i
                 break
-    
+
     print start_line
 
     total = 0
@@ -163,13 +163,13 @@ if __name__ == '__main__':
     total_time = 0.0
 
     for row in tqdm(rows):
-    
+
         if row[0] == None:
             continue
 
         splitted = row[0].split('\n')
         write_lines = [line for line in lines]
-        
+
         written = 0
         final_bb = []
         for i, line in enumerate(splitted):
@@ -185,14 +185,14 @@ if __name__ == '__main__':
                 f.writelines(write_lines)
 
             mcpu = '-mcpu=' + args.cpu
-            proc = subprocess.Popen([llvm_mca_bin,mcpu,'out.s'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)            
-            
+            proc = subprocess.Popen([llvm_mca_bin,mcpu,'out.s'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
             start_time = time.time()
             result = wait_timeout(proc, 10)
             end_time = time.time()
-            
+
             if result != None:
-                
+
                 try:
                     error_lines = False
                     for line in iter(proc.stderr.readline, ''):
@@ -200,7 +200,7 @@ if __name__ == '__main__':
                         if check_error(line):
                             error_lines = True
                             break
- 
+
                     if error_lines == False:
                         success += 1
                         for line in iter(proc.stdout.readline, ''):
@@ -209,7 +209,7 @@ if __name__ == '__main__':
                                 total_time += end_time - start_time
                                 cycles = int(found.group(1))
                                 if not args.tp:
-                                    insert_time_value(cnx, row[1], cycles, args.arch) 
+                                    insert_time_value(cnx, row[1], cycles, args.arch)
                                 break
 
                     else:
@@ -226,5 +226,5 @@ if __name__ == '__main__':
         if total % 10000 == 0:
             print total_time
             print total, success, errors, not_finished, except_errors, total_time
-    
+
     cnx.close()

@@ -34,13 +34,13 @@ def cpuStats():
 
 
 
-class Train(): 
+class Train():
 
     """
     Performs training and validation for the models listed above
     """
 
-    def __init__(self, 
+    def __init__(self,
                  model,
                  data,
                  epochs = 3,
@@ -94,12 +94,12 @@ class Train():
         #training checkpointing
         self.saves_per_epoch = saves_per_epoch
 
-        
+
     """
     Print routines for predicted and target values.
     """
     def print_final(self,f,x,y):
-        
+
         if x.shape != ():
             size = x.shape[0]
             for i in range(size):
@@ -109,7 +109,7 @@ class Train():
             f.write('%f,%f\n' % (x,y))
 
     def print_max(self,f,x,y):
-        
+
         x = torch.argmax(x)
         y = torch.argmax(y)
 
@@ -127,9 +127,9 @@ class Train():
 
         if percentage < self.tolerance:
             self.correct += 1
-    
+
     def correct_regression(self,x,y):
-        
+
         if x.shape != ():
             x = x[-1]
             y = y[-1]
@@ -193,16 +193,16 @@ class Train():
             (restored_epoch, restored_batch_num) = self.load_checkpoint(loadfile)
             print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
 
-        
+
         for i in range(self.epochs):
-                
-            average_loss = [0] * self.num_losses
-          
+
+            average_loss = [0] * self.num_losses          
             epoch_start = time.time();
 
             for j in range(epoch_len):
  
                 start = time.time()
+
                 if i <= restored_epoch and j <= restored_batch_num:
                     continue
 
@@ -219,22 +219,22 @@ class Train():
 
                 #we use batches of size one for actual training
                 for batch_j, item in enumerate(self.data.batch):
-                                       #get predicted value
+                    #get predicted value
                     output = self.model(item)
 
                     #check if output is nan, if so return
                     isnan = torch.isnan(output)
-                    
+
                     if isnan.any():
                         print 'output nan detected, quit learning, please use the saved model...'
                         #also add the per epch loss to the main loss accumulation
                         self.loss.append(self.per_epoch_loss)
                         return
-                        
+
 
                     #target as a tensor
                     target = torch.FloatTensor([item.y]).squeeze()
-              
+
                     #get the loss value
                     losses = self.loss_fn(output, target)
 
@@ -243,12 +243,13 @@ class Train():
 
                     #accumulate the losses
                     for c,l in enumerate(losses):
-                        item_num = j * self.batch_size + batch_j 
+                        item_num = j * self.batch_size + batch_j
                         average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
                         average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
-                    
+
                     for loss_num in range(0,len(losses)):
                         loss = loss + losses[loss_num]
+
 
 
                 #propagate gradients
@@ -273,10 +274,10 @@ class Train():
                 # self.model.remove_refs(item)
                   
                 end = time.time()    
+
                 if savefile != None:
                     self.save_checkpoint(i,j,savefile)
-                
-                
+
                 #per batch training messages
                 p_str = 'PID: %d ' % ( os.getpid(), ) + str(i) + ' ' + str(j) + ' '
                 for av in average_loss:
@@ -292,7 +293,7 @@ class Train():
                 for av in average_loss:
                     losses.append(av)
                 self.per_epoch_loss.append(losses)
-                
+
                 #change learning rates
                 if self.correct_fn == self.correct_regression and self.opt != 'Adam':
                     if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
@@ -301,9 +302,10 @@ class Train():
                         print 'learning rate changed ' + str(self.lr)
                         for param_group in self.optimizer.param_groups:
                             param_group['lr'] = self.lr
-                        
+    
             epoch_end = time.time()
             print "Completed epoch %d  time: %s" % (i, epoch_end - epoch_start,)
+
 
             #loss accumulation
             self.loss.append(self.per_epoch_loss)
@@ -314,24 +316,24 @@ class Train():
             print 'learning rate changed ' + str(self.lr)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.lr
-    
-            
+
+
         if savefile != None:
             print 'final model saved...'
             self.save_checkpoint(self.epochs - 1,epoch_len - 1,savefile)
-    
-        
+
+
     """
     Validation with a test set
     """
 
     def validate(self, resultfile, loadfile=None):
-        
+
 
         if loadfile != None:
             print 'loaded from checkpoint for validation...'
             self.load_checkpoint(loadfile)
-  
+
         f = open(resultfile,'w')
 
         self.correct = 0
@@ -362,7 +364,7 @@ class Train():
             for c,l in enumerate(losses):
                 loss += l
                 average_loss[c] = (average_loss[c] * j + l.item()) / (j + 1)
-            
+
             if j % (len(self.data.test) / 100) == 0:
                 p_str = str(j) + ' '
                 for av in average_loss:
@@ -372,20 +374,20 @@ class Train():
 
             #remove refs; so the gc remove unwanted tensors
             self.model.remove_refs(item)
-           
+
         for loss in average_loss:
             f.write('loss - %f\n' % (loss))
         f.write('%f,%f\n' % (self.correct, len(self.data.test)))
-        
+
         print average_loss, self.correct, len(self.data.test)
-        f.close()       
+        f.close()
 
         return (actual, predicted)
 
-        
-        
 
 
-        
-        
+
+
+
+
 

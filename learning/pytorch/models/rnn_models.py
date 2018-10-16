@@ -3,7 +3,7 @@
 
 import numpy as np
 import common_libs.utilities as ut
-import random  
+import random
 import word2vec.word2vec as w2v
 import torch.nn as nn
 import torch.autograd as autograd
@@ -23,7 +23,7 @@ class ModelAbs(nn.Module):
     num_classes = 1 - for regression
     num_classes = n - for classifying into n classes
 
-    """    
+    """
 
     def __init__(self, hidden_size, embedding_size, num_classes):
 
@@ -34,7 +34,7 @@ class ModelAbs(nn.Module):
         #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
         self.num_classes = num_classes
-        
+
         #lstm - input size, hidden size, num layers
         self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
 
@@ -43,7 +43,7 @@ class ModelAbs(nn.Module):
 
         #linear layer for regression - in_features, out_features
         self.linear = nn.Linear(self.hidden_size, self.num_classes)
-    
+
     def init_hidden(self):
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
@@ -51,12 +51,12 @@ class ModelAbs(nn.Module):
 
     #this is to set learnable embeddings
     def set_learnable_embedding(self, mode, dictsize, seed = None):
-        
+
         self.mode = mode
-        
+
         if mode != 'learnt':
             embedding = nn.Embedding(dictsize, self.embedding_size)
-        
+
         if mode == 'none':
             print 'learn embeddings form scratch...'
             initrange = 0.5 / self.embedding_size
@@ -84,7 +84,7 @@ class ModelSequentialRNN(ModelAbs):
 
     uses lstm and linear setup of ModelAbs
     each hidden state is given as a seperate batch to the linear layer
-    
+
     """
 
     def __init__(self, hidden_size, embedding_size, num_classes, intermediate):
@@ -94,11 +94,11 @@ class ModelSequentialRNN(ModelAbs):
         else:
             self.name = 'sequential RNN'
         self.intermediate = intermediate
-   
+
     def forward(self, item):
 
         self.hidden_token = self.init_hidden()
- 
+
         #convert to tensor
         if self.mode == 'learnt':
             acc_embeds = []
@@ -108,7 +108,7 @@ class ModelSequentialRNN(ModelAbs):
         else:
             embeds = self.final_embeddings(torch.LongTensor(item.x))
 
-        
+
         #prepare for lstm - seq len, batch size, embedding size
         seq_len = embeds.shape[0]
         embeds_for_lstm = embeds.unsqueeze(1)
@@ -124,7 +124,7 @@ class ModelSequentialRNN(ModelAbs):
         #input - (seq_len, batch, input_size)
 
         lstm_out, self.hidden_token = self.lstm_token(embeds_for_lstm, self.hidden_token)
-    
+
         if self.intermediate:
             #input to linear - seq_len, hidden_size (seq_len is the batch size for the linear layer)
             #output - seq_len, num_classes
@@ -147,9 +147,9 @@ class ModelHierarchicalRNN(ModelAbs):
     lstm predicting instruction embedding for sequence of tokens
     lstm_ins processes sequence of instruction embeddings
     linear layer process hidden states to produce output
-    
+
     """
-    
+
     def __init__(self, hidden_size, embedding_size, num_classes, intermediate):
         super(ModelHierarchicalRNN, self).__init__(hidden_size, embedding_size, num_classes)
 
@@ -169,7 +169,7 @@ class ModelHierarchicalRNN(ModelAbs):
         self.lstm_ins = model.lstm_ins
 
     def forward(self, item):
-        
+
         self.hidden_token = self.init_hidden()
         self.hidden_ins = self.init_hidden()
 
@@ -199,19 +199,19 @@ class ModelHierarchicalRNN(ModelAbs):
             values = self.linear(out_ins[:,0,:]).squeeze()
         else:
             values = self.linear(hidden_ins[0].squeeze()).squeeze()
-        
+
         return values
-        
+
 
 
 class ModelHierarchicalRNNRelational(ModelAbs):
-    
+
     def __init__(self, embedding_size, num_classes):
         super(ModelHierarchicalRNNRelational, self).__init__(embedding_size, num_classes)
-        
+
         self.hidden_ins = self.init_hidden()
         self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
-        
+
         self.linearg1 = nn.Linear(2 * self.hidden_size, self.hidden_size)
         self.linearg2 = nn.Linear(self.hidden_size, self.hidden_size)
 
@@ -242,12 +242,12 @@ class ModelHierarchicalRNNRelational(ModelAbs):
         out_ins, hidden_ins = self.lstm_ins(ins_embeds_lstm, self.hidden_ins)
 
         seq_len = len(item.x)
-        
+
         g_variable = autograd.Variable(torch.zeros(self.hidden_size))
 
         for i in range(seq_len):
             for j in range(i,seq_len):
-                
+
                 concat = torch.cat((out_ins[i].squeeze(),out_ins[j].squeeze()),0)
                 g1 = nn.functional.relu(self.linearg1(concat))
                 g2 = nn.functional.relu(self.linearg2(g1))
@@ -259,7 +259,7 @@ class ModelHierarchicalRNNRelational(ModelAbs):
 
         return output
 
-        
+
 class ModelSequentialRNNComplex(nn.Module):
 
     """
@@ -268,9 +268,9 @@ class ModelSequentialRNNComplex(nn.Module):
     Input - sequence of tokens processed in sequence by the lstm
     Output - the final value to be predicted
 
-    we do not derive from ModelAbs, but instead use a bidirectional, multi layer 
+    we do not derive from ModelAbs, but instead use a bidirectional, multi layer
     lstm and a deep MLP with non-linear activation functions to predict the final output
-    
+
     """
 
     def __init__(self, embedding_size):
@@ -279,11 +279,11 @@ class ModelSequentialRNNComplex(nn.Module):
         self.name = 'sequential RNN'
         self.hidden_size = 256
         self.embedding_size = embedding_size
-        
+
         self.layers = 2
         self.directions = 1
         self.is_bidirectional = (self.directions == 2)
-        self.lstm_token = torch.nn.LSTM(input_size = self.embedding_size, 
+        self.lstm_token = torch.nn.LSTM(input_size = self.embedding_size,
                                   hidden_size = self.hidden_size,
                                   num_layers = self.layers,
                                   bidirectional = self.is_bidirectional)
@@ -308,13 +308,13 @@ class ModelSequentialRNNComplex(nn.Module):
         else:
             embeds = self.final_embeddings(torch.LongTensor(item.x))
 
-        
+
         #prepare for lstm - seq len, batch size, embedding size
         seq_len = embeds.shape[0]
         embeds_for_lstm = embeds.unsqueeze(1)
 
         lstm_out, self.hidden_token = self.lstm_token(embeds_for_lstm, self.hidden_token)
-        
+
         f1 = nn.functional.relu(self.linear1(self.hidden_token[0].squeeze().view(-1)))
         f2 = self.linear2(f1)
         return f2
