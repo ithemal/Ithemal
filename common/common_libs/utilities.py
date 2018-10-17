@@ -335,6 +335,34 @@ class BasicBlock:
 
         return roots
 
+    def find_renamings(self, within_equivalence_classes=True):
+        operand_equivalence_classes = get_operand_equivalence_classes()
+        all_registers = frozenset(r for rs in operand_equivalence_classes for r in rs)
+
+        def gen_renamings(block, rmap):
+            rset = set(rmap.keys())
+
+            for i, instr in enumerate(block.instrs):
+                if not instr.parents:
+                    continue
+
+                for i, src in enumerate(instr.srcs):
+                    if src in rset or src not in all_registers:
+                        continue
+                    elif src in all_registers:
+                        if within_equivalence_classes:
+                            pass
+                        else:
+                            for reg in (all_registers - rset):
+                                pass
+
+                for i, dst in enumerate(instr.dsts):
+                    # fork
+                    pass
+
+
+        return gen_renamings(self, {})
+
 
 def create_basicblock(tokens):
 
