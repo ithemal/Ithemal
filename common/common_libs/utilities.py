@@ -112,6 +112,9 @@ def get_data(cnx, format, cols):
     else:
         return data
 
+OPCODE_REGEXP = '/\*.*\*/.*OP_([a-zA-Z_0-9]+),.*'
+OPERAND_REGEXP = '.*DR_([A-Za-z_0-9]+),.*'
+COMMENT_REGEXP = '^/\*.*\*/$'
 
 #dynamorio specific encoding details - tokenizing
 def get_opcode_opnd_dict(opcode_start, opnd_start):
@@ -123,17 +126,45 @@ def get_opcode_opnd_dict(opcode_start, opnd_start):
         opcode_num = opcode_start
         opnd_num = opnd_start
         for line in f:
-            opcode_re = re.search('/\*.*\*/.*OP_([a-zA-Z_0-9]+),.*', line)
+            opcode_re = re.search(OPCODE_REGEXP, line)
             if opcode_re != None:
                 sym_dict[opcode_num] = opcode_re.group(1)
                 opcode_num = opcode_num + 1
-            opnd_re = re.search('.*DR_([A-Za-z_0-9]+),.*', line)
+            opnd_re = re.search(OPERAND_REGEXP, line)
             if opnd_re != None:
                 sym_dict[opnd_num] = opnd_re.group(1)
                 opnd_num = opnd_num + 1
         f.close()
 
     return sym_dict
+
+def get_operand_equivalence_classes():
+    filename = os.path.join(
+        os.environ['ITHEMAL_HOME'],
+        'common',
+        'inputs',
+        'encoding.h',
+    )
+
+    classes = []
+    curr_class = []
+    classes.append(curr_class)
+    has_found_opnd = False
+
+    with open(filename) as f:
+        for line in f:
+            line = line.strip()
+            opnd_re = re.search(OPERAND_REGEXP, line)
+            comment_re = re.search(COMMENT_REGEXP, line)
+
+            if opnd_re:
+                has_found_opnd = True
+                curr_class.append(opnd_re.group(1))
+            elif comment_re and has_found_opnd:
+                curr_class = []
+                classes.append(curr_class)
+
+    return frozenset(map(frozenset, filter(bool, classes)))
 
 def read_offsets():
     offsets_filename = os.environ['ITHEMAL_HOME'] + '/common/inputs/offsets.txt'
