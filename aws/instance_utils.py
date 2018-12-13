@@ -26,7 +26,10 @@ def format_instance(instance):
 class AwsInstance(object):
     def __init__(self, identity, require_pem=False):
         self.identity = identity
-        self.pem_key = os.path.expanduser('~/.ssh/{}.pem'.format(identity))
+        if os.path.exists(identity):
+            self.pem_key = identity
+        else:
+            self.pem_key = os.path.expanduser('~/.ssh/{}.pem'.format(identity))
         if require_pem and not os.path.exists(os.path.expanduser(self.pem_key)):
             raise ValueError('Cannot create an AWS instance without the key at {}'.format(self.pem_key))
 
