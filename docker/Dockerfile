@@ -28,8 +28,7 @@ COPY docker_my.cnf /etc/my.cnf
 
 RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh && \
     sh /tmp/install_conda.sh -b -p /opt/conda && \
-    rm /tmp/install_conda.sh && \
-    echo 'export PATH=/opt/conda/bin:$PATH' > /etc/profile
+    rm /tmp/install_conda.sh
 
 ARG HOST_UID=999
 ENV HOST_UID $HOST_UID
@@ -44,10 +43,15 @@ WORKDIR /home/ithemal
 
 RUN /opt/conda/bin/conda create --name ithemal python=2.7
 RUN /opt/conda/bin/conda install -q -n ithemal -c pytorch pytorch torchvision
-RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotlib=2.2.3 psutil=5.4.7 tqdm scikit-learn=0.19 numpy=1.15 scipy=1.1.0 statistics=1.0.3.5 ipython-notebook ipython pandas pyqt pytest=3.8.1
+RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotlib=2.2.3 psutil=5.4.7 tqdm scikit-learn=0.19 numpy=1.15 scipy=1.1.0 statistics=1.0.3.5 ipython-notebook ipython pandas pyqt pytest=3.8.1 graphviz
+
+RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.zshrc
+RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.bashrc
+RUN echo 'source ~/.bashrc' >> /home/ithemal/.bash_profile
 
 RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz
 
-RUN touch /home/ithemal/.zshrc
-RUN bash -lc 'source activate ithemal; jupyter notebook --generate-config'
+RUN zsh -c 'source /home/ithemal/.zshrc; source activate ithemal; jupyter notebook --generate-config'
+
+RUN echo 'source activate ithemal' >> /home/ithemal/.zshrc
 RUN echo 'source activate ithemal' >> /home/ithemal/.bashrc
