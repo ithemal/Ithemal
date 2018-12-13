@@ -19,6 +19,9 @@ services:
        - type: bind
          source: ..
          target: /home/ithemal/ithemal
+       - type: bind
+         source: /tmp/.X11-unix
+         target: /tmp/.X11-unix
      image: ithemal:latest
      tty: true
      environment:
@@ -27,6 +30,7 @@ services:
        HISTFILE: /home/ithemal/ithemal/docker/.docker_bash_history
        ITHEMAL_HOME: /home/ithemal/ithemal
        DYNAMORIO_HOME: /home/ithemal/DynamoRIO-Linux-7.0.0-RC1
+       DISPLAY: ${HOSTNAME}:0
      ports:
        - "8888:8888"
 
