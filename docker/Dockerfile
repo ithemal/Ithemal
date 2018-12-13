@@ -15,7 +15,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         sqlite3                     \
         sudo                        \
         vim                         \
-        wget
+        wget                        \
+        zsh
 
 # install mysql
 RUN wget -O /tmp/RPM-GPG-KEY-mysql https://repo.mysql.com/RPM-GPG-KEY-mysql
@@ -36,7 +37,7 @@ ARG HOST_GID=999
 ENV HOST_GID $HOST_GID
 
 RUN groupadd -g $HOST_UID ithemal && \
-    useradd -m -r -u $HOST_GID -g ithemal ithemal
+    useradd -m -r -u $HOST_GID -g ithemal -s /bin/zsh ithemal
 
 USER ithemal
 WORKDIR /home/ithemal
@@ -47,5 +48,6 @@ RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotl
 
 RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz
 
+RUN touch /home/ithemal/.zshrc
 RUN bash -lc 'source activate ithemal; jupyter notebook --generate-config'
 RUN echo 'source activate ithemal' >> /home/ithemal/.bashrc
