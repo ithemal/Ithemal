@@ -56,4 +56,4 @@ if [[ -z "${CONTAINER}" ]]; then
     fi
 fi
 
-sudo docker exec -u "${USER}" -it "${CONTAINER}" bash -l
+sudo docker exec -u "${USER}" -it "${CONTAINER}" zsh -l
