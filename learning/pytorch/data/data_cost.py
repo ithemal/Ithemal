@@ -293,6 +293,8 @@ class DataInstructionEmbedding(DataCost):
 
                 block = ut.create_basicblock(row[0])
                 block.create_dependencies()
+                for (instr, intel) in zip(block.instrs, row[2].split('\n')):
+                    instr.intel = intel
 
 
                 if mode in times:
