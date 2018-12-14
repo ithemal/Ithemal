@@ -6,7 +6,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 import os
-sys.path.append(os.environ['ITHEMAL_HOME'] + '/learning/pytorch')
+sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
 import common_libs.utilities as ut
 import models.graph_models as md

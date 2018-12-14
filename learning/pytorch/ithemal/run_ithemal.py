@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.environ['ITHEMAL_HOME'] + '/learning/pytorch')
+sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 import mysql.connector
 import struct
 import word2vec as w2v
@@ -196,6 +196,3 @@ if __name__ == "__main__":
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
         graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
-
-
-
