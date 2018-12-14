@@ -173,8 +173,6 @@ class ModelHierarchicalRNN(ModelAbs):
         self.hidden_token = self.init_hidden()
         self.hidden_ins = self.init_hidden()
 
-
-
         ins_embeds = autograd.Variable(torch.zeros(len(item.x),self.embedding_size))
         for i, ins in enumerate(item.x):
 

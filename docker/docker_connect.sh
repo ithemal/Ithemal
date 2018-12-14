@@ -54,6 +54,8 @@ if [[ -z "${CONTAINER}" ]]; then
 	# hide the evidence
 	rmdir /tmp/.X11-unix
     fi
+
+    sudo docker exec -u ithemal "${CONTAINER}" bash -lc 'ithemal/build_all.sh'
 fi
 
 sudo docker exec -u "${USER}" -it "${CONTAINER}" zsh -l
