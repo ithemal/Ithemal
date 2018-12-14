@@ -184,6 +184,7 @@ def get_percentage_error(predicted, actual):
 
     return errors
 
+_global_sym_dict, _global_mem_start = get_sym_dict()
 
 #calculating static properties of instructions and basic blocks
 class Instruction:
@@ -207,6 +208,9 @@ class Instruction:
         num_parents = [parent.num for parent in self.parents]
         num_children = [child.num for child in self.children]
         print num_parents, num_children
+
+    def has_mem(self):
+        return any(operand >= _global_mem_start for operand in self.srcs + self.dsts)
 
 class BasicBlock:
 
@@ -299,6 +303,12 @@ class BasicBlock:
             self.find_defs(n)
             self.find_uses(n)
 
+    def find_leafs(self):
+        leafs = []
+        for instr in self.instrs:
+            if len(instr.parents) == 0:
+                leafs.append(instr)
+        return leafs
 
     def find_roots(self):
         roots = []
@@ -308,6 +318,42 @@ class BasicBlock:
 
         return roots
 
+    def gen_reorderings(self):
+        self.create_dependencies()
+
+        def _gen_reorderings(prefix, schedulable_instructions, mem_q):
+            mem_q = mem_q[:]
+            has_pending_mem = any(instr.has_mem() for instr in schedulable_instructions)
+            has_activated_mem = mem_q and all(parent in prefix for parent in mem_q[0].parents)
+
+            if has_activated_mem and not has_pending_mem:
+                schedulable_instructions.append(mem_q.pop(0))
+
+            if len(schedulable_instructions) == 0:
+                return [prefix]
+
+            reorderings = []
+            for i in range(len(schedulable_instructions)):
+                instr = schedulable_instructions[i]
+                # pop this instruction
+                rest_scheduleable_instructions = schedulable_instructions[:i] + schedulable_instructions[i+1:]
+                rest_prefix = prefix + [instr]
+
+                # add all activated children
+                for child in instr.children:
+                    if all(parent in rest_prefix for parent in child.parents):
+                        if not child.has_mem():
+                            rest_scheduleable_instructions.append(child)
+
+                reorderings.extend(_gen_reorderings(rest_prefix, rest_scheduleable_instructions, mem_q))
+
+            return reorderings
+
+        return _gen_reorderings(
+            [],
+            [i for i in self.find_leafs() if not i.has_mem()],
+            [i for i in self.instrs if i.has_mem()],
+        )
 
 def create_basicblock(tokens):
 
