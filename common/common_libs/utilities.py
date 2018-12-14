@@ -74,7 +74,7 @@ def execute_query(cnx, sql, fetch, multi=False):
         return None
 
 #data reading function
-def get_data(cnx, format, cols):
+def get_data(cnx, format, cols, limit=None):
     try:
         cur = cnx.cursor(buffered=True)
 
@@ -85,6 +85,9 @@ def get_data(cnx, format, cols):
         columns += ''
 
         sql = 'SELECT ' + columns + ' FROM code'
+        if limit is not None:
+            sql += ' LIMIT {}'.format(limit)
+
         print sql
         data = list()
         cur.execute(sql)
