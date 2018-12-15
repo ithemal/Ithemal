@@ -309,3 +309,21 @@ class DataInstructionEmbedding(DataCost):
 
         self.max_time = max(times)
         print len(self.raw_data), len(self.data)
+
+
+def load_dataset(embed_file, data_savefile=None):
+    data = dt.DataInstructionEmbedding()
+
+    if data_savefile is None:
+        cnx = ut.create_connection_from_config()
+        data.extract_data(cnx, format, ['code_id','code_intel'])
+        data.get_timing_data(cnx, arch)
+    else:
+        data.raw_data = torch.load(data_savefile)
+
+    data.set_embedding(embed_file)
+    data.read_meta_data()
+    data.prepare_data()
+    data.generate_datasets()
+
+    return data
