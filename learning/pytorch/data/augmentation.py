@@ -61,27 +61,28 @@ def gen_permutations(
 
     n_perms_gen = 0
 
-    with tqdm(total=desired_n_perms) as pbar:
-        while data and (desired_n_perms is None or n_perms_gen < desired_n_perms):
-            datum = data.pop()
-            block = datum.block
-            if max_block_size and len(block.instrs) > max_block_size:
-                continue
-            if max_perms_per_block:
-                reorderings = set() # type: Set[Sequence[ut.Instruction]]
-                n_tries = 0
-                while len(reorderings) < max_perms_per_block and n_tries < max_perms_per_block * 2:
-                    m_reorderings = block.gen_reorderings(single_perm=True)
-                    assert len(m_reorderings) == 1
-                    reorderings.add(tuple(m_reorderings[0]))
-                    n_tries += 1
-            else:
-                reorderings = set(map(tuple, block.gen_reorderings()))
-            if min_perms_per_block and len(reorderings) < min_perms_per_block:
-                continue
-            perms[datum] = reorderings
-            n_perms_gen += len(reorderings)
-            pbar.update(len(reorderings))
+    pbar = tqdm(total=(desired_n_perms or len(data)))
+    while data and (desired_n_perms is None or n_perms_gen < desired_n_perms):
+        datum = data.pop()
+        block = datum.block
+        if max_block_size and len(block.instrs) > max_block_size:
+            continue
+        if max_perms_per_block:
+            reorderings = set() # type: Set[Sequence[ut.Instruction]]
+            n_tries = 0
+            while len(reorderings) < max_perms_per_block and n_tries < max_perms_per_block * 2:
+                m_reorderings = block.gen_reorderings(single_perm=True)
+                assert len(m_reorderings) == 1
+                reorderings.add(tuple(m_reorderings[0]))
+                n_tries += 1
+        else:
+            reorderings = set(map(tuple, block.gen_reorderings()))
+        if min_perms_per_block and len(reorderings) < min_perms_per_block:
+            continue
+        perms[datum] = reorderings
+        n_perms_gen += len(reorderings)
+        pbar.update(len(reorderings) if desired_n_perms else 1)
+    pbar.close()
 
     return perms
 
