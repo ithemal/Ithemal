@@ -86,10 +86,10 @@ def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) 
         CONSTRAINT {}_idfk_1 FOREIGN KEY (code_id) REFERENCES code(code_id)
     );'''.format(table_name, table_name))
 
-    def format_insert_command(values):
+    def format_insert_command(values): # List[str] -> str
         return 'INSERT INTO {} (code_id, code_intel, code_token) VALUES ({});'.format(
             table_name,
-            values,
+            ','.join(values),
         )
 
     for dataitem in tqdm(perms):
@@ -103,11 +103,11 @@ def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) 
                 tokens.extend(i.dsts)
                 tokens.append(-1)
 
-            values = '({}, {}, {})'.format(
-                dataitem.code_id,
+            values = [
+                str(dataitem.code_id),
                 "'{}'".format(','.join(map(str, tokens))),
                 "'{}'".format('\n'.join(i.intel for i in perm)),
-            )
+            ]
             sql_commands.append(format_insert_command(values))
 
     return sql_commands
