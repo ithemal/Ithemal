@@ -37,13 +37,8 @@ def read_dataset(data_file, embedding_file): # type: (str, str) -> dt.DataInstru
 def memory_trace(instrs): # type: (List[ut.Instruction]) -> List[ut.Instruction]
     return [i for i in instrs if i.has_mem()]
 
-_DIRNAME = os.path.abspath(os.path.dirname(__file__)) # type: str
-_DATA_DIR = os.path.join(_DIRNAME, os.pardir, 'input', 'augmentations') # type: str
-
-try:
-    os.makedirs(_DATA_DIR)
-except OSError:
-    pass
+_DIRNAME = os.path.abspath(os.path.dirname(__file__))
+_DATA_DIR = os.path.join(_DIRNAME, os.pardir, 'inputs', 'augmentations')
 
 PermutationMap = Dict[dt.DataItem, Iterable[Sequence[ut.Instruction]]]
 
