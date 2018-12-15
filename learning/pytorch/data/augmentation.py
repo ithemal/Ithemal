@@ -74,16 +74,22 @@ def save_object(obj, name): # type: (Any, str) -> None
         pickle.dump(obj, f)
 
 def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) -> List[str]
-    create_table_sql = '''CREATE TABLE {} (
-    perm_id int(32) NOT NULL AUTO_INCREMENT,
-    code_id int(32) NOT NULL,
-    code_intel TEXT NOT NULL,
-    code_token TEXT NOT NULL,
-    PRIMARY KEY (perm_id),
-    CONSTRAINT {}_idfk_1 FOREIGN KEY (code_id) REFERENCES code(code_id)
-    );'''.format(table_name, table_name)
+    sql_commands = []
+    sql_commands.append('''CREATE TABLE {} (
+        perm_id int(32) NOT NULL AUTO_INCREMENT,
+        code_id int(32) NOT NULL,
+        code_intel TEXT NOT NULL,
+        code_token TEXT NOT NULL,
+        PRIMARY KEY (perm_id),
+        CONSTRAINT {}_idfk_1 FOREIGN KEY (code_id) REFERENCES code(code_id)
+    );'''.format(table_name, table_name))
 
-    values = []
+    def format_insert_command(values):
+        return 'INSERT INTO {} (code_id, code_intel, code_token) VALUES ({});'.format(
+            table_name,
+            values,
+        )
+
     for dataitem in tqdm(perms):
         for perm in perms[dataitem]:
             tokens = []
@@ -95,19 +101,14 @@ def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) 
                 tokens.extend(i.dsts)
                 tokens.append(-1)
 
-            values_str = '({}, {}, {})'.format(
+            values = '({}, {}, {})'.format(
                 dataitem.code_id,
                 "'{}'".format(','.join(map(str, tokens))),
                 "'{}'".format('\n'.join(i.intel for i in perm)),
             )
-            values.append(values_str)
+            sql_commands.append(format_insert_command(values))
 
-    populate_table_sql = 'INSERT INTO {} (code_id, code_intel, code_token) VALUES ({});'.format(
-        table_name,
-        ','.join(values),
-    )
-
-    return [create_table_sql, populate_table_sql]
+    return sql_commands
 
 def execute_sql(commands): # type: (List[str]) -> None
     cnx = ut.create_connection()
