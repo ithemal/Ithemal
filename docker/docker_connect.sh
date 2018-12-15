@@ -58,4 +58,4 @@ if [[ -z "${CONTAINER}" ]]; then
     sudo docker exec -u ithemal "${CONTAINER}" bash -lc 'ithemal/build_all.sh'
 fi
 
-sudo docker exec -u "${USER}" -it "${CONTAINER}" zsh -l
+sudo docker exec -u "${USER}" -it "${CONTAINER}" bash -l

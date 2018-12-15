@@ -17,8 +17,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 	sudo                        \
 	tmux                        \
 	vim                         \
-	wget                        \
-	zsh
+	wget
 
 # install mysql
 RUN wget -O /tmp/RPM-GPG-KEY-mysql https://repo.mysql.com/RPM-GPG-KEY-mysql
@@ -67,17 +66,19 @@ ARG HOST_UID=1000
 ENV HOST_UID $HOST_UID
 
 RUN groupadd -g 1000 ithemal
-RUN useradd -m -r -u $HOST_UID -g ithemal -s /bin/zsh ithemal
+RUN useradd -m -r -u $HOST_UID -g ithemal ithemal
 USER ithemal
 WORKDIR /home/ithemal
 
-RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.zshrc
+# non-login shell
+RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.bash_profile
+RUN echo 'source activate ithemal' >> /home/ithemal/.bash_profile
+
+# login shell
 RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.bashrc
-RUN echo 'source ~/.bashrc' >> /home/ithemal/.bash_profile
-RUN echo 'source activate ithemal' >> /home/ithemal/.zshrc
 RUN echo 'source activate ithemal' >> /home/ithemal/.bashrc
 
-RUN zsh -c 'source /home/ithemal/.zshrc; source activate ithemal; pip install --upgrade pyhamcrest pip; jupyter notebook --generate-config'
+RUN bash -lc 'pip install --upgrade --user pyhamcrest pip; jupyter notebook --generate-config'
 
 COPY notebook_config.patch /tmp/_docker_notebook_conf.patch
 RUN patch .jupyter/jupyter_notebook_config.py < /tmp/_docker_notebook_conf.patch
