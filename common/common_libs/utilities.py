@@ -374,8 +374,8 @@ class BasicBlock:
         return roots
 
 
-    def draw(self, file_name=None, view=True):
-        if not file_name:
+    def draw(self, to_file=False, file_name=None, view=True):
+        if to_file and not file_name:
             file_name = tempfile.NamedTemporaryFile(suffix='.gv').name
 
         dot = Digraph()
@@ -384,8 +384,11 @@ class BasicBlock:
             for child in instr.children:
                 dot.edge(str(id(instr)), str(id(child)))
 
-        dot.render(file_name, view=view)
-        return file_name
+        if to_file:
+            dot.render(file_name, view=view)
+            return dot, file_name
+        else:
+            return dot
 
 
 def create_basicblock(tokens):
