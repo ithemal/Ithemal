@@ -185,6 +185,5 @@ if __name__ == "__main__":
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
         graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
-
-
-
+    else:
+        raise ValueError('Unknown mode "{}"'.format(args.mode))
