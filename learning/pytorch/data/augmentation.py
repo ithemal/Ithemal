@@ -139,7 +139,7 @@ def main(): # type: () -> None
     sql_commands = gen_sql_commands_of_perms(perms, args.table_name)
 
     if args.store_sql:
-        with open(os.path.join(_DATA_DIR, 'table_{}.pkl'.format(time_str())), 'w') as f:
+        with open(os.path.join(_DATA_DIR, 'table_{}.sql'.format(time_str())), 'w') as f:
             print('\n'.join(sql_commands), file=f)
 
     if args.execute_sql:
