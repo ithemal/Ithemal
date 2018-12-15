@@ -51,8 +51,9 @@ def time_str(): # type: () -> str
 
 def gen_permutations(full_data, max_block_size=10): # type: (dt.DataInstructionEmbedding, int) -> PermutationMap
     data = set(full_data.data)
-    n_perms_gen = 0
     perms = {} # type: PermutationMap
+
+    n_perms_gen = 0
     desired_n_perms = len(full_data.data)
 
     with tqdm(total=desired_n_perms) as pbar:
