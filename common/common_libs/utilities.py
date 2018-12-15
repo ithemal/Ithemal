@@ -309,6 +309,61 @@ class BasicBlock:
             self.find_defs(n)
             self.find_uses(n)
 
+    def get_dfs(self):
+        dfs = collections.defaultdict(set)
+
+        for instr in self.instrs[::-1]:
+            frontier = {instr}
+            while frontier:
+                n = frontier.pop()
+                if n in dfs:
+                    dfs[instr] |= dfs[n]
+                    continue
+
+                for c in n.children:
+                    if c in dfs[instr] or c in frontier:
+                        continue
+                    frontier.add(c)
+                dfs[instr].add(n)
+
+        return dfs
+
+    def transitive_closure(self):
+        dfs = self.get_dfs()
+        for instr in self.instrs:
+            transitive_children = set(n for c in instr.children for n in dfs[c])
+            instr.children = list(transitive_children)
+            for child in instr.children:
+                if instr not in child.parents:
+                    child.parents.append(instr)
+
+    def transitive_reduction(self):
+        dfs = self.get_dfs()
+        for instr in self.instrs:
+            transitive_children = set()
+            for i, child in enumerate(instr.children):
+                for child_p in instr.children[i+1:]:
+                    if child_p in dfs[child]:
+                        transitive_children.add(child_p)
+
+            for child in transitive_children:
+                instr.children.remove(child)
+                child.parents.remove(instr)
+
+    def random_forward_edges(self, frequency):
+        '''Add forward-facing edges at random to the instruction graph.
+
+        There are n^2/2 -1 considered edges (where n is the number of
+        instructions), so to add 5 edges in expectation, one would
+        provide frequency=5/(n^2/2-1)
+
+        '''
+        for head_idx, head_instr in enumerate(self.instrs[:-1]):
+            for tail_instr in self.instrs[head_idx+1:]:
+                if random.random() < frequency:
+                    if tail_instr not in head_instr.children:
+                        head_instr.children.append(tail_instr)
+                        tail_instr.parents.append(head_instr)
 
     def find_roots(self):
         roots = []
