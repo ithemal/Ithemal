@@ -126,6 +126,7 @@ def main(): # type: () -> None
     parser.add_argument('--save-perms', action='store_true', default=False)
     parser.add_argument('--execute-sql', action='store_true', default=False)
     parser.add_argument('--store-sql', action='store_true', default=False)
+    parser.add_argument('--optimize-sql', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -137,6 +138,15 @@ def main(): # type: () -> None
             pickle.dump(perms, f)
 
     sql_commands = gen_sql_commands_of_perms(perms, args.table_name)
+
+    if args.optimize_sql:
+        sql_commands.insert(0, 'SET autocommit=0;')
+        sql_commands.insert(1, 'SET unique_checks=0;')
+        sql_commands.insert(2, 'SET foreign_key_checks=0;')
+        sql_commands.append('COMMIT;')
+        sql_commands.append('SET unique_checks=1;')
+        sql_commands.append('SET foreign_key_checks=1;')
+        sql_commands.append('SET autocommit=1;')
 
     if args.store_sql:
         with open(os.path.join(_DATA_DIR, 'table_{}.sql'.format(time_str())), 'w') as f:
