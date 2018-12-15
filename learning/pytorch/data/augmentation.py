@@ -49,21 +49,35 @@ def time_str(): # type: () -> str
         _time_str = time.strftime('%Y-%m-%d.%H-%M-%S')
     return _time_str
 
-def gen_permutations(full_data, max_block_size, min_perms_per_block): # type: (dt.DataInstructionEmbedding, int, int) -> PermutationMap
+def gen_permutations(
+        full_data,
+        desired_n_perms=None,
+        max_block_size=None,
+        min_perms_per_block=None,
+        max_perms_per_block=None
+): # type: (dt.DataInstructionEmbedding, Optional[int], Optional[int], Optional[int], Optional[int] -> PermutationMap
     data = set(full_data.data)
     perms = {} # type: PermutationMap
 
     n_perms_gen = 0
-    desired_n_perms = len(full_data.data)
 
     with tqdm(total=desired_n_perms) as pbar:
-        while n_perms_gen < desired_n_perms:
+        while data and (desired_n_perms is None or n_perms_gen < desired_n_perms):
             datum = data.pop()
             block = datum.block
-            if len(block.instrs) > max_block_size:
+            if max_block_size and len(block.instrs) > max_block_size:
                 continue
-            reorderings = set(map(tuple, block.gen_reorderings()))
-            if len(reorderings) < min_perms_per_block:
+            if max_perms_per_block:
+                reorderings = set() # type: Set[Sequence[ut.Instruction]]
+                n_tries = 0
+                while len(reorderings) < max_perms_per_block and n_tries < max_perms_per_block * 2:
+                    m_reorderings = block.gen_reorderings(single_perm=True)
+                    assert len(m_reorderings) == 1
+                    reorderings.add(tuple(m_reorderings[0]))
+                    n_tries += 1
+            else:
+                reorderings = set(map(tuple, block.gen_reorderings()))
+            if min_perms_per_block and len(reorderings) < min_perms_per_block:
                 continue
             perms[datum] = reorderings
             n_perms_gen += len(reorderings)
@@ -124,8 +138,10 @@ def main(): # type: () -> None
     parser.add_argument('--embedding', type=str, required=True, help='Token embedding file to use (e.g. inputs/embeddings/code_delim.emb)')
     parser.add_argument('--table-name', type=str, required=True, help='Table to write permutations to (will be freshly created)')
 
-    parser.add_argument('--max-block-size', type=int, default=9)
-    parser.add_argument('--min-perms-per-block', type=int, default=3)
+    parser.add_argument('--desired-n-perms', default='all')
+    parser.add_argument('--max-block-size', type=int, default=None)
+    parser.add_argument('--min-perms-per-block', type=int, default=None)
+    parser.add_argument('--max-perms-per-block', type=int, default=None)
 
     parser.add_argument('--save-perms', action='store_true', default=False)
     parser.add_argument('--execute-sql', action='store_true', default=False)
@@ -135,7 +151,20 @@ def main(): # type: () -> None
     args = parser.parse_args()
 
     data = read_dataset(args.data, args.embedding)
-    perms = gen_permutations(data, args.max_block_size, args.min_perms_per_block)
+    if args.desired_n_perms == 'all':
+        desired_n_perms = None
+    elif args.desired_n_perms == 'equal':
+        desired_n_perms = len(data.data)
+    else:
+        desired_n_perms = int(args.desired_n_perms)
+
+    perms = gen_permutations(
+        data,
+        desired_n_perms=desired_n_perms,
+        max_block_size=args.max_block_size,
+        min_perms_per_block=args.min_perms_per_block,
+        max_perms_per_block=args.max_perms_per_block,
+    )
 
     if args.save_perms:
         with open(os.path.join(_DATA_DIR, 'permutations_{}.pkl'.format(time_str())), 'wb') as f:
