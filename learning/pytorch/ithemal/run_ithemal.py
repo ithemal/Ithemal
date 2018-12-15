@@ -17,7 +17,6 @@ import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
 
-
 def save_data(database, config, format, savefile, arch):
 
     cnx = ut.create_connection_from_config(database=database, config_file=config)
@@ -30,17 +29,8 @@ def save_data(database, config, format, savefile, arch):
     torch.save(data.raw_data, savefile)
 
 
-
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
-
-    data = dt.DataInstructionEmbedding()
-
-    data.raw_data = torch.load(data_savefile)
-    data.set_embedding(embed_file)
-    data.read_meta_data()
-
-    data.prepare_data()
-    data.generate_datasets()
+    dt.load_dataset(embed_file, data_savefile=data_savefile)
 
     #regression
     num_classes = 1
