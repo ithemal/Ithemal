@@ -1,9 +1,12 @@
+import collections
+from graphviz import Digraph
 import mysql.connector
 import struct
 import sys
 from mysql.connector import errorcode
 import re
 import os
+import tempfile
 
 
 #mysql specific functions
@@ -204,6 +207,17 @@ class Instruction:
         num_children = [child.num for child in self.children]
         print num_parents, num_children
 
+    def __str__(self):
+        rhs = '{}({})'.format(self.opcode, ', '.join(map(str, self.srcs)))
+
+        if len(self.dsts) == 0:
+            return rhs
+        elif len(self.dsts) == 1:
+            return '{} <- {}'.format(self.dsts[0], rhs)
+        else:
+            return '[{}] <- {}'.format(', '.join(map(str, self.dsts)), rhs)
+
+
 class BasicBlock:
 
     def __init__(self, instrs):
@@ -303,6 +317,20 @@ class BasicBlock:
                 roots.append(instr)
 
         return roots
+
+
+    def draw(self, file_name=None, view=True):
+        if not file_name:
+            file_name = tempfile.NamedTemporaryFile(suffix='.gv').name
+
+        dot = Digraph()
+        for instr in self.instrs:
+            dot.node(str(id(instr)), str(instr))
+            for child in instr.children:
+                dot.edge(str(id(instr)), str(id(child)))
+
+        dot.render(file_name, view=view)
+        return file_name
 
 
 def create_basicblock(tokens):
