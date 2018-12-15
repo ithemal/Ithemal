@@ -2,9 +2,9 @@ import mysql.connector
 import struct
 import sys
 from mysql.connector import errorcode
+import random
 import re
 import os
-
 
 #mysql specific functions
 def create_connection(database=None, user=None, password=None, port=None):
@@ -310,6 +310,7 @@ class BasicBlock:
         return leafs
 
     def find_roots(self):
+
         roots = []
         for instr in self.instrs:
             if len(instr.children) == 0:
@@ -317,7 +318,7 @@ class BasicBlock:
 
         return roots
 
-    def gen_reorderings(self):
+    def gen_reorderings(self, single_perm=False):
         self.create_dependencies()
 
         def _gen_reorderings(prefix, schedulable_instructions, mem_q):
@@ -332,7 +333,7 @@ class BasicBlock:
                 return [prefix]
 
             reorderings = []
-            for i in range(len(schedulable_instructions)):
+            def process_index(i):
                 instr = schedulable_instructions[i]
                 # pop this instruction
                 rest_scheduleable_instructions = schedulable_instructions[:i] + schedulable_instructions[i+1:]
@@ -345,6 +346,12 @@ class BasicBlock:
                             rest_scheduleable_instructions.append(child)
 
                 reorderings.extend(_gen_reorderings(rest_prefix, rest_scheduleable_instructions, mem_q))
+
+            if single_perm:
+                process_index(random.randrange(len(schedulable_instructions)))
+            else:
+                for i in range(len(schedulable_instructions)):
+                    process_index(i)
 
             return reorderings
 
