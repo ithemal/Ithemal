@@ -129,6 +129,7 @@ def main(): # type: () -> None
 
     data = read_dataset(args.data, args.embedding)
     perms = gen_permutations(data, max_block_size=args.max_block_size)
+
     if args.save_perms:
         with open(os.path.join(_DATA_DIR, 'permutations_{}.pkl'.format(time_str())), 'wb') as f:
             pickle.dump(perms, f)
