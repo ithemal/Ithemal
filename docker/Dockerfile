@@ -35,7 +35,8 @@ RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Mi
 RUN /opt/conda/bin/conda create --name ithemal python=2.7
 RUN /opt/conda/bin/conda install -q -n ithemal -c pytorch pytorch torchvision
 RUN /opt/conda/bin/conda install -q -n ithemal \
-	cython \
+        cython \
+        graphviz \
 	ipython \
 	ipython-notebook \
 	matplotlib=2.2.3 \
