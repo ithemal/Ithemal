@@ -49,7 +49,7 @@ def time_str(): # type: () -> str
         _time_str = time.strftime('%Y-%m-%d.%H-%M-%S')
     return _time_str
 
-def gen_permutations(full_data, max_block_size=10): # type: (dt.DataInstructionEmbedding, int) -> PermutationMap
+def gen_permutations(full_data, max_block_size, min_perms_per_block): # type: (dt.DataInstructionEmbedding, int, int) -> PermutationMap
     data = set(full_data.data)
     perms = {} # type: PermutationMap
 
@@ -63,6 +63,8 @@ def gen_permutations(full_data, max_block_size=10): # type: (dt.DataInstructionE
             if len(block.instrs) > max_block_size:
                 continue
             reorderings = set(map(tuple, block.gen_reorderings()))
+            if len(reorderings) < min_perms_per_block:
+                continue
             perms[datum] = reorderings
             n_perms_gen += len(reorderings)
             pbar.update(len(reorderings))
@@ -121,7 +123,9 @@ def main(): # type: () -> None
     parser.add_argument('--data', type=str, required=True, help='Block data file to use (e.g. inputs/data/time_skylake.data')
     parser.add_argument('--embedding', type=str, required=True, help='Token embedding file to use (e.g. inputs/embeddings/code_delim.emb)')
     parser.add_argument('--table-name', type=str, required=True, help='Table to write permutations to (will be freshly created)')
-    parser.add_argument('--max-block-size', type=int, default=10)
+
+    parser.add_argument('--max-block-size', type=int, default=9)
+    parser.add_argument('--min-perms-per-block', type=int, default=3)
 
     parser.add_argument('--save-perms', action='store_true', default=False)
     parser.add_argument('--execute-sql', action='store_true', default=False)
@@ -131,7 +135,7 @@ def main(): # type: () -> None
     args = parser.parse_args()
 
     data = read_dataset(args.data, args.embedding)
-    perms = gen_permutations(data, max_block_size=args.max_block_size)
+    perms = gen_permutations(data, args.max_block_size, args.min_perms_per_block)
 
     if args.save_perms:
         with open(os.path.join(_DATA_DIR, 'permutations_{}.pkl'.format(time_str())), 'wb') as f:
