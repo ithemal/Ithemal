@@ -32,6 +32,11 @@ class GraphNN(nn.Module):
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
 
+        #lstm - for sequential model
+        self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
+        self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
+
     def set_learnable_embedding(self, mode, dictsize, seed = None):
 
         self.mode = mode
@@ -137,6 +142,30 @@ class GraphNN(nn.Module):
 
         return instr.hidden
 
+    def create_residual_lstm(self, x, block):
+
+        hidden_token  = self.init_hidden()
+        hidden_ins = self.init_hidden()
+
+        ins_embeds = autograd.Variable(torch.zeros(len(x),self.embedding_size))
+        for i, ins in enumerate(x):
+
+            token_embeds = block.instrs[i].tokens
+
+            #token_embeds = torch.FloatTensor(ins)
+            token_embeds_lstm = token_embeds.unsqueeze(1)
+            out_token, hidden_token = self.lstm_token_seq(token_embeds_lstm,hidden_token)
+            ins_embeds[i] = hidden_token[0].squeeze()
+
+        ins_embeds_lstm = ins_embeds.unsqueeze(1)
+
+        out_ins, hidden_ins = self.lstm_ins_seq(ins_embeds_lstm, hidden_ins)
+
+        seq_ret = hidden_ins[0].squeeze()
+
+        return seq_ret
+
+
     def forward(self, item):
 
 
@@ -145,9 +174,17 @@ class GraphNN(nn.Module):
 
         self.init_bblstm(item)
 
-        hidden = self.create_graphlstm(item.x, item.block)
+        graph = self.create_graphlstm(item.x, item.block)
+        sequential = self.create_residual_lstm(item.x, item.block)
+        
+        final = self.linear(graph).squeeze() + self.linear_seq(sequential).squeeze()
 
-        return self.linear(hidden).squeeze()
+        #final = self.reduction(graph, sequential)
+        #return self.linear(final).squeeze()
+
+        #print final.item()
+
+        return final
 
 
 
