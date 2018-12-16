@@ -347,15 +347,15 @@ class BasicBlock:
     def transitive_reduction(self):
         dfs = self.get_dfs()
         for instr in self.instrs:
-            transitive_children = set()
-            for i, child in enumerate(instr.children):
-                for child_p in instr.children[i+1:]:
-                    if child_p in dfs[child]:
-                        transitive_children.add(child_p)
 
-            for child in transitive_children:
-                instr.children.remove(child)
-                child.parents.remove(instr)
+            transitively_reachable_children = set()
+            for child in instr.children:
+                transitively_reachable_children |= dfs[child] - {child}
+
+            for child in transitively_reachable_children:
+                if child in instr.children:
+                    instr.children.remove(child)
+                    child.parents.remove(instr)
 
     def random_forward_edges(self, frequency):
         '''Add forward-facing edges at random to the instruction graph.
