@@ -365,12 +365,21 @@ class BasicBlock:
         provide frequency=5/(n^2/2-1)
 
         '''
+        n_edges_added = 0
         for head_idx, head_instr in enumerate(self.instrs[:-1]):
             for tail_instr in self.instrs[head_idx+1:]:
                 if random.random() < frequency:
                     if tail_instr not in head_instr.children:
                         head_instr.children.append(tail_instr)
                         tail_instr.parents.append(head_instr)
+                        n_edges_added += 1
+
+        return n_edges_added
+
+    def clear_edges(self):
+        for instr in self.instrs:
+            instr.parents = []
+            instr.children = []
 
     def find_leafs(self):
         leafs = []
