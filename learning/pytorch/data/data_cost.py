@@ -258,8 +258,6 @@ class DataTokenEmbedding(DataCost):
         print len(self.raw_data), len(self.data)
 
 
-
-
 class DataInstructionEmbedding(DataCost):
 
     def __init__(self, data=None):
@@ -311,11 +309,14 @@ class DataInstructionEmbedding(DataCost):
         print len(self.raw_data), len(self.data)
 
 
-def load_dataset(embed_file, data_savefile=None):
-    data = dt.DataInstructionEmbedding()
+def load_dataset(embed_file, data_savefile=None, arch=None, format='text'):
+    data = DataInstructionEmbedding()
 
     if data_savefile is None:
-        cnx = ut.create_connection_from_config()
+        if arch is None:
+            raise ValueError('Must provide one of data_savefile or arch')
+
+        cnx = ut.create_connection()
         data.extract_data(cnx, format, ['code_id','code_intel'])
         data.get_timing_data(cnx, arch)
     else:
