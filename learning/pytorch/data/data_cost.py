@@ -9,6 +9,7 @@ from tqdm import tqdm
 from data import Data
 import matplotlib.pyplot as plt
 import statistics
+import pandas as pd
 
 import sys
 sys.path.append('..')
@@ -192,28 +193,22 @@ class DataCost(Data):
 
         data = []
 
+        sql = 'SELECT code_id, AVG(time) as time FROM times WHERE arch={} AND kind="actual" GROUP BY code_id'.format(arch)
+        times = pd.read_sql(sql, cnx).set_index('code_id')
+
         #assumes code_token and code_id
         for row in tqdm(self.raw_data):
 
             if len(row[0]) == 0:
                 continue
 
-            code_id = row[1]
-
-            sql = 'SELECT kind, time from times where code_id=' + str(code_id) + ' and arch=' + str(arch)
-
-            values = []
-            times = ut.execute_query(cnx,sql, True)
-            for time in times:
-                if time[0] == 'actual':
-                    values.append(time[1])
-
-            if len(values) == 0:
+            try:
+                avg_time = times.loc[row[1]]['time']
+            except KeyError:
                 continue
 
-            final_value = statistics.mean(values)
+            data.append((row[0],avg_time,row[2],row[1]))
 
-            data.append((row[0],final_value,row[2],row[1]))
 
 
         self.raw_data = data
