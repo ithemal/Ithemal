@@ -212,14 +212,14 @@ class Instruction:
         print num_parents, num_children
 
     def __str__(self):
-        rhs = '{}({})'.format(self.opcode, ', '.join(map(str, self.srcs)))
+        rhs = '{}({})'.format(_global_sym_dict[self.opcode], ', '.join(map(_global_sym_dict.get, self.srcs)))
 
         if len(self.dsts) == 0:
             return rhs
         elif len(self.dsts) == 1:
-            return '{} <- {}'.format(self.dsts[0], rhs)
+            return '{} <- {}'.format(_global_sym_dict[self.dsts[0]], rhs)
         else:
-            return '[{}] <- {}'.format(', '.join(map(str, self.dsts)), rhs)
+            return '[{}] <- {}'.format(', '.join(map(lambda x: _global_sym_dict.get(x, 'MEM'), self.dsts)), rhs)
 
     def has_mem(self):
         return any(operand >= _global_mem_start for operand in self.srcs + self.dsts)
