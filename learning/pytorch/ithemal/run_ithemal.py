@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.environ['ITHEMAL_HOME'] + '/learning/pytorch')
+sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 import mysql.connector
 import struct
 import word2vec as w2v

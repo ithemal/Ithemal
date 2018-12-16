@@ -4,10 +4,10 @@ import mysql.connector
 import struct
 import sys
 from mysql.connector import errorcode
+import random
 import re
 import os
 import tempfile
-
 
 #mysql specific functions
 def create_connection(database=None, user=None, password=None, port=None):
@@ -73,7 +73,7 @@ def execute_query(cnx, sql, fetch, multi=False):
         return None
 
 #data reading function
-def get_data(cnx, format, cols):
+def get_data(cnx, format, cols, limit=None):
     try:
         cur = cnx.cursor(buffered=True)
 
@@ -84,6 +84,9 @@ def get_data(cnx, format, cols):
         columns += ''
 
         sql = 'SELECT ' + columns + ' FROM code'
+        if limit is not None:
+            sql += ' LIMIT {}'.format(limit)
+
         print sql
         data = list()
         cur.execute(sql)
@@ -183,6 +186,7 @@ def get_percentage_error(predicted, actual):
 
     return errors
 
+_global_sym_dict, _global_mem_start = get_sym_dict()
 
 #calculating static properties of instructions and basic blocks
 class Instruction:
@@ -216,6 +220,9 @@ class Instruction:
             return '{} <- {}'.format(self.dsts[0], rhs)
         else:
             return '[{}] <- {}'.format(', '.join(map(str, self.dsts)), rhs)
+
+    def has_mem(self):
+        return any(operand >= _global_mem_start for operand in self.srcs + self.dsts)
 
 
 class BasicBlock:
@@ -365,7 +372,15 @@ class BasicBlock:
                         head_instr.children.append(tail_instr)
                         tail_instr.parents.append(head_instr)
 
+    def find_leafs(self):
+        leafs = []
+        for instr in self.instrs:
+            if len(instr.parents) == 0:
+                leafs.append(instr)
+        return leafs
+
     def find_roots(self):
+
         roots = []
         for instr in self.instrs:
             if len(instr.children) == 0:
@@ -373,6 +388,48 @@ class BasicBlock:
 
         return roots
 
+    def gen_reorderings(self, single_perm=False):
+        self.create_dependencies()
+
+        def _gen_reorderings(prefix, schedulable_instructions, mem_q):
+            mem_q = mem_q[:]
+            has_pending_mem = any(instr.has_mem() for instr in schedulable_instructions)
+            has_activated_mem = mem_q and all(parent in prefix for parent in mem_q[0].parents)
+
+            if has_activated_mem and not has_pending_mem:
+                schedulable_instructions.append(mem_q.pop(0))
+
+            if len(schedulable_instructions) == 0:
+                return [prefix]
+
+            reorderings = []
+            def process_index(i):
+                instr = schedulable_instructions[i]
+                # pop this instruction
+                rest_scheduleable_instructions = schedulable_instructions[:i] + schedulable_instructions[i+1:]
+                rest_prefix = prefix + [instr]
+
+                # add all activated children
+                for child in instr.children:
+                    if all(parent in rest_prefix for parent in child.parents):
+                        if not child.has_mem():
+                            rest_scheduleable_instructions.append(child)
+
+                reorderings.extend(_gen_reorderings(rest_prefix, rest_scheduleable_instructions, mem_q))
+
+            if single_perm:
+                process_index(random.randrange(len(schedulable_instructions)))
+            else:
+                for i in range(len(schedulable_instructions)):
+                    process_index(i)
+
+            return reorderings
+
+        return _gen_reorderings(
+            [],
+            [i for i in self.find_leafs() if not i.has_mem()],
+            [i for i in self.instrs if i.has_mem()],
+        )
 
     def draw(self, to_file=False, file_name=None, view=True):
         if to_file and not file_name:
