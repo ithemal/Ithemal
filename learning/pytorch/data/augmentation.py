@@ -120,8 +120,8 @@ def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) 
 
             values = [
                 str(dataitem.code_id),
-                "'{}'".format(','.join(map(str, tokens))),
                 "'{}'".format('\n'.join(i.intel for i in perm)),
+                "'{}'".format(','.join(map(str, tokens))),
             ]
             sql_commands.append(format_insert_command(values))
 
