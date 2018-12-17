@@ -29,7 +29,7 @@ def save_data(database, config, format, savefile, arch):
     data.get_timing_data(cnx, arch)
 
     torch.save(data.raw_data, savefile)
-    
+
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     data = dt.DataInstructionEmbedding()
@@ -51,7 +51,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
     train = tr.Train(model, data, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
-           
+
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
     train.print_fn = train.print_final
@@ -66,19 +66,19 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
         print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
 
     model.share_memory()
-        
+
     mp_config = MPConfig(args.trainers, args.threads)
 
     partition_size = len(data.train) // mp_config.trainers
-    
-    processes = []
-  
+
+
     for i in range(args.epochs):
+        processes = []
         i = restored_epoch + 1
 
         with mp_config :
             for rank in range(mp_config.trainers):
-                
+
                 mp_config.set_env(rank)
 
                 # XXX: this drops data on the floor, namely the tail of the file
@@ -89,10 +89,10 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
                 p.start()
                 print("Starting process %d" % (rank,))
                 processes.append(p)
-         
+
         for p in processes:
             p.join()
-        
+
         if args.savefile is not None :
             train.save_checkpoint(i, 0, args.savefile)
 
@@ -168,7 +168,7 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
 
-    train = tr.Train(model, data,  batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)    
+    train = tr.Train(model, data,  batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument('--config',action='store',type=str)
 
     parser.add_argument('--epochs',action='store',type=int,default=1)
-    
+
     parser.add_argument('--trainers',action='store',type=int,default=1)
     parser.add_argument('--threads',action='store',type=int, default=4)
     parser.add_argument('--batch-size',action='store',type=int, default=100)
@@ -235,6 +235,3 @@ if __name__ == "__main__":
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
         graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
-
-
-
