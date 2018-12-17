@@ -32,7 +32,6 @@ def save_data(database, config, format, savefile, arch):
     
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
-
     data = dt.DataInstructionEmbedding()
 
     data.raw_data = torch.load(data_savefile)

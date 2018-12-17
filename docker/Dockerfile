@@ -2,20 +2,22 @@ FROM debian:stretch
 
 RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        libsqlite3-dev              \
-        build-essential             \
-        cmake                       \
-        coreutils                   \
-        curl                        \
-        git                         \
-        gnupg                       \
-        man                         \
-        python-dev                  \
-        qt5-default                 \
-        sqlite3                     \
-        sudo                        \
-        vim                         \
-        wget
+	libsqlite3-dev              \
+	locales                     \
+	build-essential             \
+	cmake                       \
+	coreutils                   \
+	curl                        \
+	git                         \
+	gnupg                       \
+	man                         \
+	python-dev                  \
+	qt5-default                 \
+	sqlite3                     \
+	sudo                        \
+	tmux                        \
+	vim                         \
+	wget
 
 # install mysql
 RUN wget -O /tmp/RPM-GPG-KEY-mysql https://repo.mysql.com/RPM-GPG-KEY-mysql
@@ -26,26 +28,52 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server
 COPY docker_my.cnf /etc/my.cnf
 
 RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh && \
-    sh /tmp/install_conda.sh -b -p /opt/conda && \
-    rm /tmp/install_conda.sh && \
-    echo 'export PATH=/opt/conda/bin:$PATH' > /etc/profile
+	sh /tmp/install_conda.sh -b -p /opt/conda && \
+	rm /tmp/install_conda.sh && \
+	echo 'export PATH=/opt/conda/bin:$PATH' > /etc/profile
 
-ARG HOST_UID=999
+RUN /opt/conda/bin/conda create --name ithemal python=2.7
+RUN /opt/conda/bin/conda install -q -n ithemal -c pytorch pytorch torchvision
+RUN /opt/conda/bin/conda install -q -n ithemal \
+	cython \
+	ipython \
+	ipython-notebook \
+	matplotlib=2.2.3 \
+	mysql-connector-python=2 \
+	numpy=1.15 \
+	pandas \
+	psutil=5.4.7 \
+	pyqt \
+	pytest=3.8.1 \
+	scikit-learn=0.19 \
+	scipy=1.1.0 \
+	statistics=1.0.3.5 \
+	tqdm
+RUN bash -lc 'source activate ithemal; pip install --upgrade pyhamcrest pip'
+
+RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz -C /opt
+ENV DYNAMORIO_HOME "/opt/DynamoRIO-Linux-7.0.0-RC1"
+# tar will not give you `755 & ~umask` because tar is evil
+RUN chown -R root:root "${DYNAMORIO_HOME}" && \
+	find "${DYNAMORIO_HOME}" -type d -exec chmod 755 {} \; && \
+	find "${DYNAMORIO_HOME}" -type f -exec chmod 644 {} \;
+
+RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+ARG HOST_UID=1000
 ENV HOST_UID $HOST_UID
-ARG HOST_GID=999
-ENV HOST_GID $HOST_GID
 
-RUN groupadd -g $HOST_UID ithemal && \
-    useradd -m -r -u $HOST_GID -g ithemal ithemal
+RUN groupadd -g 1000 ithemal
+RUN useradd -m -r -u $HOST_UID -g ithemal ithemal
 
 USER ithemal
 WORKDIR /home/ithemal
 
-RUN /opt/conda/bin/conda create --name ithemal python=2.7
-RUN /opt/conda/bin/conda install -q -n ithemal -c pytorch pytorch torchvision
-RUN /opt/conda/bin/conda install -q -n ithemal mysql-connector-python=2 matplotlib=2.2.3 psutil=5.4.7 tqdm scikit-learn=0.19 numpy=1.15 scipy=1.1.0 statistics=1.0.3.5 ipython-notebook ipython pandas pyqt pytest=3.8.1
-
-RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz
-
 RUN bash -lc 'source activate ithemal; jupyter notebook --generate-config'
+RUN echo 'export PATH=/home/ithemal/.local/bin:$PATH' >> /home/ithemal/.bashrc
 RUN echo 'source activate ithemal' >> /home/ithemal/.bashrc
+COPY notebook_config.patch /tmp/_docker_notebook_conf.patch
+RUN patch .jupyter/jupyter_notebook_config.py < /tmp/_docker_notebook_conf.patch
