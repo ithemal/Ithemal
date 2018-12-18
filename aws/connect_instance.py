@@ -35,19 +35,22 @@ class InstanceConnector(AwsInstance):
         os.execvp('ssh', ssh_args)
         sys.exit(1)
 
+def list_instances(instances):
+    if not instances:
+        print('No instances running!')
+        return
+
+    print('Active instances:')
+    for i, instance in enumerate(instances):
+        print('{}) {}'.format(i + 1, format_instance(instance)))
+
+
 def interactively_connect_to_instance(aws_instances):
     while True:
         instances = aws_instances.get_running_instances()
+        list_instances(instances)
         if not instances:
-            print('No instances to connect to!')
             return
-        elif len(instances) == 1:
-            aws_instances.connect_to_instance(instances[0])
-            return
-
-        print('Active instances:')
-        for i, instance in enumerate(instances):
-            print('{}) {}'.format(i + 1, format_instance(instance)))
 
         try:
             res = input('Enter a number to connect to that instance, or "q" to exit: ')
@@ -80,12 +83,17 @@ def main():
     user_group = parser.add_mutually_exclusive_group()
     user_group.add_argument('--host', help='Connect directly to the host', default=False, action='store_true')
     user_group.add_argument('--root', help='Connect to root in the Docker instance', default=False, action='store_true')
+    user_group.add_argument('--list', help='Just list the instances, rather than connecting', default=False, action='store_true')
 
     parser.add_argument('identity', help='Identity to use to connect')
     parser.add_argument('instance_id', help='Instance IDs to manually connect to', nargs='?', default=None)
     args = parser.parse_args()
 
     aws_instances = InstanceConnector(args.identity, args.host, args.root)
+
+    if args.list:
+        list_instances(aws_instances.get_running_instances())
+        return
 
     if args.instance_id:
         instance = next(instance for instance in aws_instances.get_running_instances() if instance['InstanceId'] == args.instance_id)
