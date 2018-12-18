@@ -24,6 +24,28 @@ try:
 except ImportError:
     import pickle # type: ignore
 
+_DIRNAME = os.path.abspath(os.path.dirname(__file__))
+_DATA_DIR = os.path.join(_DIRNAME, os.pardir, 'inputs', 'augmentations')
+_DEFAULT_DUP_TEMPLATE = os.path.join(_DIRNAME, 'eu_dup_template.json')
+
+_time_str = None # type: Optional[str]
+def time_str(): # type: () -> str
+    global _time_str
+    if _time_str is None:
+        _time_str = time.strftime('%Y-%m-%d.%H-%M-%S')
+    return _time_str
+
+def save_object(obj, name): # type: (Any, str) -> None
+    with open(os.path.join(_DATA_DIR, '{}_{}.pkl'.format(name, time_str())), 'wb') as f:
+        pickle.dump(obj, f)
+
+def execute_sql(commands): # type: (List[str]) -> None
+    cnx = ut.create_connection()
+    for com in commands:
+        ut.execute_query(cnx, com, False)
+    cnx.commit()
+
+
 def read_dataset(data_file, embedding_file): # type: (str, str) -> dt.DataInstructionEmbedding
     data = dt.DataInstructionEmbedding()
 
@@ -34,20 +56,8 @@ def read_dataset(data_file, embedding_file): # type: (str, str) -> dt.DataInstru
     data.generate_datasets()
     return data
 
-def memory_trace(instrs): # type: (List[ut.Instruction]) -> List[ut.Instruction]
-    return [i for i in instrs if i.has_mem()]
 
-_DIRNAME = os.path.abspath(os.path.dirname(__file__))
-_DATA_DIR = os.path.join(_DIRNAME, os.pardir, 'inputs', 'augmentations')
-
-PermutationMap = Dict[dt.DataItem, Iterable[Sequence[ut.Instruction]]]
-
-_time_str = None # type: Optional[str]
-def time_str(): # type: () -> str
-    global _time_str
-    if _time_str is None:
-        _time_str = time.strftime('%Y-%m-%d.%H-%M-%S')
-    return _time_str
+AugmentationMap = Dict[dt.DataItem, Iterable[Sequence[ut.Instruction]]]
 
 def gen_permutations(
         full_data,
@@ -55,9 +65,10 @@ def gen_permutations(
         max_block_size=None,
         min_perms_per_block=None,
         max_perms_per_block=None
-): # type: (dt.DataInstructionEmbedding, Optional[int], Optional[int], Optional[int], Optional[int] -> PermutationMap
+):
+    # type: (dt.DataInstructionEmbedding, Optional[int], Optional[int], Optional[int], Optional[int]) -> AugmentationMap
     data = set(full_data.data)
-    perms = {} # type: PermutationMap
+    perms = {} # type: AugmentationMap
 
     n_perms_gen = 0
 
@@ -86,18 +97,18 @@ def gen_permutations(
 
     return perms
 
-def save_object(obj, name): # type: (Any, str) -> None
-    with open(os.path.join(_DATA_DIR, '{}_{}.pkl'.format(name, time_str())), 'wb') as f:
-        pickle.dump(obj, f)
+def gen_duplicated_instructions(data):
+    # type: (dt.DataInstructionEmbedding) -> AugmentationMap
+    pass
 
-def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) -> List[str]
+def gen_sql_commands_of_augs(augs, table_name): # type: (AugmentationMap, str) -> List[str]
     sql_commands = []
     sql_commands.append('''CREATE TABLE {} (
-        perm_id int(32) NOT NULL AUTO_INCREMENT,
+        aug_id int(32) NOT NULL AUTO_INCREMENT,
         code_id int(32) NOT NULL,
         code_intel TEXT NOT NULL,
         code_token TEXT NOT NULL,
-        PRIMARY KEY (perm_id),
+        PRIMARY KEY (aug_id),
         CONSTRAINT {}_idfk_1 FOREIGN KEY (code_id) REFERENCES code(code_id)
     );'''.format(table_name, table_name))
 
@@ -107,10 +118,10 @@ def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) 
             ','.join(values),
         )
 
-    for dataitem in tqdm(perms):
-        for perm in perms[dataitem]:
+    for dataitem in tqdm(augs):
+        for aug in augs[dataitem]:
             tokens = []
-            for i in perm:
+            for i in aug:
                 tokens.append(i.opcode)
                 tokens.append(-1)
                 tokens.extend(i.srcs)
@@ -120,58 +131,58 @@ def gen_sql_commands_of_perms(perms, table_name): # type: (PermutationMap, str) 
 
             values = [
                 str(dataitem.code_id),
-                "'{}'".format('\n'.join(i.intel for i in perm)),
+                "'{}'".format('\n'.join(i.intel for i in aug)),
                 "'{}'".format(','.join(map(str, tokens))),
             ]
             sql_commands.append(format_insert_command(values))
 
     return sql_commands
 
-def execute_sql(commands): # type: (List[str]) -> None
-    cnx = ut.create_connection()
-    for com in commands:
-        ut.execute_query(cnx, com, False)
-    cnx.commit()
-
 def main(): # type: () -> None
     parser = argparse.ArgumentParser(description='Supplement dataset')
     parser.add_argument('--data', type=str, required=True, help='Block data file to use (e.g. inputs/data/time_skylake.data')
     parser.add_argument('--embedding', type=str, required=True, help='Token embedding file to use (e.g. inputs/embeddings/code_delim.emb)')
-    parser.add_argument('--table-name', type=str, required=True, help='Table to write permutations to (will be freshly created)')
+    parser.add_argument('--table-name', type=str, required=True, help='Table to write augmentations to (will be freshly created)')
 
-    parser.add_argument('--desired-n-perms', default='all')
-    parser.add_argument('--max-block-size', type=int, default=None)
-    parser.add_argument('--min-perms-per-block', type=int, default=None)
-    parser.add_argument('--max-perms-per-block', type=int, default=None)
-
-    parser.add_argument('--save-perms', action='store_true', default=False)
     parser.add_argument('--execute-sql', action='store_true', default=False)
     parser.add_argument('--store-sql', action='store_true', default=False)
     parser.add_argument('--optimize-sql', action='store_true', default=False)
 
+    subparsers = parser.add_subparsers(dest='command')
+
+    perms_parser = subparsers.add_parser('permutations')
+    perms_parser.add_argument('--desired-n-perms', default='all')
+    perms_parser.add_argument('--max-block-size', type=int, default=None, help='Maximum block size to attempt to generate permutations for. Default none')
+    perms_parser.add_argument('--min-perms-per-block', type=int, default=None, help='Minimum number of permutations to include when generating permutations (otherwise throw out block)')
+    perms_parser.add_argument('--max-perms-per-block', type=int, default=None, help='Maximum numnber of permutations to include when generating permuations.')
+
+    ports_parser = subparsers.add_parser('ports')
+    ports_parser.add_argument('--dup-template', type=str, default=_DEFAULT_DUP_TEMPLATE)
+    ports_parser.add_argument('--max-dups', type=int, default=5, help='Max number of times to duplicate a given instruction')
+
     args = parser.parse_args()
 
     data = read_dataset(args.data, args.embedding)
-    if args.desired_n_perms == 'all':
-        desired_n_perms = None
-    elif args.desired_n_perms == 'equal':
-        desired_n_perms = len(data.data)
+
+    if args.command == 'permutations':
+        if args.desired_n_perms == 'all':
+            desired_n_perms = None
+        elif args.desired_n_perms == 'equal':
+            desired_n_perms = len(data.data)
+        else:
+            desired_n_perms = int(args.desired_n_perms)
+
+        augs = gen_permutations(
+            data,
+            desired_n_perms=desired_n_perms,
+            max_block_size=args.max_block_size,
+            min_perms_per_block=args.min_perms_per_block,
+            max_perms_per_block=args.max_perms_per_block,
+        )
     else:
-        desired_n_perms = int(args.desired_n_perms)
+        augs = gen_duplicated_instructions(args.dup_template, args.max_dups)
 
-    perms = gen_permutations(
-        data,
-        desired_n_perms=desired_n_perms,
-        max_block_size=args.max_block_size,
-        min_perms_per_block=args.min_perms_per_block,
-        max_perms_per_block=args.max_perms_per_block,
-    )
-
-    if args.save_perms:
-        with open(os.path.join(_DATA_DIR, 'permutations_{}.pkl'.format(time_str())), 'wb') as f:
-            pickle.dump(perms, f)
-
-    sql_commands = gen_sql_commands_of_perms(perms, args.table_name)
+    sql_commands = gen_sql_commands_of_augs(augs, args.table_name)
 
     if args.optimize_sql:
         sql_commands.insert(0, 'SET autocommit=0;')
