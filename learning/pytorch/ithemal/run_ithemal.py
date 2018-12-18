@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
+from enum import Enum
 import mysql.connector
 import struct
 import word2vec as w2v
@@ -17,6 +18,11 @@ import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
 
+class EdgeAblationType(Enum):
+    TRANSITIVE_REDUCTION = 1
+    TRANSITIVE_CLOSURE = 2
+    LINEAR_EDGES = 3
+    NO_EDGES = 4
 
 def save_data(database, config, format, savefile, arch):
 
@@ -29,18 +35,28 @@ def save_data(database, config, format, savefile, arch):
 
     torch.save(data.raw_data, savefile)
 
+def ablate_data(data, edge_ablation_type, random_edge_freq):
+    if edge_ablation_type == EdgeAblationType.TRANSITIVE_REDUCTION:
+        for data_item in data.data:
+            data_item.block.transitive_reduction()
+    elif edge_ablation_type == EdgeAblationType.TRANSITIVE_CLOSURE:
+        for data_item in data.data:
+            data_item.block.transitive_closure()
+    elif edge_ablation_type == EdgeAblationType.LINEAR_EDGES:
+        for data_item in data.data:
+            data_item.block.linearize_edges()
+    elif edge_ablation_type == EdgeAblationType.NO_EDGES:
+        for data_item in data.data:
+            data_item.block.remove_edges()
+
+    if random_edge_freq > 0:
+        for data_item in data.data:
+            data_item.block.random_forward_edges(random_edge_freq / len(data_item.block.instrs))
 
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
-
-    data = dt.DataInstructionEmbedding()
-
-    data.raw_data = torch.load(data_savefile)
-    data.set_embedding(embed_file)
-    data.read_meta_data()
-
-    data.prepare_data()
-    data.generate_datasets()
+def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, edge_ablation_type=None, random_edge_freq=0):
+    data = dt.load_dataset(embed_file, data_savefile=data_savefile)
+    ablate_data(edge_ablation_type, random_edge_freq)
 
     #regression
     num_classes = 1
@@ -65,8 +81,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     results = train.validate(resultfile)
 
 
-def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode):
-
+def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0):
     data = dt.DataInstructionEmbedding()
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
@@ -74,6 +89,8 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
 
     data.prepare_data()
     data.generate_datasets()
+
+    ablate_data(edge_ablation_type, random_edge_freq)
 
     #regression
     num_classes = 1
@@ -113,7 +130,7 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
 
     f.close()
 
-def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch):
+def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch, edge_ablation_type=None, random_edge_freq=0):
 
     cnx = ut.create_connection(database=database, config_file=config)
 
@@ -124,6 +141,8 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
 
     data.prepare_data()
     data.test = data.data #all data are test data now
+
+    ablate_data(edge_ablation_type, random_edge_freq)
 
     #regression
     num_classes = 1
@@ -167,7 +186,6 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
 
     cnx.close()
 
-
 if __name__ == "__main__":
 
     #command line arguments
@@ -185,13 +203,23 @@ if __name__ == "__main__":
     parser.add_argument('--database',action='store',type=str)
     parser.add_argument('--config',action='store',type=str)
 
+    edge_ablation_parser_group = parser.add_mutually_exclusive_group()
+    edge_ablation_parser_group.add_argument('--transitive-reduction', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_REDUCTION)
+    edge_ablation_parser_group.add_argument('--transitive-closure', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_CLOSURE)
+    edge_ablation_parser_group.add_argument('--linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.LINEAR_EDGES)
+    edge_ablation_parser_group.add_argument('--no-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.NO_EDGES)
+
+    parser.add_argument('--random-edge-freq', type=float, default=0)
+
     args = parser.parse_args(sys.argv[1:])
 
     if args.mode == 'save':
         save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode)
+        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.edge_ablation, args.random_edge_freq)
     elif args.mode == 'validate':
-        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
+        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq)
     elif args.mode == 'predict':
-        graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
+        graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch, args.edge_ablation, args.random_edge_freq)
+    else:
+        raise ValueError('Unknown mode "{}"'.format(args.mode))

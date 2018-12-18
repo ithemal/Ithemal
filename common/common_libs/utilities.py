@@ -1,3 +1,5 @@
+import collections
+from graphviz import Digraph
 import mysql.connector
 import struct
 import sys
@@ -5,6 +7,7 @@ from mysql.connector import errorcode
 import random
 import re
 import os
+import tempfile
 
 #mysql specific functions
 def create_connection(database=None, user=None, password=None, port=None):
@@ -208,8 +211,19 @@ class Instruction:
         num_children = [child.num for child in self.children]
         print num_parents, num_children
 
+    def __str__(self):
+        rhs = '{}({})'.format(_global_sym_dict[self.opcode], ', '.join(map(_global_sym_dict.get, self.srcs)))
+
+        if len(self.dsts) == 0:
+            return rhs
+        elif len(self.dsts) == 1:
+            return '{} <- {}'.format(_global_sym_dict[self.dsts[0]], rhs)
+        else:
+            return '[{}] <- {}'.format(', '.join(map(lambda x: _global_sym_dict.get(x, 'MEM'), self.dsts)), rhs)
+
     def has_mem(self):
         return any(operand >= _global_mem_start for operand in self.srcs + self.dsts)
+
 
 class BasicBlock:
 
@@ -302,6 +316,71 @@ class BasicBlock:
             self.find_defs(n)
             self.find_uses(n)
 
+    def get_dfs(self):
+        dfs = collections.defaultdict(set)
+
+        for instr in self.instrs[::-1]:
+            frontier = {instr}
+            while frontier:
+                n = frontier.pop()
+                if n in dfs:
+                    dfs[instr] |= dfs[n]
+                    continue
+
+                for c in n.children:
+                    if c in dfs[instr] or c in frontier:
+                        continue
+                    frontier.add(c)
+                dfs[instr].add(n)
+
+        return dfs
+
+    def transitive_closure(self):
+        dfs = self.get_dfs()
+        for instr in self.instrs:
+            transitive_children = set(n for c in instr.children for n in dfs[c])
+            instr.children = list(transitive_children)
+            for child in instr.children:
+                if instr not in child.parents:
+                    child.parents.append(instr)
+
+    def transitive_reduction(self):
+        dfs = self.get_dfs()
+        for instr in self.instrs:
+
+            transitively_reachable_children = set()
+            for child in instr.children:
+                transitively_reachable_children |= dfs[child] - {child}
+
+            for child in transitively_reachable_children:
+                if child in instr.children:
+                    instr.children.remove(child)
+                    child.parents.remove(instr)
+
+    def random_forward_edges(self, frequency):
+        '''Add forward-facing edges at random to the instruction graph.
+
+        There are n^2/2 -1 considered edges (where n is the number of
+        instructions), so to add 5 edges in expectation, one would
+        provide frequency=5/(n^2/2-1)
+
+        '''
+        n_edges_added = 0
+        for head_idx, head_instr in enumerate(self.instrs[:-1]):
+            for tail_instr in self.instrs[head_idx+1:]:
+                if random.random() < frequency:
+                    if tail_instr not in head_instr.children:
+                        head_instr.children.append(tail_instr)
+                        tail_instr.parents.append(head_instr)
+                        n_edges_added += 1
+
+        return n_edges_added
+
+    def clear_edges(self):
+        for instr in self.instrs:
+            instr.parents = []
+            instr.children = []
+
     def find_leafs(self):
         leafs = []
         for instr in self.instrs:
@@ -360,6 +439,23 @@ class BasicBlock:
             [i for i in self.find_leafs() if not i.has_mem()],
             [i for i in self.instrs if i.has_mem()],
         )
+
+    def draw(self, to_file=False, file_name=None, view=True):
+        if to_file and not file_name:
+            file_name = tempfile.NamedTemporaryFile(suffix='.gv').name
+
+        dot = Digraph()
+        for instr in self.instrs:
+            dot.node(str(id(instr)), str(instr))
+            for child in instr.children:
+                dot.edge(str(id(instr)), str(id(child)))
+
+        if to_file:
+            dot.render(file_name, view=view)
+            return dot, file_name
+        else:
+            return dot
+
 
 def create_basicblock(tokens):
 
