@@ -14,12 +14,14 @@ def format_instance(instance):
     instance_type = instance['InstanceType']
     launch_time = instance['LaunchTime']
     key_name = instance['KeyName']
+    ip_addr = instance['PublicIpAddress']
 
-    return '{} :: {} :: {} :: {} :: {}'.format(
+    return '{} :: {} :: {} :: {} :: {} :: {}'.format(
         name,
         instance_id,
         instance_type,
         launch_time,
+        ip_addr,
         key_name,
     )
 
