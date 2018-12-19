@@ -17,8 +17,9 @@ IMAGE_ID="654586875650.dkr.ecr.us-east-2.amazonaws.com/ithemal:latest"
 
 sudo docker login -u "${AWS_DOCKER_USER}" -p "${AWS_DOCKER_PASSWORD}" "${AWS_DOCKER_ENDPOINT}"
 sudo docker pull "${IMAGE_ID}"
-sudo docker run -dit --name ithemal -v /home/ec2-user/ithemal:/home/ithemal/ithemal -e ITHEMAL_HOME=/home/ithemal/ithemal "${IMAGE_ID}"
+sudo docker run -dit --name ithemal -v /home/ec2-user/ithemal:/home/ithemal/ithemal -e ITHEMAL_HOME=/home/ithemal/ithemal -p 8888:8888 "${IMAGE_ID}"
 sudo docker exec -u ithemal ithemal bash -lc '/home/ithemal/ithemal/build_all.sh'
+sudo docker exec -d -u ithemal ithemal bash -lc "jupyter notebook --ip 0.0.0.0 --port 8888 /home/ithemal/ithemal/learning/pytorch/notebooks --no-browser --NotebookApp.token='ithemal'"
 sudo docker exec -i -u ithemal ithemal bash -lc 'cat > ~/.my.cnf' <<EOF
 [client]
 host=${MYSQL_HOST}
