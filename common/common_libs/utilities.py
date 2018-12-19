@@ -8,6 +8,7 @@ import random
 import re
 import os
 import tempfile
+from typing import Dict, FrozenSet, Optional, Tuple, Union
 
 #mysql specific functions
 def create_connection(database=None, user=None, password=None, port=None):
@@ -153,6 +154,7 @@ def read_offsets():
     return offsets
 
 def get_sym_dict():
+    # type: Tuple[Dict[int, str], int]
 
     offsets = read_offsets()
     sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1])
@@ -162,6 +164,33 @@ def get_sym_dict():
 
     return sym_dict, offsets[4]
 
+_REGISTER_CLASSES = tuple(map(frozenset, (
+    {'REG_RAX', 'REG_RCX', 'REG_RDX', 'REG_RBX', 'REG_RSP', 'REG_RBP', 'REG_RSI',
+     'REG_RDI', 'REG_R8', 'REG_R9', 'REG_R10', 'REG_R11', 'REG_R12', 'REG_R13',
+     'REG_R14', 'REG_R15'},
+    {'REG_EAX', 'REG_ECX', 'REG_EDX', 'REG_EBX', 'REG_ESP', 'REG_EBP', 'REG_ESI',
+     'REG_EDI', 'REG_R8D', 'REG_R9D', 'REG_R10D', 'REG_R11D', 'REG_R12D', 'REG_R13D',
+     'REG_R14D', 'REG_R15D'},
+    {'REG_AX', 'REG_CX', 'REG_DX', 'REG_BX', 'REG_SP', 'REG_BP', 'REG_SI',
+     'REG_DI', 'REG_R8W', 'REG_R9W', 'REG_R10W', 'REG_R11W', 'REG_R12W', 'REG_R13W',
+     'REG_R14W', 'REG_R15W'},
+    {'REG_AL', 'REG_CL', 'REG_DL', 'REG_BL', 'REG_AH', 'REG_CH', 'REG_DH',
+     'REG_BH', 'REG_R8L', 'REG_R9L', 'REG_R10L', 'REG_R11L', 'REG_R12L', 'REG_R13L',
+     'REG_R14L', 'REG_R15L'},
+)))
+
+def get_register_class(reg):
+    # type: Union[str, int] -> Optional[FrozenSet[str]]
+
+    if isinstance(reg, int):
+        reg = _global_sym_dict.get(reg)
+
+    for cls in _REGISTER_CLASSES:
+        if reg in cls:
+            return cls
+
+    return None
+
 def get_name(val,sym_dict,mem_offset):
     if val >= mem_offset:
         return 'mem_' + str(val - mem_offset)
@@ -169,7 +198,6 @@ def get_name(val,sym_dict,mem_offset):
         return 'delim'
     else:
         return sym_dict[val]
-
 
 def get_percentage_error(predicted, actual):
 
@@ -187,6 +215,7 @@ def get_percentage_error(predicted, actual):
     return errors
 
 _global_sym_dict, _global_mem_start = get_sym_dict()
+_global_sym_dict_rev = {v:k for (k, v) in _global_sym_dict.items()}
 
 #calculating static properties of instructions and basic blocks
 class Instruction:
@@ -204,6 +233,8 @@ class Instruction:
         self.hidden = None
         self.tokens = None
 
+    def clone(self):
+        return Instruction(self.opcode, self.srcs[:], self.dsts[:], self.num)
 
     def print_instr(self):
         print self.num, self.opcode, self.srcs, self.dsts
@@ -212,17 +243,91 @@ class Instruction:
         print num_parents, num_children
 
     def __str__(self):
-        rhs = '{}({})'.format(_global_sym_dict[self.opcode], ', '.join(map(_global_sym_dict.get, self.srcs)))
-
-        if len(self.dsts) == 0:
-            return rhs
-        elif len(self.dsts) == 1:
-            return '{} <- {}'.format(_global_sym_dict[self.dsts[0]], rhs)
-        else:
-            return '[{}] <- {}'.format(', '.join(map(lambda x: _global_sym_dict.get(x, 'MEM'), self.dsts)), rhs)
+        return self.intel
 
     def has_mem(self):
         return any(operand >= _global_mem_start for operand in self.srcs + self.dsts)
+
+    def is_idempotent(self):
+        return len(set(self.srcs) & set(self.dsts)) == 0
+
+class InstructionReplacer(object):
+    def __init__(self, regexp_intel, replacement_intel,
+                 replacement_srcs, replacement_dsts):
+        self.regexp_intel = re.compile(regexp_intel)
+        self.replacement_intel = replacement_intel
+        self.replacement_srcs = replacement_srcs
+        self.replacement_dsts = replacement_dsts
+
+    def replace(self, instr, unused_registers):
+        if instr.has_mem():
+            return None
+
+        match = self.regexp_intel.match(instr.intel)
+        if match is None:
+            return None
+
+        unused_set = None
+        for operand in instr.dsts:
+            op_cls = get_register_class(operand)
+            if op_cls is None:
+                continue
+
+            m_unused_set = op_cls & unused_registers
+            if unused_set is not None:
+                assert unused_set == m_unused_set, 'Did not expect mix of operand types'
+
+            unused_set = m_unused_set
+
+        if not unused_set:
+            return None
+
+        unused = list(unused_set)
+        unused_intel = list(map(lambda x: x[x.rindex('_')+1:].lower(), unused))
+        unused_token = list(map(_global_sym_dict_rev.get, unused))
+
+        new_instr = instr.clone()
+        new_instr.intel = self.replacement_intel.format(
+            unused=unused_intel,
+            **match.groupdict()
+        )
+
+        new_instr.srcs = list(map(int, map(lambda x: x.format(
+            srcs=instr.srcs,
+            dsts=instr.dsts,
+            unused=unused_token,
+        ), self.replacement_srcs)))
+
+        new_instr.dsts = list(map(int, map(lambda x: x.format(
+            srcs=instr.srcs,
+            dsts=instr.dsts,
+            unused=unused_token,
+        ), self.replacement_dsts)))
+
+        return new_instr
+
+def _two_way_replacer(opcode):
+    return InstructionReplacer(
+        r'{}\s+(?P<op1>\w+),\s+(?P<op2>\w+)'.format(opcode),
+        r'{} {{unused[0]}}, {{op2}}'.format(opcode),
+        ['{srcs[0]}', '{unused[0]}'],
+        ['{unused[0]}'],
+    )
+
+def _three_way_replacer(opcode):
+    return InstructionReplacer(
+        r'{}\s+(?P<op1>\w+),\s+(?P<op2>\w+),\s+(?P<op3>\w+)'.format(opcode),
+        r'{} {{unused[0]}}, {{op2}}, {{op3}}'.format(opcode),
+        ['{srcs[0]}', '{srcs[1]}'],
+        ['{unused[0]}'],
+    )
+
+replacers = (
+    _two_way_replacer('add'), _two_way_replacer('sub'), _two_way_replacer('and'),
+    _two_way_replacer('or'), _two_way_replacer('xor'), _two_way_replacer('shl'),
+    _two_way_replacer('shr'), _two_way_replacer('sar'),
+    _three_way_replacer('imul'),
+)
 
 
 class BasicBlock:
@@ -455,6 +560,45 @@ class BasicBlock:
             return dot, file_name
         else:
             return dot
+
+def generate_duplicates(instrs, max_n_dups):
+    for idx in range(len(instrs) - 1, -1, -1):
+        instr = instrs[idx]
+        unused_regs = unused_registers_at_point(instrs, idx)
+        for replacer in replacers:
+            res = replacer.replace(instr, unused_regs)
+            if res is None:
+                continue
+
+            augmentations = []
+            new_instrs = instrs[:]
+            for i in range(max_n_dups):
+                unused_regs = unused_registers_at_point(new_instrs, idx)
+                aug_instr = replacer.replace(instr, unused_regs)
+                if not aug_instr:
+                    break
+                new_instrs.insert(idx, aug_instr)
+                augmentations.append(new_instrs[:])
+
+            return augmentations
+
+    return []
+
+
+def unused_registers_at_point(instrs, idx):
+    if idx < 0 or idx > len(instrs):
+        raise ValueError('{} is not a valid index'.format(idx))
+
+    unused_regs = set()
+    for cls in _REGISTER_CLASSES:
+        unused_regs |= cls
+    for instr in instrs[idx:]:
+        for src in instr.srcs:
+            unused_regs -= {_global_sym_dict.get(src)}
+        for dst in instr.dsts:
+            unused_regs -= {_global_sym_dict.get(dst)}
+
+    return unused_regs
 
 
 def create_basicblock(tokens):
