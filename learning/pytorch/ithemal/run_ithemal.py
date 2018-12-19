@@ -56,7 +56,7 @@ def ablate_data(data, edge_ablation_type, random_edge_freq):
 
 def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, edge_ablation_type=None, random_edge_freq=0):
     data = dt.load_dataset(embed_file, data_savefile=data_savefile)
-    ablate_data(edge_ablation_type, random_edge_freq)
+    ablate_data(data, edge_ablation_type, random_edge_freq)
 
     #regression
     num_classes = 1
@@ -90,7 +90,7 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
     data.prepare_data()
     data.generate_datasets()
 
-    ablate_data(edge_ablation_type, random_edge_freq)
+    ablate_data(data, edge_ablation_type, random_edge_freq)
 
     #regression
     num_classes = 1
@@ -142,7 +142,7 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
     data.prepare_data()
     data.test = data.data #all data are test data now
 
-    ablate_data(edge_ablation_type, random_edge_freq)
+    ablate_data(data, edge_ablation_type, random_edge_freq)
 
     #regression
     num_classes = 1
