@@ -50,7 +50,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-    train = tr.Train(model, data, batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
+    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=0.01)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -61,29 +61,33 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     restored_epoch = -1
     restored_batch_num = -1
 
-    if args.loadfile != None:
+    if args.loadfile is not None:
         (restored_epoch, restored_batch_num) = train.load_checkpoint(args.loadfile)
-        print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
+        print('starting from a checkpointed state... epoch {} batch_num {}'.format(
+            restored_epoch,
+            restored_batch_num,
+        ))
 
     model.share_memory()
 
     mp_config = MPConfig(args.trainers, args.threads)
-
     partition_size = len(data.train) // mp_config.trainers
-
+    delta = len(data.train) % mp_config.trainers
 
     for i in range(args.epochs):
         processes = []
         i = restored_epoch + 1
 
-        with mp_config :
+        with mp_config:
             for rank in range(mp_config.trainers):
-
                 mp_config.set_env(rank)
 
-                # XXX: this drops data on the floor, namely the tail of the file
-                # if the examples are not evenly divisble by the number of trainers
-                partition = (rank * partition_size, (rank + 1) * partition_size)
+                if rank < delta:
+                    partition = (rank * (partition_size + 1),
+                                 (rank + 1) * (partition_size + 1))
+                else:
+                    partition = (rank * partition_size + delta,
+                                 (rank + 1) * partition_size + delta)
 
                 p = mp.Process(target=train, args=(i, rank, partition))
                 p.start()
@@ -93,10 +97,16 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
         for p in processes:
             p.join()
 
-        if args.savefile is not None :
+        if args.savefile is not None:
             train.save_checkpoint(i, 0, args.savefile)
 
-    resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
+    resultfile = os.path.join(
+        os.environ['ITHEMAL_HOME'],
+        'learning',
+        'pytorch',
+        'results',
+        'realtime_results.txt',
+    )
     results = train.validate(resultfile)
 
 def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode):
@@ -168,7 +178,7 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
 
-    train = tr.Train(model, data,  batch_size = args.batch_size, clip=None, opt='Adam', lr = 0.01)
+    train = tr.Train(model, data,  batch_size = args.batch_size, clip=None, opt='Adam', lr=0.01)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
