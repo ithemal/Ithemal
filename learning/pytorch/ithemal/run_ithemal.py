@@ -8,6 +8,7 @@ import argparse
 import matplotlib
 import common_libs.utilities as ut
 import numpy as np
+import time
 import torch
 import torch.multiprocessing as mp
 torch.backends.cudnn.enabled = False
@@ -108,6 +109,64 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
         'realtime_results.txt',
     )
     results = train.validate(resultfile)
+
+def graph_model_benchmark(data_savefile, embed_file, embedding_mode, n_examples):
+    # type: (str, str, str, int) -> None
+
+    data = dt.DataInstructionEmbedding()
+
+    data.raw_data = torch.load(data_savefile)
+    data.set_embedding(embed_file)
+    data.read_meta_data()
+
+    data.prepare_data()
+    data.generate_datasets()
+
+    #regression
+    num_classes = 1
+
+    #get the embedding size
+    embedding_size = data.final_embeddings.shape[1]
+    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
+
+    model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
+
+    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=0.01)
+
+    #defining losses, correctness and printing functions
+    train.loss_fn = ls.mse_loss
+    train.print_fn = train.print_final
+    train.correct_fn = train.correct_regression
+    train.num_losses = 1
+
+    model.share_memory()
+
+    mp_config = MPConfig(args.trainers, args.threads)
+    partition_size = n_examples // args.trainers
+
+    processes = []
+
+    start_time = time.time()
+
+    with mp_config:
+        for rank in range(mp_config.trainers):
+            mp_config.set_env(rank)
+
+            partition = (rank * partition_size, (rank + 1) * partition_size)
+
+            p = mp.Process(target=train, args=(0, rank, partition))
+            p.start()
+            print("Starting process %d" % (rank,))
+            processes.append(p)
+
+    for p in processes:
+        p.join()
+
+    end_time = time.time()
+    print('Time to process {} examples: {:.2} seconds'.format(
+        n_examples,
+        end_time - start_time,
+    ))
 
 def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode):
 
@@ -233,6 +292,7 @@ if __name__ == "__main__":
     parser.add_argument('--trainers',action='store',type=int,default=1)
     parser.add_argument('--threads',action='store',type=int, default=4)
     parser.add_argument('--batch-size',action='store',type=int, default=100)
+    parser.add_argument('--n-examples', type=int, default=1000)
 
 
     args = parser.parse_args(sys.argv[1:])
@@ -245,3 +305,5 @@ if __name__ == "__main__":
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
         graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch)
+    elif args.mode == 'benchmark':
+        graph_model_benchmark(args.savedatafile, args.embedfile, args.embmode, args.n_examples)

@@ -187,6 +187,7 @@ class Train():
         average_loss = [0] * self.num_losses
         ema_average_loss = [0] * self.num_losses
         epoch_start = time.time();
+        last_report_time = 0
 
         for j in range(epoch_len):
 
@@ -265,17 +266,19 @@ class Train():
 
             end = time.time()
 
-            print('PID {}, {}-{}, Loss: bat: ({}), ema: ({}), ep: ({}), corr: {}/{}, time: {:.2f}'.format(
-                pid,
-                self.epoch_id,
-                j,
-                ' '.join(map('{:.2f}'.format, average_loss_per_batch)),
-                ' '.join(map('{:.2f}'.format, ema_average_loss)),
-                ' '.join(map('{:.2f}'.format, average_loss)),
-                self.correct,
-                self.batch_size,
-                end - start
-            ))
+            if end - last_report_time > 10:
+                last_report_time = end
+                print('PID {}, {}-{}, Loss: bat: ({}), ema: ({}), ep: ({}), corr: {}/{}, time: {:.2f}'.format(
+                    pid,
+                    self.epoch_id,
+                    j,
+                    ' '.join(map('{:.2f}'.format, average_loss_per_batch)),
+                    ' '.join(map('{:.2f}'.format, ema_average_loss)),
+                    ' '.join(map('{:.2f}'.format, average_loss)),
+                    self.correct,
+                    self.batch_size,
+                    end - start
+                ))
 
             #losses accumulation to visualize learning
             losses = []
