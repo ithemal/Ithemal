@@ -107,4 +107,3 @@ local/
 # Custom Ithemal/Docker ignores
 #==============================================================================#
 /docker/.docker_bash_history
-.mypy_cache
