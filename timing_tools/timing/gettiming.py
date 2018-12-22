@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import sys
-import utilities as ut
+import common_libs.utilities as ut
 from tqdm import tqdm
 import subprocess
 import os
@@ -44,9 +44,9 @@ def add_memory_prefix(line):
     return line
 
 
-def insert_time_value(cnx,code_id, time, arch):
+def insert_time_value(cnx,code_id, time, arch, ttable):
 
-    sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'actual\',' + str(time) + ')'
+    sql = 'INSERT INTO ' + ttable + ' (code_id, arch, kind, time) VALUES(' + str(code_id) + ',' + str(arch) + ',\'actual\',' + str(time) + ')'
     ut.execute_query(cnx, sql, False)
     cnx.commit()
 
@@ -141,13 +141,15 @@ if __name__ == '__main__':
     parser.add_argument('--user',action='store', type=str, required=True)
     parser.add_argument('--password',action='store', type=str, required=True)
     parser.add_argument('--port',action='store', type=int, required=True)
+    parser.add_argument('--ctable',action='store',type=str, required=True)
+    parser.add_argument('--ttable',action='store',type=str, required=True)
 
     parser.add_argument('--tp',action='store',type=bool,default=False)
 
     args = parser.parse_args(sys.argv[1:])
 
     cnx = ut.create_connection(database=args.database, user=args.user, password=args.password, port=args.port)
-    sql = 'SELECT code_intel, code_id from code'
+    sql = 'SELECT code_intel, code_id from ' + args.ctable
     rows = ut.execute_query(cnx, sql, True)
     print len(rows)
 
@@ -204,6 +206,8 @@ if __name__ == '__main__':
 
             if result != None:
 
+                print final_bb
+
                 try:
                     error_lines = False
                     for line in iter(proc.stderr.readline, ''):
@@ -230,16 +234,17 @@ if __name__ == '__main__':
                         if counters != None:
                             counters.set_modes()
                             mode = counters.get_value('Core_cyc')
-                            print mode
+                            print ' time ' + str(mode)
                             if mode != None:
                                 if not args.tp:
-                                    insert_time_value(cnx, row[1], mode, args.arch)
+                                    insert_time_value(cnx, row[1], mode, args.arch, args.ttable)
                                 success += 1
                     else:
                         for line in final_bb:
                             print line[:-1]
                         errors += 1
-                except:
+                except Exception as e:
+                    print e
                     print 'exception occurred'
                     except_errors += 1
 
