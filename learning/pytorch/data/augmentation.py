@@ -97,9 +97,23 @@ def gen_permutations(
 
     return perms
 
-def gen_duplicated_instructions(data):
-    # type: (dt.DataInstructionEmbedding) -> AugmentationMap
-    pass
+def gen_duplicated_instructions(full_data, max_dups):
+    # type: (dt.DataInstructionEmbedding, int) -> AugmentationMap
+
+    data = set(full_data.data)
+    perms = {} # type: AugmentationMap
+
+    pbar = tqdm(total=len(data))
+    while data:
+        datum = data.pop()
+        block = datum.block
+        reorderings = ut.generate_duplicates(block.instrs, max_dups)
+        if reorderings:
+            perms[datum] = reorderings
+        pbar.update(1)
+    pbar.close()
+
+    return perms
 
 def gen_sql_commands_of_augs(augs, table_name): # type: (AugmentationMap, str) -> List[str]
     sql_commands = []
@@ -158,7 +172,7 @@ def main(): # type: () -> None
 
     ports_parser = subparsers.add_parser('ports')
     ports_parser.add_argument('--dup-template', type=str, default=_DEFAULT_DUP_TEMPLATE)
-    ports_parser.add_argument('--max-dups', type=int, default=5, help='Max number of times to duplicate a given instruction')
+    ports_parser.add_argument('--max-dups', type=int, default=10, help='Max number of times to duplicate a given instruction')
 
     args = parser.parse_args()
 
@@ -180,7 +194,7 @@ def main(): # type: () -> None
             max_perms_per_block=args.max_perms_per_block,
         )
     else:
-        augs = gen_duplicated_instructions(args.dup_template, args.max_dups)
+        augs = gen_duplicated_instructions(data, args.max_dups)
 
     sql_commands = gen_sql_commands_of_augs(augs, args.table_name)
 
