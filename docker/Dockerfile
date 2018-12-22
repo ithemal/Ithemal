@@ -74,10 +74,12 @@ WORKDIR /home/ithemal
 # non-login shell
 RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.bash_profile
 RUN echo 'source activate ithemal' >> /home/ithemal/.bash_profile
+RUN echo 'export PYTHONPATH="/home/ithemal/ithemal/learning/pytorch"' >> /home/ithemal/.bash_profile
 
 # login shell
 RUN echo 'export PATH=/opt/conda/bin:$PATH' >> /home/ithemal/.bashrc
 RUN echo 'source activate ithemal' >> /home/ithemal/.bashrc
+RUN echo 'export PYTHONPATH="/home/ithemal/ithemal/learning/pytorch"' >> /home/ithemal/.bashrc
 
 RUN bash -lc 'pip install --upgrade --user pyhamcrest pip; jupyter notebook --generate-config'
 
