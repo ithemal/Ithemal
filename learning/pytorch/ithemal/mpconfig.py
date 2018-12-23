@@ -2,9 +2,9 @@ import os
 
 class MPConfig:
 
-    THREADS_KEY = "OMP_NUM_THREADS";
-    AFFINITY_KEY = "KMP_AFFINITY";
-    PYTORCH_THREAD_OFFSET = 2;
+    THREADS_KEY = "OMP_NUM_THREADS"
+    AFFINITY_KEY = "KMP_AFFINITY"
+    PYTORCH_THREAD_OFFSET = 2
 
     def __init__(self, trainers, threads):
         assert 0 < trainers
@@ -23,12 +23,12 @@ class MPConfig:
     def set_env(self, trainer_id):
         assert trainer_id < self.trainers
 
-        os.environ[MPConfig.THREADS_KEY] = str(self.threads - MPConfig.PYTORCH_THREAD_OFFSET);
+        os.environ[MPConfig.THREADS_KEY] = str(self.threads - MPConfig.PYTORCH_THREAD_OFFSET)
         os.environ[MPConfig.AFFINITY_KEY] = ','.join(map(str, [
             'verbose',
             'granularity=fine',
             'compact',
-            '1',
+            '0',
             trainer_id * self.threads
         ]))
 
