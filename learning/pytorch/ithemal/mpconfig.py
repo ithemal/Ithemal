@@ -8,7 +8,7 @@ class MPConfig:
 
     def __init__(self, trainers, threads):
         assert 0 < trainers
-        assert 2 <= trainers
+        assert 2 <= threads
 
         self.trainers = trainers
         self.threads = threads
