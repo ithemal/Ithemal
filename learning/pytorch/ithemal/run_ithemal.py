@@ -63,7 +63,9 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     restored_batch_num = -1
 
     if args.loadfile is not None:
-        (restored_epoch, restored_batch_num) = train.load_checkpoint(args.loadfile)
+        state_dict = train.load_checkpoint(args.loadfile)
+        restored_epoch = state_dict['epoch']
+        restored_batch_num = state_dict['batch_num']
         print('starting from a checkpointed state... epoch {} batch_num {}'.format(
             restored_epoch,
             restored_batch_num,
@@ -74,10 +76,11 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     mp_config = MPConfig(args.trainers, args.threads)
     partition_size = len(data.train) // mp_config.trainers
     delta = len(data.train) % mp_config.trainers
+    start_time = time.time()
 
     for i in range(args.epochs):
         processes = []
-        i = restored_epoch + 1
+        i = restored_epoch + i + 1
 
         with mp_config:
             for rank in range(mp_config.trainers):
@@ -90,7 +93,8 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
                     partition = (rank * partition_size + delta,
                                  (rank + 1) * partition_size + delta)
 
-                p = mp.Process(target=train, args=(i, rank, partition))
+                p_args= (i, rank, partition, args.savefile, start_time)
+                p = mp.Process(target=train, args=p_args)
                 p.start()
                 print("Starting process %d" % (rank,))
                 processes.append(p)

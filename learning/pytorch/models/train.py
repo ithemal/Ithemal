@@ -14,6 +14,7 @@ from tqdm import tqdm
 import time
 import torch
 from torch import nn
+import random
 
 def memReport():
     num_obj = 0
@@ -43,7 +44,6 @@ class Train():
                  data,
                  batch_size = 1000,
                  tolerance = 25,
-                 epoch_len_div = 1,
                  saves_per_epoch = 5,
                  lr = 0.001,
                  momentum = 0.9,
@@ -69,7 +69,6 @@ class Train():
         self.partition = (0, len(self.data.train))
 
         self.batch_size = batch_size
-        self.epoch_len_div = epoch_len_div
 
         #correctness
         self.tolerance = tolerance
@@ -90,6 +89,8 @@ class Train():
         #training checkpointing
         self.saves_per_epoch = saves_per_epoch
 
+        self.epoch_id = None
+        self.rank = None
 
     """
     Print routines for predicted and target values.
@@ -135,14 +136,18 @@ class Train():
         if percentage < self.tolerance:
             self.correct += 1
 
-    def save_checkpoint(self, epoch, batch_num, filename):
+    def save_checkpoint(self, epoch, batch_num, filename, **rest):
 
         state_dict = {
             'epoch': epoch,
             'batch_num': batch_num,
             'model': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict()
+            'optimizer': self.optimizer.state_dict(),
         }
+
+        for (k, v) in rest.items():
+            state_dict[k] = v
+
         torch.save(state_dict, filename)
 
     def load_checkpoint(self, filename):
@@ -151,21 +156,20 @@ class Train():
         self.model.load_state_dict(state_dict['model'])
         self.optimizer.load_state_dict(state_dict['optimizer'])
 
-        epoch = state_dict['epoch']
-        batch_num = state_dict['batch_num']
+        return state_dict
 
-        return (epoch, batch_num)
-
-    def __call__(self, epoch_id, id, partition, savefile=None):
+    def __call__(self, epoch_id, rank, partition, savefile=None, start_time=None):
         self.epoch_id = epoch_id
+        self.rank = rank
         self.partition = partition
-        self.train(savefile=savefile)
+        self.train(savefile=savefile, start_time=start_time)
 
     """
     Training loop - to do make the average loss for general
     """
 
-    def train(self, savefile=None, loadfile=None):
+    def train(self, savefile=None, loadfile=None, start_time=None):
+        # type: (str, str, float) -> None
 
         self.per_epoch_loss = []
 
@@ -174,52 +178,49 @@ class Train():
         train_length = self.partition[1] - self.partition[0]
         pid = os.getpid()
 
-        # XXX: potentially drops self.batch_size - 1 elements
-        # if train_length is not an even multiple
-        epoch_len = (train_length // self.batch_size)
-        epoch_len = epoch_len // self.epoch_len_div
+        epoch_len = train_length // self.batch_size
+        leftover = train_length % self.batch_size
 
         print 'start training...'
         print "partition = (%d, %d)" % (self.partition)
         print 'epoch length ' + str(epoch_len)
         print 'batch size (sampled) ' + str(self.batch_size)
 
-        average_loss = [0] * self.num_losses
-        ema_average_loss = [0] * self.num_losses
+        epoch_sum_loss = np.zeros(self.num_losses)
+        epoch_ema_loss = np.ones(self.num_losses)
+
         epoch_start = time.time();
         last_report_time = 0
+        last_save_time = 0
+        epoch_save_no = 0
 
-        for j in range(epoch_len):
+        data = [self.data.train[i] for i in random.sample(range(*self.partition), train_length)]
 
-            start = time.time()
-
-            self.data.generate_batch(self.batch_size, self.partition)
-
-            average_loss_per_batch = [0] * self.num_losses
+        for batch_idx in range(epoch_len + 1):
+            batch_start_time = time.time()
+            batch_loss_sum = np.zeros(self.num_losses)
             self.correct = 0
 
-            #zero out grads
             self.optimizer.zero_grad()
+            loss_tensor = torch.FloatTensor([0]).squeeze()
 
-            loss = torch.FloatTensor([0]).squeeze()
+            batch_idx_start = batch_idx * self.batch_size
+            batch = data[batch_idx_start:batch_idx_start+self.batch_size]
 
-            #we use batches of size one for actual training
-            items = []
-            for batch_j, item in enumerate(self.data.batch):
-                #get predicted value
-                output = self.model(item)
+            if not batch:
+                break
 
-                #check if output is nan, if so return
-                isnan = torch.isnan(output)
+            for datum in batch:
+                output = self.model(datum)
 
-                if isnan.any():
+                if torch.isnan(output).any():
                     print 'output nan detected, quit learning, please use the saved model...'
                     #also add the per epch loss to the main loss accumulation
                     self.loss.append(self.per_epoch_loss)
                     return
 
                 #target as a tensor
-                target = torch.FloatTensor([item.y]).squeeze()
+                target = torch.FloatTensor([datum.y]).squeeze()
 
                 #get the loss value
                 losses = self.loss_fn(output, target)
@@ -228,19 +229,15 @@ class Train():
                 self.correct_fn(output, target)
 
                 #accumulate the losses
-                for c,l in enumerate(losses):
-                    item_num = j * self.batch_size + batch_j
-                    average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
-                    ema_average_loss[c] = 0.98 * ema_average_loss[c] + 0.02 * l.item()
-                    average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
-
-                for loss_num in range(len(losses)):
-                    loss = loss + losses[loss_num]
-
-                items.append(item)
+                for class_idx, loss in enumerate(losses):
+                    loss_tensor += loss
+                    l = loss.item()
+                    epoch_sum_loss[class_idx] += l
+                    epoch_ema_loss[class_idx] = 0.98 * epoch_ema_loss[class_idx] + 0.02 * l
+                    batch_loss_sum[class_idx] += l
 
             #propagate gradients
-            loss.backward()
+            loss_tensor.backward()
 
             #clip the gradients
             if self.clip is not None:
@@ -257,38 +254,49 @@ class Train():
             #optimizer step to update parameters
             self.optimizer.step()
 
-            # remove refs; so the gc remove unwanted tensors
-            # XXX: it is not clear to me how early this can happen
-            # presumably it must happen after the gradient step.
-            # however that is not clear to me
-            for item in items:
-                self.model.remove_refs(item)
+            # get those tensors out of here!
+            for datum in batch:
+                self.model.remove_refs(datum)
 
-            end = time.time()
+            batch_end_time = time.time()
 
-            if end - last_report_time > 10:
-                last_report_time = end
-                print('PID {}, {}-{}, Loss: bat: ({}), ema: ({}), ep: ({}), corr: {}/{}, time: {:.2f}'.format(
-                    pid,
+            if batch_end_time - last_report_time > 60:
+                last_report_time = batch_end_time
+                print(', '.join((
+                    'PID: {}'.format(pid),
+                    'Epoch {} Batch {}/{}'.format(self.epoch_id, batch_idx, epoch_len),
+                    'Loss EMA: {}'.format(' '.join(map('{:.2f}'.format, epoch_ema_loss))),
+                    'Acc: {}/{}'.format(self.correct, self.batch_size)
+                )))
+
+            is_designated_checkpointer = self.rank == 0
+            time_since_last_chckpoint = batch_end_time - last_save_time
+            should_checkpoint = savefile and start_time and is_designated_checkpointer and time_since_last_chckpoint > 10 * 60
+            if should_checkpoint:
+                last_save_time = batch_end_time
+                savefile_dir, savefile_fname = os.path.split(savefile)
+                checkpoint_fname = 'checkpoint_{}_{}_{}'.format(
                     self.epoch_id,
-                    j,
-                    ' '.join(map('{:.2f}'.format, average_loss_per_batch)),
-                    ' '.join(map('{:.2f}'.format, ema_average_loss)),
-                    ' '.join(map('{:.2f}'.format, average_loss)),
-                    self.correct,
-                    self.batch_size,
-                    end - start
-                ))
+                    epoch_save_no,
+                    savefile_fname
+                )
+                m_savefile = os.path.join(savefile_dir, checkpoint_fname)
+                self.save_checkpoint(
+                    self.epoch_id, 0, m_savefile,
+                    time=(batch_end_time-start_time),
+                    batch_idx=batch_idx
+                )
+                epoch_save_no += 1
 
             #losses accumulation to visualize learning
             losses = []
-            for av in average_loss:
-                losses.append(av)
+            for av in epoch_sum_loss:
+                losses.append(av / (batch_idx + 1))
             self.per_epoch_loss.append(losses)
 
             #change learning rates
             if self.correct_fn == self.correct_regression and self.opt != 'Adam':
-                if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
+                if epoch_sum_loss[0] / (batch_idx + 1) < 0.10 and self.lr > 0.00001:
                     print 'reducing learning rate....'
                     self.lr = self.lr * 0.1
                     print 'learning rate changed ' + str(self.lr)
