@@ -97,7 +97,7 @@ class Data(object):
             self.costs[i] = np.random.randint(1,maxnum)
 
     def prepare_data(self):
-        Pass
+        pass
 
     def generate_datasets(self):
         size = len(self.data)
