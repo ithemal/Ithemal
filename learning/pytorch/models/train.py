@@ -91,6 +91,7 @@ class Train():
 
         self.epoch_id = None
         self.rank = None
+        self.last_save_time = 0
 
     """
     Print routines for predicted and target values.
@@ -191,8 +192,6 @@ class Train():
 
         epoch_start = time.time();
         last_report_time = 0
-        last_save_time = 0
-        epoch_save_no = 0
 
         data = [self.data.train[i] for i in random.sample(range(*self.partition), train_length)]
 
@@ -263,22 +262,27 @@ class Train():
             if batch_end_time - last_report_time > 60:
                 last_report_time = batch_end_time
                 print(', '.join((
-                    'PID: {}'.format(pid),
+                    'Proc: {}'.format(self.rank),
                     'Epoch {} Batch {}/{}'.format(self.epoch_id, batch_idx, epoch_len),
                     'Loss EMA: {}'.format(' '.join(map('{:.2f}'.format, epoch_ema_loss))),
                     'Acc: {}/{}'.format(self.correct, self.batch_size)
                 )))
 
             is_designated_checkpointer = self.rank == 0
-            time_since_last_chckpoint = batch_end_time - last_save_time
-            should_checkpoint = savefile and start_time and is_designated_checkpointer and time_since_last_chckpoint > 10 * 60
+            time_since_last_checkpoint = batch_end_time - self.last_save_time
+            should_checkpoint = (
+                savefile
+                and start_time
+                and is_designated_checkpointer
+                and time_since_last_checkpoint > 10 * 60
+            )
             if should_checkpoint:
-                last_save_time = batch_end_time
+                self.last_save_time = batch_end_time
                 savefile_dir, savefile_fname = os.path.split(savefile)
                 checkpoint_fname = 'checkpoint_{}_{}_{}'.format(
                     self.epoch_id,
-                    epoch_save_no,
-                    savefile_fname
+                    time.strftime('%Y-%m-%d_%H-%M-%S'),
+                    savefile_fname,
                 )
                 m_savefile = os.path.join(savefile_dir, checkpoint_fname)
                 self.save_checkpoint(
@@ -286,7 +290,6 @@ class Train():
                     time=(batch_end_time-start_time),
                     batch_idx=batch_idx
                 )
-                epoch_save_no += 1
 
             #losses accumulation to visualize learning
             losses = []
@@ -304,7 +307,7 @@ class Train():
                         param_group['lr'] = self.lr
 
         epoch_end = time.time()
-        print "PID: %d completed epoch %d  time: %s" % (os.getpid(), self.epoch_id, epoch_end - epoch_start,)
+        print "Proc %d completed epoch %d  time: %s" % (self.rank, self.epoch_id, epoch_end - epoch_start,)
 
 
         #loss accumulation

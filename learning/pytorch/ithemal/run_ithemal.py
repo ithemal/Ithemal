@@ -31,7 +31,20 @@ def save_data(database, config, format, savefile, arch):
 
     torch.save(data.raw_data, savefile)
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
+def get_partition_splits(n_datapoints, n_trainers, split_distr):
+    assert abs(sum(split_distr) - 1) < 1e-4
+    assert all(elem >= 0 for elem in split_distr)
+
+    idx = 0
+    for frac in split_distr:
+        split_size = int((n_datapoints / n_trainers) * frac)
+        for tr in range(n_trainers):
+            yield (idx, idx + split_size)
+            idx += split_size
+    yield (idx, n_datapoints)
+
+
+def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist):
 
     data = dt.DataInstructionEmbedding()
 
@@ -74,30 +87,39 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode):
     model.share_memory()
 
     mp_config = MPConfig(args.trainers, args.threads)
+
     partition_size = len(data.train) // mp_config.trainers
     delta = len(data.train) % mp_config.trainers
     start_time = time.time()
+
+    def run_training(q, epoch_idx, rank):
+        while True:
+            part = q.get()
+            if part is None:
+                return
+            train(epoch_idx, rank, part, savefile, start_time)
+
+    partitions = list(get_partition_splits(len(data.train), mp_config.trainers, split_dist))
+    partitions += [None] * mp_config.trainers
+    print(partitions)
 
     for i in range(args.epochs):
         processes = []
         i = restored_epoch + i + 1
 
+        queue = mp.Queue()
+
         with mp_config:
             for rank in range(mp_config.trainers):
                 mp_config.set_env(rank)
 
-                if rank < delta:
-                    partition = (rank * (partition_size + 1),
-                                 (rank + 1) * (partition_size + 1))
-                else:
-                    partition = (rank * partition_size + delta,
-                                 (rank + 1) * partition_size + delta)
-
-                p_args= (i, rank, partition, args.savefile, start_time)
-                p = mp.Process(target=train, args=p_args)
+                p = mp.Process(target=run_training, args=(queue, i, rank))
                 p.start()
                 print("Starting process %d" % (rank,))
                 processes.append(p)
+
+        for split in partitions:
+            queue.put(split)
 
         for p in processes:
             p.join()
@@ -297,6 +319,8 @@ if __name__ == "__main__":
     parser.add_argument('--threads',action='store',type=int, default=4)
     parser.add_argument('--batch-size',action='store',type=int, default=100)
     parser.add_argument('--n-examples', type=int, default=1000)
+    parser.add_argument('--split-dist', nargs='+', type=float,
+                        default=[0.5, 0.25, 0.125, .0625, .0625])
 
 
     args = parser.parse_args(sys.argv[1:])
@@ -304,7 +328,7 @@ if __name__ == "__main__":
     if args.mode == 'save':
         save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode)
+        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist)
     elif args.mode == 'validate':
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
