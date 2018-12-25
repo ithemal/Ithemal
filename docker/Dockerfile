@@ -50,7 +50,7 @@ RUN /opt/conda/bin/conda install -q -n ithemal \
         statistics=1.0.3.5 \
         tqdm=4.28.1
 
-RUN bash -lc 'source activate ithemal; pip install --upgrade pyhamcrest pip sumtype'
+RUN bash -lc 'source activate ithemal; pip install --upgrade pyhamcrest pip sumtypes'
 
 RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz -C /opt
 ENV DYNAMORIO_HOME "/opt/DynamoRIO-Linux-7.0.0-RC1"
