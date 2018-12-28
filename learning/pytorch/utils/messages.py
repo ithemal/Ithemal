@@ -1,5 +1,7 @@
-from sumtypes import sumtype, constructor
+from typing import NamedTuple
 
-@sumtype
-class LossReportMessage(object):
-    LossReport = constructor('rank', 'loss', 'n_items')
+LossReportMessage = NamedTuple('LossReportMessage', [
+    ('rank', int),
+    ('loss', float),
+    ('n_items', int),
+])

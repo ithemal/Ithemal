@@ -19,6 +19,7 @@ import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
 from mpconfig import MPConfig
+from typing import List
 
 def save_data(database, config, format, savefile, arch):
 
@@ -44,8 +45,8 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
     yield (idx, n_datapoints)
 
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist):
-
+def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs):
+    # type: (str, str, str, str, List[float], bool) -> None
     data = dt.DataInstructionEmbedding()
 
     data.raw_data = torch.load(data_savefile)
@@ -64,7 +65,8 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=0.01)
+    lr = 0.01
+    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=lr)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -86,46 +88,73 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
 
     model.share_memory()
 
-    mp_config = MPConfig(args.trainers, args.threads)
-
-    partition_size = len(data.train) // mp_config.trainers
-    delta = len(data.train) % mp_config.trainers
     start_time = time.time()
 
-    def run_training(q, epoch_idx, rank):
+    def run_training(q, epoch_idx, rank, loss_report_func):
         while True:
             part = q.get()
             if part is None:
                 return
-            train(epoch_idx, rank, part, savefile, start_time)
+            train(epoch_idx, rank, part, savefile, start_time, loss_report_func)
 
-    partitions = list(get_partition_splits(len(data.train), mp_config.trainers, split_dist))
-    partitions += [None] * mp_config.trainers
-    print(partitions)
+    def loss_report_func(ep_no, loss_q):
+        # type: (mp.Queue) -> None
+        format_loss = lambda l: 'Epoch {}, Loss {:.2}'.format(ep_no, l)
+        pbar = tqdm(desc=format_loss('??'), total=len(data.train))
+        ema_loss = None
+        while True:
+            item = loss_q.get()
+            if item is None:
+                return
+            loss = item.loss
+            if ema_loss is None:
+                ema_loss = loss
+            else:
+                ema_loss = ema_loss * 0.99 + loss * 0.01
+
+            pbar.update(item.n_items)
+            pbar.set_description(format_loss(ema_loss))
+
+    n_trainers = args.trainers
 
     for i in range(args.epochs):
+        mp_config = MPConfig(n_trainers, args.threads)
+        partitions = list(get_partition_splits(len(data.train), mp_config.trainers, split_dist))
+        partitions += [None] * mp_config.trainers
+
         processes = []
         i = restored_epoch + i + 1
 
-        queue = mp.Queue()
+        partition_queue = mp.Queue()
+        loss_q = mp.Queue()
+
+        mp.Process(target=loss_report_func, args=(i, loss_q)).start()
 
         with mp_config:
             for rank in range(mp_config.trainers):
                 mp_config.set_env(rank)
 
-                p = mp.Process(target=run_training, args=(queue, i, rank))
+                m_args = (partition_queue, i, rank, loss_q.put)
+                p = mp.Process(target=run_training, args=m_args)
                 p.start()
                 print("Starting process %d" % (rank,))
                 processes.append(p)
 
         for split in partitions:
-            queue.put(split)
+            partition_queue.put(split)
 
         for p in processes:
             p.join()
 
+        loss_q.put(None)
+
         if args.savefile is not None:
             train.save_checkpoint(i, 0, args.savefile)
+
+        lr /= 10
+        train.set_lr(lr)
+        if not no_decay_procs:
+            n_trainers -= 1
 
     resultfile = os.path.join(
         os.environ['ITHEMAL_HOME'],
@@ -319,6 +348,7 @@ if __name__ == "__main__":
     parser.add_argument('--threads',action='store',type=int, default=4)
     parser.add_argument('--batch-size',action='store',type=int, default=100)
     parser.add_argument('--n-examples', type=int, default=1000)
+    parser.add_argument('--no-decay-procs', type=bool, action='store_true', default=False)
     parser.add_argument('--split-dist', nargs='+', type=float,
                         default=[0.5, 0.25, 0.125, .0625, .0625])
 
@@ -328,7 +358,7 @@ if __name__ == "__main__":
     if args.mode == 'save':
         save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist)
+        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs)
     elif args.mode == 'validate':
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode)
     elif args.mode == 'predict':
