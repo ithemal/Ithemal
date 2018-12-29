@@ -153,7 +153,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
 
         lr /= 10
         train.set_lr(lr)
-        if not no_decay_procs:
+        if not no_decay_procs and n_trainers > 1:
             n_trainers -= 1
 
     resultfile = os.path.join(
