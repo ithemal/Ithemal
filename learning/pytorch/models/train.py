@@ -11,6 +11,12 @@ import os
 import gc
 import psutil
 from tqdm import tqdm
+import time
+import torch
+from torch import nn
+import utils.messages as messages
+import random
+from typing import Callable, Optional
 
 def memReport():
     num_obj = 0
@@ -29,8 +35,6 @@ def cpuStats():
         print('memory GB:', memoryUse)
 
 
-
-
 class Train():
 
     """
@@ -40,17 +44,14 @@ class Train():
     def __init__(self,
                  model,
                  data,
-                 epochs = 3,
                  batch_size = 1000,
                  tolerance = 25,
-                 epoch_len_div = 1,
                  saves_per_epoch = 5,
                  lr = 0.001,
                  momentum = 0.9,
                  clip = 2,
                  opt = 'SGD'
     ):
-
         self.model = model
         print self.model
         self.data = data
@@ -58,18 +59,18 @@ class Train():
         self.momentum = momentum
         self.clip = clip
         self.opt = opt
+
         if opt == 'SGD':
-            self.optimizer = optim.SGD(self.model.parameters(), lr = lr, momentum = momentum)
+            self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum)
         elif opt == 'Adam':
             self.optimizer = optim.Adam(self.model.parameters())
         else:
-            print 'unknown optimizer...'
-            exit(-1)
+            raise ValueError('unknown optimizer...')
 
         #training parameters
-        self.epochs = epochs
+        self.partition = (0, len(self.data.train))
+
         self.batch_size = batch_size
-        self.epoch_len_div = epoch_len_div
 
         #correctness
         self.tolerance = tolerance
@@ -90,6 +91,9 @@ class Train():
         #training checkpointing
         self.saves_per_epoch = saves_per_epoch
 
+        self.epoch_id = None
+        self.rank = None
+        self.last_save_time = 0
 
     """
     Print routines for predicted and target values.
@@ -135,14 +139,18 @@ class Train():
         if percentage < self.tolerance:
             self.correct += 1
 
-    def save_checkpoint(self, epoch, batch_num, filename):
+    def save_checkpoint(self, epoch, batch_num, filename, **rest):
 
         state_dict = {
             'epoch': epoch,
             'batch_num': batch_num,
             'model': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict()
+            'optimizer': self.optimizer.state_dict(),
         }
+
+        for (k, v) in rest.items():
+            state_dict[k] = v
+
         torch.save(state_dict, filename)
 
     def load_checkpoint(self, filename):
@@ -151,168 +159,131 @@ class Train():
         self.model.load_state_dict(state_dict['model'])
         self.optimizer.load_state_dict(state_dict['optimizer'])
 
-        epoch = state_dict['epoch']
-        batch_num = state_dict['batch_num']
+        return state_dict
 
-        return (epoch, batch_num)
+    def __call__(self, epoch_id, rank, partition,
+                 savefile=None, start_time=None, report_loss_fn=None):
+        self.epoch_id = epoch_id
+        self.rank = rank
+        self.partition = partition
+        self.train(savefile=savefile, start_time=start_time, report_loss_fn=report_loss_fn)
 
     """
     Training loop - to do make the average loss for general
     """
 
-    def train(self, savefile=None, loadfile=None):
-
+    def train(self, savefile=None, loadfile=None, start_time=None, report_loss_fn=None):
+        # type: (Optional[str], Optional[str], Optional[float], Optional[Callable[[messages.LossReportMessage], None]]) -> None
         self.per_epoch_loss = []
         self.loss = []
 
-        epoch_len = (len(self.data.train) // self.batch_size)
-        epoch_len = epoch_len / self.epoch_len_div
+        train_length = self.partition[1] - self.partition[0]
+        epoch_len = train_length // self.batch_size
+        leftover = train_length % self.batch_size
 
-        print 'start training...'
-        print 'epochs ' + str(self.epochs)
-        print 'epoch length ' + str(epoch_len)
-        print 'batch size (sampled) ' + str(self.batch_size)
+        epoch_sum_loss = np.zeros(self.num_losses)
+        epoch_ema_loss = np.ones(self.num_losses)
 
+        data = [self.data.train[i] for i in random.sample(range(*self.partition), train_length)]
 
-        restored_epoch = -1
-        restored_batch_num = -1
-        if loadfile != None:
-            (restored_epoch, restored_batch_num) = self.load_checkpoint(loadfile)
-            print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
+        for batch_idx in range(epoch_len + 1):
+            batch_loss_sum = np.zeros(self.num_losses)
+            self.correct = 0
 
+            self.optimizer.zero_grad()
+            loss_tensor = torch.FloatTensor([0]).squeeze()
 
-        for i in range(self.epochs):
+            batch_idx_start = batch_idx * self.batch_size
+            batch = data[batch_idx_start:batch_idx_start+self.batch_size]
 
-            average_loss = [0] * self.num_losses
+            if not batch:
+                break
 
-            for j in range(epoch_len):
+            for datum in batch:
+                output = self.model(datum)
 
-                if i <= restored_epoch and j <= restored_batch_num:
-                    continue
+                if torch.isnan(output).any():
+                    print 'output nan detected, quit learning, please use the saved model...'
+                    #also add the per epch loss to the main loss accumulation
+                    self.loss.append(self.per_epoch_loss)
+                    return
 
-                self.data.generate_batch(self.batch_size)
+                #target as a tensor
+                target = torch.FloatTensor([datum.y]).squeeze()
 
-                average_loss_per_batch = [0] * self.num_losses
-                self.correct = 0
+                #get the loss value
+                losses = self.loss_fn(output, target)
 
-                #we use batches of size one for actual training
-                for batch_j, item in enumerate(self.data.batch):
+                #check how many are correct
+                self.correct_fn(output, target)
 
-                    #zero out grads
-                    self.optimizer.zero_grad()
+                #accumulate the losses
+                for class_idx, loss in enumerate(losses):
+                    loss_tensor += loss
+                    l = loss.item()
+                    epoch_sum_loss[class_idx] += l
+                    epoch_ema_loss[class_idx] = 0.98 * epoch_ema_loss[class_idx] + 0.02 * l
+                    batch_loss_sum[class_idx] += l
 
-                    #get predicted value
-                    output = self.model(item)
+            batch_loss_avg = batch_loss_sum / len(batch)
 
-                    #check if output is nan, if so return
-                    isnan = torch.isnan(output)
+            #propagate gradients
+            loss_tensor.backward()
 
-                    if isnan.any():
-                        print 'output nan detected, quit learning, please use the saved model...'
-                        #also add the per epch loss to the main loss accumulation
-                        self.loss.append(self.per_epoch_loss)
-                        return
+            #clip the gradients
+            if self.clip is not None:
+                torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
 
+            for param in self.model.parameters():
+                isnan = torch.isnan(param.grad)
+                if isnan.any():
+                    print 'gradient values are nan...'
+                    #append the loss before returning
+                    self.loss.append(self.per_epoch_loss)
+                    return
 
-                    #target as a tensor
-                    target = torch.FloatTensor([item.y]).squeeze()
+            #optimizer step to update parameters
+            self.optimizer.step()
 
-                    #get the loss value
-                    losses = self.loss_fn(output, target)
+            # get those tensors out of here!
+            for datum in batch:
+                self.model.remove_refs(datum)
 
-                    if batch_j == self.batch_size / 2:
-                        self.print_fn(sys.stdout, output, target)
+            #losses accumulation to visualize learning
+            losses = []
+            for av in epoch_sum_loss:
+                losses.append(av / (batch_idx + 1))
+            self.per_epoch_loss.append(losses)
 
-                    #check how many are correct
-                    self.correct_fn(output, target)
+            #change learning rates
+            if self.correct_fn == self.correct_regression and self.opt != 'Adam':
+                if epoch_sum_loss[0] / (batch_idx + 1) < 0.10 and self.lr > 0.00001:
+                    print 'reducing learning rate....'
+                    self.set_lr(self.lr * 0.1)
 
+            if report_loss_fn is not None:
+                report_loss_fn(messages.LossReportMessage(
+                    self.rank,
+                    batch_loss_avg[0],
+                    len(batch),
+                ))
 
-                    #accumulate the losses
-                    for c,l in enumerate(losses):
-                        item_num = j * self.batch_size + batch_j
-                        average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
-                        average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
+        #loss accumulation
+        self.loss.append(self.per_epoch_loss)
+        self.per_epoch_loss = []
+        self.set_lr(self.lr * 0.1)
 
-                    loss = losses[0]
-                    for loss_num in range(1,len(losses)):
-                        loss += losses[loss_num]
-
-
-                    #propagate gradients
-                    loss.backward()
-
-                    #clip the gradients
-                    if self.clip != None:
-                        torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-
-                    for param in self.model.parameters():
-                        isnan = torch.isnan(param.grad)
-                        if isnan.any():
-                            print 'gradient values are nan...'
-                            #append the loss before returning
-                            self.loss.append(self.per_epoch_loss)
-                            return
-
-                    #optimizer step to update parameters
-                    self.optimizer.step()
-
-                    #remove refs; so the gc remove unwanted tensors
-                    self.model.remove_refs(item)
-
-
-                if savefile != None:
-                    self.save_checkpoint(i,j,savefile)
-
-
-                #per batch training messages
-                p_str = str(i) + ' ' + str(j) + ' '
-                for av in average_loss:
-                    p_str += str(av) + ' '
-                for av in average_loss_per_batch:
-                    p_str += str(av) + ' '
-                p_str += str(self.correct) + ' ' + str(self.batch_size)
-                print p_str
-
-                #losses accumulation to visualize learning
-                losses = []
-                for av in average_loss:
-                    losses.append(av)
-                self.per_epoch_loss.append(losses)
-
-                #change learning rates
-                if self.correct_fn == self.correct_regression and self.opt != 'Adam':
-                    if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
-                        print 'reducing learning rate....'
-                        self.lr = self.lr * 0.1
-                        print 'learning rate changed ' + str(self.lr)
-                        for param_group in self.optimizer.param_groups:
-                            param_group['lr'] = self.lr
-
-            print i
-
-            #loss accumulation
-            self.loss.append(self.per_epoch_loss)
-            self.per_epoch_loss = []
-
-            #learning rate changes
-            self.lr = self.lr * 0.1
-            print 'learning rate changed ' + str(self.lr)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.lr
-
-
-        if savefile != None:
-            print 'final model saved...'
-            self.save_checkpoint(self.epochs - 1,epoch_len - 1,savefile)
-
+    def set_lr(self, lr):
+        # type: (float) -> None
+        self.lr = lr
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.lr
 
     """
     Validation with a test set
     """
 
     def validate(self, resultfile, loadfile=None):
-
-
         if loadfile != None:
             print 'loaded from checkpoint for validation...'
             self.load_checkpoint(loadfile)
@@ -366,11 +337,3 @@ class Train():
         f.close()
 
         return (actual, predicted)
-
-
-
-
-
-
-
-

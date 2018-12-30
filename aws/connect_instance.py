@@ -23,7 +23,7 @@ class InstanceConnector(AwsInstance):
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
         ssh_args = ['ssh', '-i', self.pem_key, '-t', ssh_address]
 
-        conn_com = "bash -lc '~/ithemal/aws/tmux_attach.sh'"
+        conn_com = "bash -lc '/home/ithemal/ithemal/aws/tmux_attach.sh'"
 
         if self.host:
             ssh_args.append(conn_com)

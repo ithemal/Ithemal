@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import time
 
 def format_instance(instance):
     name = 'Unnamed'
@@ -42,4 +43,11 @@ class AwsInstance(object):
         parsed_out = json.loads(output)
 
         # flatten output
-        return [instance for reservation in parsed_out['Reservations'] for instance in reservation['Instances']]
+        instances = [instance
+                     for reservation in parsed_out['Reservations']
+                     for instance in reservation['Instances']]
+
+        def start_time_of_instance(instance):
+            return time.strptime(instance['LaunchTime'], '%Y-%m-%dT%H:%M:%S.%fZ')
+
+        return sorted(instances, key=start_time_of_instance)
