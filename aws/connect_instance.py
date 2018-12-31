@@ -21,9 +21,9 @@ class InstanceConnector(AwsInstance):
 
     def connect_to_instance(self, instance):
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
-        ssh_args = ['ssh', '-i', self.pem_key, '-t', ssh_address]
+        ssh_args = ['ssh', '-X', '-i', self.pem_key, '-t', ssh_address]
 
-        conn_com = "bash -lc '/home/ithemal/ithemal/aws/tmux_attach.sh'"
+        conn_com = "bash -lc '~/ithemal/aws/tmux_attach.sh || /home/ithemal/ithemal/aws/tmux_attach.sh'"
 
         if self.host:
             ssh_args.append(conn_com)
@@ -48,9 +48,14 @@ def list_instances(instances):
 def interactively_connect_to_instance(aws_instances):
     while True:
         instances = aws_instances.get_running_instances()
-        list_instances(instances)
         if not instances:
+            print('No instances to connect do!')
             return
+        elif len(instances) == 1:
+            aws_instances.connect_to_instance(instances[0])
+            return
+
+        list_instances(instances)
 
         try:
             res = input('Enter a number to connect to that instance, or "q" to exit: ')
