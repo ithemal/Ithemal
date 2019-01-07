@@ -68,7 +68,7 @@ ARG HOST_UID=1000
 ENV HOST_UID $HOST_UID
 
 RUN groupadd -g 1000 ithemal
-RUN useradd -m -r -u $HOST_UID -g ithemal ithemal
+RUN useradd -m -s /bin/bash -r -u $HOST_UID -g ithemal ithemal
 USER ithemal
 WORKDIR /home/ithemal
 
