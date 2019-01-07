@@ -14,19 +14,21 @@ import torch
 import torch.multiprocessing as mp
 torch.backends.cudnn.enabled = False
 
+from utils import messages
 import models.graph_models as md
 import data.data_cost as dt
 import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
 from mpconfig import MPConfig
-from typing import List
+from typing import List, Optional
 
 class EdgeAblationType(Enum):
     TRANSITIVE_REDUCTION = 1
     TRANSITIVE_CLOSURE = 2
-    LINEAR_EDGES = 3
-    NO_EDGES = 4
+    ADD_LINEAR_EDGES = 3
+    ONLY_LINEAR_EDGES = 4
+    NO_EDGES = 5
 
 def save_data(database, config, format, savefile, arch):
 
@@ -46,8 +48,12 @@ def ablate_data(data, edge_ablation_type, random_edge_freq):
     elif edge_ablation_type == EdgeAblationType.TRANSITIVE_CLOSURE:
         for data_item in data.data:
             data_item.block.transitive_closure()
-    elif edge_ablation_type == EdgeAblationType.LINEAR_EDGES:
+    elif edge_ablation_type == EdgeAblationType.ADD_LINEAR_EDGES:
         for data_item in data.data:
+            data_item.block.linearize_edges()
+    elif edge_ablation_type == EdgeAblationType.ONLY_LINEAR_EDGES:
+        for data_item in data.data:
+            data_item.block.remove_edges()
             data_item.block.linearize_edges()
     elif edge_ablation_type == EdgeAblationType.NO_EDGES:
         for data_item in data.data:
@@ -69,8 +75,8 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
             idx += split_size
     yield (idx, n_datapoints)
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0):
-    # type: (str, str, str, str, List[float], bool, float) -> None
+def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0, no_residual=False, loss_report_file_name=None):
+    # type: (str, str, str, str, List[float], bool, float, Optional[EdgeAblationType], float, bool, Optional[str]) -> None
     data = dt.load_dataset(embed_file, data_savefile=data_savefile)
     ablate_data(data, edge_ablation_type, random_edge_freq)
 
@@ -79,7 +85,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
 
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
+    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
 
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
@@ -115,27 +121,51 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
                 return
             train(epoch_idx, rank, part, savefile, start_time, loss_report_func)
 
-    def loss_report_func(ep_no, loss_q):
+
+    if loss_report_file_name is None:
+        loss_report_file_name = os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch', 'loss_reports', 'loss_report_{}.log'.format(start_time))
+
+    if not os.path.exists(os.path.dirname(loss_report_file_name)):
+        os.makedirs(os.path.dirname(loss_report_file_name))
+
+    def loss_report_func(message_q):
         # type: (mp.Queue) -> None
-        format_loss = lambda l: 'Epoch {}, Loss {:.2}'.format(ep_no, l)
-        pbar = tqdm(desc=format_loss('??'), total=len(data.train))
-        ema_loss = None
+        loss_report_file = open(loss_report_file_name, 'w', 1) # line buffered
+        last_report_time = time.time()
+
+        def format_loss(ep_no, loss):
+            return 'Epoch {}, Loss {:.2}'.format(ep_no, loss)
+
+        pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
+        ema_loss = 1.0
+        ep_no = 0
         while True:
-            item = loss_q.get()
+            item = message_q.get()
             if item is None:
                 return
-            loss = item.loss
-            if ema_loss is None:
-                ema_loss = loss
-            else:
-                ema_loss = ema_loss * 0.99 + loss * 0.01
+            elif isinstance(item, messages.LossReportMessage):
+                loss = item.loss
+                ema_loss = ema_loss * 0.999 + loss * 0.001
+                pbar.update(item.n_items)
+            elif isinstance(item, messages.EpochAdvanceMessage):
+                ep_no = item.epoch
+                pbar.close()
+                pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
 
-            pbar.update(item.n_items)
-            pbar.set_description(format_loss(ema_loss))
+            t = time.time()
+            if t - last_report_time > 10:
+                loss_report_file.write('{}\t{}\t{}\n'.format(ep_no, t - start_time, ema_loss))
+                last_report_time = t
+
+            pbar.set_description(format_loss(ep_no, ema_loss))
 
     n_trainers = args.trainers
 
+    message_q = mp.Queue()
+    mp.Process(target=loss_report_func, args=(message_q,)).start()
+
     for i in range(args.epochs):
+        message_q.put(messages.EpochAdvanceMessage(i + 1))
         mp_config = MPConfig(n_trainers, args.threads)
         partitions = list(get_partition_splits(len(data.train), mp_config.trainers, split_dist))
         partitions += [None] * mp_config.trainers
@@ -144,15 +174,12 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
         i = restored_epoch + i + 1
 
         partition_queue = mp.Queue()
-        loss_q = mp.Queue()
-
-        mp.Process(target=loss_report_func, args=(i, loss_q)).start()
 
         with mp_config:
             for rank in range(mp_config.trainers):
                 mp_config.set_env(rank)
 
-                m_args = (partition_queue, i, rank, loss_q.put)
+                m_args = (partition_queue, i, rank, message_q.put)
                 p = mp.Process(target=run_training, args=m_args)
                 p.start()
                 print("Starting process %d" % (rank,))
@@ -164,8 +191,6 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
         for p in processes:
             p.join()
 
-        loss_q.put(None)
-
         if args.savefile is not None:
             train.save_checkpoint(i, 0, args.savefile)
 
@@ -173,6 +198,8 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
         train.set_lr(lr)
         if not no_decay_procs and n_trainers > 1:
             n_trainers -= 1
+
+    message_q.put(None)
 
     resultfile = os.path.join(
         os.environ['ITHEMAL_HOME'],
@@ -241,7 +268,7 @@ def graph_model_benchmark(data_savefile, embed_file, embedding_mode, n_examples)
         end_time - start_time,
     ))
 
-def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0):
+def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0, use_residual=False):
     data = dt.DataInstructionEmbedding()
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
@@ -257,9 +284,10 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
 
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
+    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
-    train = tr.Train(model,data, batch_size = 1000,  clip=None)
+
+    train = tr.Train(model,data, batch_size = 1000, clip=None)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -290,7 +318,7 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
 
     f.close()
 
-def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch, edge_ablation_type=None, random_edge_freq=0):
+def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch, edge_ablation_type=None, random_edge_freq=0, use_residual=False):
 
     cnx = ut.create_connection(database=database, config_file=config)
 
@@ -309,7 +337,7 @@ def graph_model_gettiming(database, config, format, data_savefile, embed_file, m
 
     #get the embedding size
     embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
+    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
 
@@ -365,7 +393,8 @@ if __name__ == "__main__":
     edge_ablation_parser_group = parser.add_mutually_exclusive_group()
     edge_ablation_parser_group.add_argument('--transitive-reduction', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_REDUCTION)
     edge_ablation_parser_group.add_argument('--transitive-closure', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_CLOSURE)
-    edge_ablation_parser_group.add_argument('--linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.LINEAR_EDGES)
+    edge_ablation_parser_group.add_argument('--add-linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.ADD_LINEAR_EDGES)
+    edge_ablation_parser_group.add_argument('--only-linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.ONLY_LINEAR_EDGES)
     edge_ablation_parser_group.add_argument('--no-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.NO_EDGES)
 
     parser.add_argument('--random-edge-freq', type=float, default=0)
@@ -379,17 +408,20 @@ if __name__ == "__main__":
     parser.add_argument('--split-dist', nargs='+', type=float,
                         default=[0.5, 0.25, 0.125, .0625, .0625])
     parser.add_argument('--initial-lr', type=float, default=0.01)
+    parser.add_argument('--no-residual', default=False, action='store_true')
+    parser.add_argument('--loss-report-file',action='store',type=str)
+
 
     args = parser.parse_args(sys.argv[1:])
 
     if args.mode == 'save':
         save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq)
+        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file)
     elif args.mode == 'validate':
-        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq)
+        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq, args.no_residual)
     elif args.mode == 'predict':
-        graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch, args.edge_ablation, args.random_edge_freq)
+        graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch, args.edge_ablation, args.random_edge_freq, args.no_residual)
     elif args.mode == 'benchmark':
         graph_model_benchmark(args.savedatafile, args.embedfile, args.embmode, args.n_examples)
     else:

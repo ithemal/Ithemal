@@ -5,3 +5,7 @@ LossReportMessage = NamedTuple('LossReportMessage', [
     ('loss', float),
     ('n_items', int),
 ])
+
+EpochAdvanceMessage = NamedTuple('EpochAdvanceMessage', [
+    ('epoch', int),
+])
