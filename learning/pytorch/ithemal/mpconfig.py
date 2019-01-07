@@ -28,7 +28,7 @@ class MPConfig:
             'verbose',
             'granularity=fine',
             'compact',
-            '0',
+            '1',
             trainer_id * self.threads
         ]))
 
