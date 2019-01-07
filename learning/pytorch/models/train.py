@@ -235,6 +235,9 @@ class Train():
                 torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
 
             for param in self.model.parameters():
+                if param.grad is None:
+                    continue
+
                 isnan = torch.isnan(param.grad)
                 if isnan.any():
                     print 'gradient values are nan...'
