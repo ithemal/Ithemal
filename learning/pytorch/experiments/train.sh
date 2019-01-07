@@ -7,4 +7,4 @@ fi
 
 NAME=$1; shift
 
-bash "${ITHEMAL_HOME}/learning/pytorch/experiments/baserun.sh" "${NAME}" --mode train "${@}"
+bash "${ITHEMAL_HOME}/learning/pytorch/experiments/baserun.sh" "${NAME}" --mode train --batch-size 4 "${@}"

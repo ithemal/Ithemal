@@ -22,4 +22,4 @@ NAMEDATE="${NAME}_$(date '+%m-%d-%y_%H:%M:%S')"
 SAVEFILE="saved/${NAMEDATE}.mdl"
 LOSS_REPORT_FILE="loss_reports/${NAMEDATE}.log"
 
-python ithemal/run_ithemal.py --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 1 --epochs 5 --batch-size 4 --mode train --savefile "${SAVEFILE}" --loss-report-file "${LOSS_REPORT_FILE}" "${@}"
+python ithemal/run_ithemal.py --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 1 --epochs 5 --savefile "${SAVEFILE}" --loss-report-file "${LOSS_REPORT_FILE}" "${@}"
