@@ -411,7 +411,7 @@ if __name__ == "__main__":
     parser.add_argument('--no-residual', default=False, action='store_true')
     parser.add_argument('--loss-report-file',action='store',type=str)
     parser.add_argument('--weight-decay', type=float, default=None)
-    parser.add_argument('--predict-log', action-'store_true', default=False)
+    parser.add_argument('--predict-log', action='store_true', default=False)
 
 
     args = parser.parse_args(sys.argv[1:])
