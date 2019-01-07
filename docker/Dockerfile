@@ -48,6 +48,7 @@ RUN /opt/conda/bin/conda install -q -n ithemal \
         python-graphviz=0.8.4 \
         scikit-learn=0.19 \
         scipy=1.1.0 \
+        seaborn=0.9.0 \
         statistics=1.0.3.5 \
         tqdm=4.28.1 \
         typing=3.6.6
