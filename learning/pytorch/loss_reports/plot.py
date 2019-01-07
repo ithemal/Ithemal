@@ -4,12 +4,12 @@ import argparse
 from matplotlib import pyplot as plt
 import numpy as np
 import os
+import time
 from typing import List, NamedTuple
 import re
 
 Measurement = NamedTuple('Measurement', [
-    ('trainers', int),
-    ('threads', int),
+    ('label', str),
     ('start_time', float),
     ('epochs', List[int]),
     ('times', List[float]),
@@ -22,8 +22,7 @@ def plot_measurements(measurements):
         epochs = np.array(measurement.epochs)
         times = np.array(measurement.times)
         losses = np.array(measurement.losses)
-
-        label = '{} Trainers, {} Threads'.format(measurement.trainers, measurement.threads)
+        label = measurement.label
         plt.plot(times / 60, losses, label=label, color=color)
 
         ep_advance = np.where(np.diff(epochs))[0] + 1
@@ -38,7 +37,7 @@ def plot_measurements(measurements):
     plt.show()
 
 def plot_files(files):
-    pat = re.compile(r'(?P<trainers>\d+)_(?P<threads>\d+)_(?P<time>\d+(?:\.\d+)?)\.log')
+    pat = re.compile(r'(?P<base>.*?)_(?P<time>\d\d-\d\d-\d\d_\d\d:\d\d:\d\d).log$')
     measurements = {}
     for fname in files:
         with open(fname) as f:
@@ -50,14 +49,12 @@ def plot_files(files):
                 continue
 
             epochs, times, losses = zip(*datum)
-            match = pat.match(os.path.basename(fname))
-            trainers = int(match.group('trainers'))
-            threads = int(match.group('threads'))
-            start_time = float(match.group('time'))
-
-            key = (trainers, threads)
-            if key not in measurements or measurements[key].start_time < start_time:
-                measurements[key] = Measurement(trainers, threads, start_time, epochs, times, losses)
+            match = pat.search(os.path.basename(fname))
+            if not match:
+                continue
+            start_time = time.strptime(match.group('time'), '%m-%d-%y_%H:%M:%S')
+            label = match.group('base')
+            measurements[label] = Measurement(label, start_time, epochs, times, losses)
 
     plot_measurements(measurements.values())
 
