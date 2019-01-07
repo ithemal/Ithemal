@@ -11,12 +11,13 @@ import numpy as np
 
 class GraphNN(nn.Module):
 
-    def __init__(self, embedding_size, hidden_size, num_classes):
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True):
         super(GraphNN, self).__init__()
 
         self.num_classes = num_classes
 
         self.hidden_size = hidden_size
+        self.use_residual = use_residual
 
         #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
@@ -175,9 +176,12 @@ class GraphNN(nn.Module):
         self.init_bblstm(item)
 
         graph = self.create_graphlstm(item.x, item.block)
-        sequential = self.create_residual_lstm(item.x, item.block)
-        
-        final = self.linear(graph).squeeze() + self.linear_seq(sequential).squeeze()
+
+        if self.use_residual:
+            sequential = self.create_residual_lstm(item.x, item.block)
+            final = self.linear(graph).squeeze() + self.linear_seq(sequential).squeeze()
+        else:
+            final = self.linear(graph).squeeze()
 
         #final = self.reduction(graph, sequential)
         #return self.linear(final).squeeze()
@@ -185,7 +189,3 @@ class GraphNN(nn.Module):
         #print final.item()
 
         return final
-
-
-
-
