@@ -1,5 +1,4 @@
 import collections
-from graphviz import Digraph
 import mysql.connector
 import struct
 import sys
@@ -481,10 +480,17 @@ class BasicBlock:
 
         return n_edges_added
 
-    def clear_edges(self):
+    def remove_edges(self):
         for instr in self.instrs:
             instr.parents = []
             instr.children = []
+
+    def linearize_edges(self):
+        for fst, snd in zip(self.instrs, self.instrs[1:]):
+            if snd not in fst.children:
+                fst.children.append(snd)
+            if fst not in snd.parents:
+                snd.parents.append(fst)
 
     def find_leafs(self):
         leafs = []
@@ -548,6 +554,8 @@ class BasicBlock:
     def draw(self, to_file=False, file_name=None, view=True):
         if to_file and not file_name:
             file_name = tempfile.NamedTemporaryFile(suffix='.gv').name
+
+        from graphviz import Digraph
 
         dot = Digraph()
         for instr in self.instrs:
