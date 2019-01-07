@@ -7,13 +7,16 @@ sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 import common_libs.utilities as ut
 import data.data_cost as dt
 import functools
+import itertools
 from pprint import pprint
 import random
 import re
+import sparsemax
 import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 from typing import Callable, List, NamedTuple
 
 SLOT_WIDTH = 32
@@ -43,7 +46,8 @@ class Slot(object):
 
     def mutate(self, new_state, additional_time):
         # type: (torch.tensor, torch.tensor) -> torch.tensor
-        self.state = self.state * (self.remaining_time > 0).float() + new_state
+        perc = additional_time / (additional_time + self.remaining_time)
+        self.state = new_state * perc + self.state * (1 - perc)
         old_time = self.remaining_time
         self.remaining_time = self.remaining_time + additional_time
         return old_time[0]
@@ -54,53 +58,57 @@ class Slot(object):
 
     def read(self):
         # type: () -> torch.tensor
-        return torch.cat([self.remaining_time, self.state * (self.remaining_time > 0).float()])
-
-def cat_embedder(emb_dim, max_n_srcs, max_n_dsts):
-    # type: (int, int, int) -> Callable[[ut.Instruction], torch.tensor]
-    sym_dict, _ = ut.get_sym_dict()
-    embedder = torch.nn.Embedding(len(sym_dict), emb_dim)
-    clamp = lambda x: x if x < len(sym_dict) else len(sym_dict) - 1
-
-    def get_emb_list(arr, length):
-        # type: (List[int], int) -> List[torch.tensor]
-        assert len(arr) <= length
-        real = [embedder(torch.tensor(clamp(val))) for val in arr]
-        zeros = [torch.zeros(emb_dim) for _ in range(length - len(arr))]
-        return real + zeros
-
-    def embed(instr):
-        # type: (ut.Instruction) -> torch.tensor
-        opc = embedder(torch.tensor(instr.opcode))
-        srcs = get_emb_list(instr.srcs, max_n_srcs)
-        dsts = get_emb_list(instr.dsts, max_n_dsts)
-        return torch.cat([opc] + srcs + dsts)
-
-    return embed
-
+        state = self.state * torch.clamp(self.remaining_time * 10, 0, 1)
+        return torch.cat([self.remaining_time, state])
 
 class NeuralProcessorSimulator(nn.Module):
     def __init__(self):
         # type: () -> None
         super(NeuralProcessorSimulator, self).__init__()
-        self.embedder = cat_embedder(128, 3, 3)
-        self.instr_vec_emb = nn.Linear(128*7, 128)
-        self.slot_vec_emb = nn.Linear((1+SLOT_WIDTH)*NUM_SLOTS, 128)
-        self.wait_time_out = nn.Linear(256, 1)
-        self.write_head_out = nn.Linear(256, NUM_SLOTS)
-        self.write_state_out = nn.Linear(256, SLOT_WIDTH)
-        self.write_time_out = nn.Linear(256, 1)
+        latent_width = 256
+        sym_dict, _ = ut.get_sym_dict()
+        self._embed_width = 128
+        self._n_embeddings = len(sym_dict)
+        self._max_n_srcs = 3
+        self._max_n_dsts = 3
+        self.embedder = torch.nn.Embedding(self._n_embeddings, self._embed_width)
+        full_embed_width = self._embed_width * (1 + self._max_n_srcs + self._max_n_dsts)
+        self.instr_vec_emb = nn.Linear(full_embed_width, latent_width // 2)
+        self.slot_vec_emb = nn.Linear((1+SLOT_WIDTH)*NUM_SLOTS, latent_width // 2)
+        self.latent_layer = nn.Linear(latent_width, latent_width)
+        self.wait_time_out = nn.Linear(latent_width, 1)
+        self.write_head_out = nn.Linear(latent_width, NUM_SLOTS)
+        self.write_state_out = nn.Linear(latent_width, SLOT_WIDTH)
+        self.write_time_out = nn.Linear(latent_width, 1)
+
+        self.write_head_sparsemax = sparsemax.Sparsemax(dim=0)
+
+    def _get_emb_list(self, arr, length):
+        # type: (List[int], int) -> List[torch.tensor]
+        assert len(arr) <= length
+        clamp = lambda x: x if x < self._n_embeddings else self._n_embeddings - 1
+        real = [self.embedder(torch.tensor(clamp(val))) for val in arr]
+        zeros = [torch.zeros(self._embed_width) for _ in range(length - len(arr))]
+        return real + zeros
+
+    def embed(self, instr):
+        # type: (ut.Instruction) -> torch.tensor
+        opc = self.embedder(torch.tensor(instr.opcode))
+        srcs = self._get_emb_list(instr.srcs, self._max_n_srcs)
+        dsts = self._get_emb_list(instr.dsts, self._max_n_dsts)
+        return torch.cat([opc] + srcs + dsts)
 
     def forward(self, instr_vec, slot_vec):
         # type: (torch.tensor, torch.tensor) -> SimulatorResult
-        instr_vec = F.relu(self.instr_vec_emb(instr_vec))
-        slot_vec = F.relu(self.slot_vec_emb(slot_vec))
-        concat = torch.cat([instr_vec, slot_vec])
+        instr_vec = self.instr_vec_emb(instr_vec)
+        slot_vec = self.slot_vec_emb(slot_vec)
+        concat = F.relu(torch.cat([instr_vec, slot_vec]))
+        latent = F.relu(self.latent_layer(concat))
 
-        wait_time = self.wait_time_out(concat).abs()
-        write_head = F.softmax(self.write_head_out(concat), dim=0)
-        write_state = self.write_state_out(concat)
-        write_time = self.write_time_out(concat).abs()
+        wait_time = self.wait_time_out(latent).abs()
+        write_head = self.write_head_sparsemax(self.write_head_out(latent))
+        write_state = self.write_state_out(latent)
+        write_time = self.write_time_out(latent).abs()
 
         return SimulatorResult(
             wait_time=wait_time,
@@ -112,12 +120,12 @@ class NeuralProcessorSimulator(nn.Module):
 def run_on_data(model, block, actual, debug=False):
     # type: (nn.Module, ut.BasicBlock, float, bool) -> ModelRunResult
     slots = [Slot() for _ in range(NUM_SLOTS)]
-    schedule_loss = torch.tensor(0., requires_grad=True)
-    wait_time = torch.tensor(0., requires_grad=True)
+    schedule_loss = torch.tensor(0.)
+    wait_time = torch.tensor(0.)
 
     for instr in block.instrs:
         slot_vec = torch.cat([slot.read() for slot in slots])
-        instr_vec = model.embedder(instr)
+        instr_vec = model.embed(instr)
         result = model(instr_vec, slot_vec)
 
         if debug:
@@ -133,12 +141,12 @@ def run_on_data(model, block, actual, debug=False):
             frac = result.write_head[i]
             overfill_loss = slots[i].mutate(frac * result.write_state, frac * result.write_time)
             schedule_loss = schedule_loss + frac * overfill_loss
-            schedule_loss = schedule_loss + (frac > 1e-2).float() # l0 loss
+            schedule_loss = schedule_loss + frac # l1 loss
 
     remaining_time = torch.max(torch.cat([slot.remaining_time for slot in slots]))
     total_time = wait_time + remaining_time
     wrongness_loss = F.mse_loss(total_time, torch.tensor(actual))
-    loss = schedule_loss + 10 * wrongness_loss
+    loss = schedule_loss + 100 * wrongness_loss
     return ModelRunResult(total_time, loss, slots)
 
 class Trainer(object):
@@ -148,7 +156,7 @@ class Trainer(object):
         self.train_data = train_data
         self.name = name
         self.save_freq = save_freq
-        self.optimizer = torch.optim.Adam(model.parameters(), lr = 1e-4, weight_decay=1e-5)
+        self.optimizer = torch.optim.Adam(model.parameters(), lr = 1e-6)
         self.last_save_time = 0 # type: float
         self.err_ema = 1
 
@@ -158,13 +166,22 @@ class Trainer(object):
         fpath =  os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch', 'saved', fname)
         torch.save(self.model.state_dict(), fpath)
 
+    def load_model(self, fname):
+        # type: (str) -> None
+        self.model.load_state_dict(torch.load(fname))
+
     def load_latest(self):
         # type: () -> None
-        raise NotImplementedError()
+        pat = re.compile(r'{}_([\d\.]+)$'.format(re.escape(self.name)))
+        dname = os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch', 'saved')
+        fnames = filter(bool, map(pat.match, os.listdir(dname)))
+        latest_fname = max(fnames, key=lambda m: float(m.group(1))).group(0)
+
+        self.load_model(os.path.join(dname, latest_fname))
 
     def step_sgd(self, debug=False):
         # type: (bool) -> float
-        scale = 100
+        scale = 268
 
         if time.time() - self.last_save_time > self.save_freq:
             self.save_model()
@@ -172,27 +189,30 @@ class Trainer(object):
 
         datum = random.choice(self.train_data)
 
+        if datum.y < 5 or datum.y > 1e6:
+            return 1
+
         self.optimizer.zero_grad()
         result = run_on_data(self.model, datum.block, datum.y / scale, debug=debug)
         result.loss.backward()
         self.optimizer.step()
 
-        pred = result.prediction * scale
+        pred = result.prediction.item() * scale
 
-        err = 2 * abs((datum.y - pred) / (datum.y + pred))
-        self.err_ema = 0.99 * self.err_ema + 0.01 * err
+        err = abs((datum.y - pred) / datum.y)
+        ema_exp = 0.999
+        self.err_ema = ema_exp * self.err_ema + (1 - ema_exp) * err
 
         return err
 
     def loop_sgd(self):
         # type: () -> None
-        i = 0
-        while True:
+        format_desc = desc='Error EMA: {:.2f}'.format
+        pbar = tqdm(desc=format_desc(1, 0))
+        for iter_idx in itertools.count(1):
             err = self.step_sgd()
-            i += 1
-            if i > 100:
-                print('err_ema: {:.2f}, err: {:.2f}'.format(self.err_ema, err), end='\r')
-                i = 0
+            pbar.set_description(format_desc(self.err_ema, iter_idx), refresh=False)
+            pbar.update(1)
 
     def debug_sgd(self):
         # type: () -> None
