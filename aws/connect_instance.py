@@ -49,7 +49,7 @@ def interactively_connect_to_instance(aws_instances):
     while True:
         instances = aws_instances.get_running_instances()
         if not instances:
-            print('No instances to connect do!')
+            print('No instances to connect to!')
             return
         elif len(instances) == 1:
             aws_instances.connect_to_instance(instances[0])
@@ -74,13 +74,35 @@ def interactively_connect_to_instance(aws_instances):
                 continue
 
             if index_to_connect < 1 or index_to_connect > len(instances):
-                print('{} is not between 1 and {}.'.format(index_to_connect, len(instances) + 1))
+                print('{} is not between 1 and {}.'.format(index_to_connect, len(instances)))
                 continue
 
             instance = instances[index_to_connect - 1]
             aws_instances.connect_to_instance(instance)
 
             return
+
+def connect_to_instance_id_or_index(aws_instances, id_or_index):
+    instances = aws_instances.get_running_instances()
+
+    if len(instances) == 0:
+        print('No instances to connect to!')
+
+    try:
+        idx = int(id_or_index)
+        if idx <= 0 or idx > len(instances):
+            print('Provided index must be in the range [{}, {}]'.format(1, len(instances)))
+            return
+
+        aws_instances.connect_to_instance(instances[idx - 1])
+    except ValueError:
+        pass
+
+    try:
+        instance = next(instance for instance in instances if instance['InstanceId'] == id_or_index)
+        aws_instances.connect_to_instance(instance)
+    except StopIteration:
+        raise ValueError('{} is not a valid instance ID or index'.format(id_or_index))
 
 def main():
     parser = argparse.ArgumentParser(description='Connect to a running AWS EC2 instance')
@@ -101,8 +123,7 @@ def main():
         return
 
     if args.instance_id:
-        instance = next(instance for instance in aws_instances.get_running_instances() if instance['InstanceId'] == args.instance_id)
-        aws_instances.connect_to_instance(instance)
+        connect_to_instance_id_or_index(aws_instances, args.instance_id)
     else:
         interactively_connect_to_instance(aws_instances)
 

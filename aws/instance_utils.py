@@ -47,7 +47,7 @@ class AwsInstance(object):
                      for reservation in parsed_out['Reservations']
                      for instance in reservation['Instances']]
 
-        def start_time_of_instance(instance):
-            return time.strptime(instance['LaunchTime'], '%Y-%m-%dT%H:%M:%S.%fZ')
+        def sort_key_of_instance(instance):
+            return (time.strptime(instance['LaunchTime'], '%Y-%m-%dT%H:%M:%S.%fZ'), instance['InstanceId'])
 
-        return sorted(instances, key=start_time_of_instance)
+        return sorted(instances, key=sort_key_of_instance)

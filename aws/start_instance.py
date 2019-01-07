@@ -19,12 +19,13 @@ except NameError:
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
-    def __init__(self, identity, name, instance_type, db, force):
+    def __init__(self, identity, name, instance_type, db, force, no_connect):
         super(InstanceMaker, self).__init__(identity, require_pem=True)
         self.name = name
         self.instance_type = instance_type
         self.db = db
         self.force = force
+        self.no_connect = no_connect
 
     def start_instance(self):
         if not self.force:
@@ -110,7 +111,8 @@ class InstanceMaker(AwsInstance):
         tar.wait()
         ssh.wait()
 
-        os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
+        if not self.no_connect:
+            os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
 
 
 def main():
@@ -119,6 +121,7 @@ def main():
     parser.add_argument('-n', '--name', help='Name to start the container with', default=None)
     parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
     parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
+    parser.add_argument('--no-connect', help='Don\'t connect to the instance after it is started', default=False, action='store_true')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--prod-ro-db', help='Use the read-only prod database (default)', action='store_true')
@@ -134,7 +137,7 @@ def main():
     else:
         db = 'prod-ro'
 
-    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force)
+    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force, args.no_connect)
     instance_maker.start_instance()
 
 if __name__ == '__main__':

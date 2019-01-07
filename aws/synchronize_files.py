@@ -47,11 +47,12 @@ class InstanceSynchronizer(AwsInstance):
 def main():
     parser = argparse.ArgumentParser(description='Synchronize files in the Ithemal directory to a running AWS EC2 instance')
 
-    user_group = parser.add_mutually_exclusive_group(required=True)
-    user_group.add_argument('--to', help='Connect directly to the host', default=False, action='store_true')
-    user_group.add_argument('--from', help='Connect to root in the Docker instance', default=False, action='store_true')
+    direction_group = parser.add_mutually_exclusive_group(required=True)
+    direction_group.add_argument('--to', help='Connect directly to the host', default=False, action='store_true')
+    direction_group.add_argument('--from', help='Connect to root in the Docker instance', default=False, action='store_true')
 
     parser.add_argument('identity', help='Identity to use to connect')
+    parser.add_argument('--all', help='Synchronize with all instances', default=False, action='store_true')
     parser.add_argument('file', help='Files to synchronize', nargs='+')
     args = parser.parse_args()
 
@@ -60,7 +61,13 @@ def main():
     else:
         direction = 'from'
 
-    connect_instance.interactively_connect_to_instance(InstanceSynchronizer(args.identity, direction, args.file))
+    synchronizer = InstanceSynchronizer(args.identity, direction, args.file)
+
+    if args.all:
+        for instance in synchronizer.get_running_instances():
+            synchronizer.connect_to_instance(instance)
+    else:
+        connect_instance.interactively_connect_to_instance(synchronizer)
 
 if __name__ == '__main__':
     main()
