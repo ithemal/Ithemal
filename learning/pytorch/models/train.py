@@ -50,7 +50,8 @@ class Train():
                  lr = 0.001,
                  momentum = 0.9,
                  clip = 2,
-                 opt = 'SGD'
+                 opt = 'SGD',
+                 weight_decay = None,
     ):
         self.model = model
         print self.model
@@ -59,11 +60,16 @@ class Train():
         self.momentum = momentum
         self.clip = clip
         self.opt = opt
+        self.weight_decay = weight_decay
 
         if opt == 'SGD':
             self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum)
         elif opt == 'Adam':
-            self.optimizer = optim.Adam(self.model.parameters())
+            if self.weight_decay:
+                wd = self.weight_decay
+            else:
+                wd = 0
+            self.optimizer = optim.Adam(self.model.parameters(), weight_decay=wd)
         else:
             raise ValueError('unknown optimizer...')
 

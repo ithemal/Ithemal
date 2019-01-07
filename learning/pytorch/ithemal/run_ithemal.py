@@ -75,8 +75,8 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
             idx += split_size
     yield (idx, n_datapoints)
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0, no_residual=False, loss_report_file_name=None):
-    # type: (str, str, str, str, List[float], bool, float, Optional[EdgeAblationType], float, bool, Optional[str]) -> None
+def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0, no_residual=False, loss_report_file_name=None, weight_decay=None):
+    # type: (str, str, str, str, List[float], bool, float, Optional[EdgeAblationType], float, bool, Optional[str], Optional[float]) -> None
     data = dt.load_dataset(embed_file, data_savefile=data_savefile)
     ablate_data(data, edge_ablation_type, random_edge_freq)
 
@@ -90,7 +90,7 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
     lr = initial_lr
-    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=lr)
+    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=lr, weight_decay=weight_decay)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -410,6 +410,7 @@ if __name__ == "__main__":
     parser.add_argument('--initial-lr', type=float, default=0.01)
     parser.add_argument('--no-residual', default=False, action='store_true')
     parser.add_argument('--loss-report-file',action='store',type=str)
+    parser.add_argument('--weight-decay', type=float, default=None)
 
 
     args = parser.parse_args(sys.argv[1:])
@@ -417,7 +418,7 @@ if __name__ == "__main__":
     if args.mode == 'save':
         save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file)
+        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file, args.weight_decay)
     elif args.mode == 'validate':
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq, args.no_residual)
     elif args.mode == 'predict':
