@@ -52,6 +52,7 @@ class Train():
                  clip = 2,
                  opt = 'SGD',
                  weight_decay = None,
+                 predict_log = False,
     ):
         self.model = model
         print self.model
@@ -61,6 +62,7 @@ class Train():
         self.clip = clip
         self.opt = opt
         self.weight_decay = weight_decay
+        self.predict_log = predict_log
 
         if opt == 'SGD':
             self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum)
@@ -174,6 +176,12 @@ class Train():
         self.partition = partition
         self.train(savefile=savefile, start_time=start_time, report_loss_fn=report_loss_fn)
 
+    def get_target(self, datum):
+        target = torch.FloatTensor([datum.y]).squeeze()
+        if self.predict_log:
+            target.log_()
+        return target
+
     """
     Training loop - to do make the average loss for general
     """
@@ -215,7 +223,7 @@ class Train():
                     return
 
                 #target as a tensor
-                target = torch.FloatTensor([datum.y]).squeeze()
+                target = self.get_target(datum)
 
                 #get the loss value
                 losses = self.loss_fn(output, target)
@@ -308,7 +316,9 @@ class Train():
 
             #print len(item.x)
             output = self.model(item)
-            target = torch.FloatTensor([item.y]).squeeze()
+            if self.predict_log:
+                output.exp_()
+            target = self.get_target(item)
 
             #get the target and predicted values into a list
             if self.correct_fn == self.correct_classification:
