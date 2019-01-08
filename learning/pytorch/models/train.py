@@ -71,7 +71,7 @@ class Train():
                 wd = self.weight_decay
             else:
                 wd = 0
-            self.optimizer = optim.Adam(self.model.parameters(), weight_decay=wd)
+            self.optimizer = optim.Adam(self.model.parameters(), weight_decay=wd, lr=lr)
         else:
             raise ValueError('unknown optimizer...')
 
@@ -318,9 +318,11 @@ class Train():
 
             #print len(item.x)
             output = self.model(item)
+            target = self.get_target(item)
+
             if self.predict_log:
                 output.exp_()
-            target = self.get_target(item)
+                target.exp_()
 
             #get the target and predicted values into a list
             if self.correct_fn == self.correct_classification:
