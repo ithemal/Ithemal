@@ -35,7 +35,7 @@ class InstanceSynchronizer(AwsInstance):
             tar = subprocess.Popen(['tar', 'cz'] + self.files, cwd=_GITROOT, stdout=subprocess.PIPE)
             ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, ssh_address, ssh_command], stdin=tar.stdout)
         elif self.direction == 'from':
-            ssh_command = 'cd ithemal; tar cz {}'.format(' '.join(self.files))
+            ssh_command = 'cd ithemal; tar cz {}'.format(' '.join(map(lambda f: "'{}'".format(f), self.files)))
 
             ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, ssh_address, ssh_command], stdout=subprocess.PIPE)
             tar = subprocess.Popen(['tar', 'xz'] + self.files, cwd=_GITROOT, stdin=ssh.stdout)
