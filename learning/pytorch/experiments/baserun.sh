@@ -23,3 +23,5 @@ SAVEFILE="saved/${NAMEDATE}.mdl"
 LOSS_REPORT_FILE="loss_reports/${NAMEDATE}.log"
 
 python ithemal/run_ithemal.py --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 1 --epochs 5 --savefile "${SAVEFILE}" --loss-report-file "${LOSS_REPORT_FILE}" "${@}"
+
+"${ITHEMAL_HOME}/aws/ping_slack.py" "Experiment ${NAME} complete"
