@@ -17,13 +17,14 @@ Measurement = NamedTuple('Measurement', [
     ('losses', List[float]),
 ])
 
-def plot_measurements(measurements):
+def plot_measurements(measurements, blur):
     for midx, measurement in enumerate(measurements):
         color = 'C{}'.format(midx)
         epochs = np.array(measurement.epochs)
         times = np.array(measurement.times)
         losses = np.array(measurement.losses)
-        losses = scipy.ndimage.filters.gaussian_filter1d(losses, 25)
+        if blur > 0:
+            losses = scipy.ndimage.filters.gaussian_filter1d(losses, blur)
         label = measurement.label
         plt.plot(times / 60, losses, label=label, color=color)
 
@@ -39,7 +40,7 @@ def plot_measurements(measurements):
     plt.legend()
     plt.show()
 
-def plot_files(files):
+def plot_files(files, blur):
     pat = re.compile(r'(?P<base>.*?)_(?P<time>\d\d-\d\d-\d\d_\d\d:\d\d:\d\d).log$')
     measurements = {}
     for fname in files:
@@ -59,13 +60,14 @@ def plot_files(files):
             label = match.group('base')
             measurements[label] = Measurement(label, start_time, epochs, times, losses)
 
-    plot_measurements(measurements.values())
+    plot_measurements(measurements.values(), blur)
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--blur', type=float, default=25)
     parser.add_argument('files', nargs='+')
     args = parser.parse_args()
-    plot_files(args.files)
+    plot_files(args.files, args.blur)
 
 if __name__ == '__main__':
     main()
