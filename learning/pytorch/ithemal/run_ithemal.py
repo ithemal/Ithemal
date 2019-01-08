@@ -269,7 +269,7 @@ def graph_model_benchmark(data_savefile, embed_file, embedding_mode, n_examples)
         end_time - start_time,
     ))
 
-def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0, no_residual=False):
+def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0, no_residual=False, predict_log=False):
     data = dt.DataInstructionEmbedding()
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
@@ -288,7 +288,7 @@ def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode
     model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
     model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
 
-    train = tr.Train(model,data, batch_size = 1000, clip=None)
+    train = tr.Train(model,data, batch_size = 1000, clip=None, predict_log=predict_log)
 
     #defining losses, correctness and printing functions
     train.loss_fn = ls.mse_loss
@@ -423,7 +423,7 @@ if __name__ == "__main__":
     elif args.mode == 'train':
         graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file, args.weight_decay, args.predict_log, args.decay_lr)
     elif args.mode == 'validate':
-        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq, args.no_residual)
+        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq, args.no_residual, args.predict_log)
     elif args.mode == 'predict':
         graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch, args.edge_ablation, args.random_edge_freq, args.no_residual)
     elif args.mode == 'benchmark':
