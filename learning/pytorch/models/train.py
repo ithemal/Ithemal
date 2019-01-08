@@ -196,7 +196,6 @@ class Train():
         leftover = train_length % self.batch_size
 
         epoch_sum_loss = np.zeros(self.num_losses)
-        epoch_ema_loss = np.ones(self.num_losses)
 
         data = [self.data.train[i] for i in random.sample(range(*self.partition), train_length)]
 
@@ -226,17 +225,20 @@ class Train():
                 target = self.get_target(datum)
 
                 #get the loss value
-                losses = self.loss_fn(output, target)
+                losses_opt = self.loss_fn(output, target)
+                if self.predict_log:
+                    losses_rep = self.loss_fn(output.exp(), target.exp())
+                else:
+                    losses_rep = losses_opt
 
                 #check how many are correct
                 self.correct_fn(output, target)
 
                 #accumulate the losses
-                for class_idx, loss in enumerate(losses):
-                    loss_tensor += loss
-                    l = loss.item()
+                for class_idx, (loss_opt, loss_rep) in enumerate(zip(losses_opt, losses_rep)):
+                    loss_tensor += loss_opt
+                    l = loss_rep.item()
                     epoch_sum_loss[class_idx] += l
-                    epoch_ema_loss[class_idx] = 0.98 * epoch_ema_loss[class_idx] + 0.02 * l
                     batch_loss_sum[class_idx] += l
 
             batch_loss_avg = batch_loss_sum / len(batch)
