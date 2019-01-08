@@ -75,8 +75,8 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
             idx += split_size
     yield (idx, n_datapoints)
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0, no_residual=False, loss_report_file_name=None, weight_decay=None, predict_log=False):
-    # type: (str, str, str, str, List[float], bool, float, Optional[EdgeAblationType], float, bool, Optional[str], Optional[float], Optional[bool]) -> None
+def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0, no_residual=False, loss_report_file_name=None, weight_decay=None, predict_log=False, decay_lr=False):
+    # type: (str, str, str, str, List[float], bool, float, Optional[EdgeAblationType], float, bool, Optional[str], Optional[float], Optional[bool], bool) -> None
     data = dt.load_dataset(embed_file, data_savefile=data_savefile)
     ablate_data(data, edge_ablation_type, random_edge_freq)
 
@@ -194,8 +194,9 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
         if args.savefile is not None:
             train.save_checkpoint(i, 0, args.savefile)
 
-        lr /= 10
-        train.set_lr(lr)
+        if decay_lr:
+            lr /= 10
+            train.set_lr(lr)
         if not no_decay_procs and n_trainers > 1:
             n_trainers -= 1
 
@@ -268,7 +269,7 @@ def graph_model_benchmark(data_savefile, embed_file, embedding_mode, n_examples)
         end_time - start_time,
     ))
 
-def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0, use_residual=False):
+def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0, no_residual=False):
     data = dt.DataInstructionEmbedding()
     data.raw_data = torch.load(data_savefile)
     data.set_embedding(embed_file)
@@ -407,11 +408,12 @@ if __name__ == "__main__":
     parser.add_argument('--no-decay-procs', action='store_true', default=False)
     parser.add_argument('--split-dist', nargs='+', type=float,
                         default=[0.5, 0.25, 0.125, .0625, .0625])
-    parser.add_argument('--initial-lr', type=float, default=0.01)
+    parser.add_argument('--initial-lr', type=float, default=0.0001)
     parser.add_argument('--no-residual', default=False, action='store_true')
     parser.add_argument('--loss-report-file',action='store',type=str)
     parser.add_argument('--weight-decay', type=float, default=None)
     parser.add_argument('--predict-log', action='store_true', default=False)
+    parser.add_argument('--decay-lr', action='store_true', default=False)
 
 
     args = parser.parse_args(sys.argv[1:])
@@ -419,7 +421,7 @@ if __name__ == "__main__":
     if args.mode == 'save':
         save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
     elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file, args.weight_decay, args.predict_log)
+        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file, args.weight_decay, args.predict_log, args.decay_lr)
     elif args.mode == 'validate':
         graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq, args.no_residual)
     elif args.mode == 'predict':
