@@ -11,6 +11,7 @@ SLACK_USERNAME = 'AWS'
 SLACK_CHANNEL = 'aws-notifications'
 SLACK_ICON = 'https://raw.githubusercontent.com/quintessence/slack-icons/e9e141f0a119759ca4d59e0b788fc9375c9b2678/images/amazon-web-services-slack-icon.png'
 
+# map from IAM key to Slack user ID
 USER_MAP = {
     'renda': 'UCJ98TMB8',
     'charithm': 'UB59J5BHR',
@@ -18,6 +19,8 @@ USER_MAP = {
 }
 
 def get_starting_user():
+    '''Get the IAM key (user) that started this AWS instance, or None if this is not an AWS instance
+    '''
     proc = subprocess.Popen(
         ['/usr/bin/curl', '--silent', '--connect-timeout', '1', 'http://169.254.169.254/latest/meta-data/public-keys/0/openssh-key'],
         stdout=subprocess.PIPE,
@@ -32,6 +35,8 @@ def get_starting_user():
     return stdout.split()[2]
 
 def send_message(message):
+    ''' Send the given message to slack
+    '''
     payload = {
         'text': message,
         'username': SLACK_USERNAME,
@@ -43,21 +48,20 @@ def send_message(message):
     urllib2.urlopen(request)
 
 def main():
-    parser = argparse.ArgumentParser('Ping a user in the aws-notifications channel on Slack')
-    parser.add_argument('--user', default=None, help='User to ping (default: user that started instance on AWS, None elsewhere)')
+    parser = argparse.ArgumentParser('Ping a user in the #aws-notifications channel on Slack')
+    parser.add_argument('--user', default=None, help='User to ping (default: user that started instance on AWS)')
     parser.add_argument('message', help='Message to send')
 
+    # behave like 'echo', and just concatenate all args (undocumented)
     args, unknown_args = parser.parse_known_args()
 
     message = args.message
     for unknown_arg in unknown_args:
         message += ' ' + unknown_arg
 
-    if args.user:
-        user = args.user
-    else:
-        user = get_starting_user()
+    user = args.user or get_starting_user()
 
+    # if there is a user, taf them
     if user:
         message = '<@{}>: {}'.format(
             USER_MAP[user],
