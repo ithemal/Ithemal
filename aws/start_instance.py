@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import argparse
 import base64
 import json
@@ -19,13 +21,14 @@ except NameError:
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
-    def __init__(self, identity, name, instance_type, db, force, no_connect):
+    def __init__(self, identity, name, instance_type, db, force, no_connect, spot):
         super(InstanceMaker, self).__init__(identity, require_pem=True)
         self.name = name
         self.instance_type = instance_type
         self.db = db
         self.force = force
         self.no_connect = no_connect
+        self.spot = spot
 
     def start_instance(self):
         if not self.force:
@@ -48,19 +51,70 @@ class InstanceMaker(AwsInstance):
         if self.name:
             name += ': {}'.format(self.name)
 
-        args = [
-            'aws', 'ec2', 'run-instances',
-            '--instance-type', self.instance_type,
-            '--key-name', self.identity,
-            '--image-id', 'ami-0b59bfac6be064b78',
-            '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name),
-            '--security-group-ids', 'sg-0780fe1760c00d96d',
-            '--block-device-mappings', '[{"DeviceName": "/dev/xvda", "Ebs": {"VolumeSize": 16}}]',
-        ]
-        output = subprocess.check_output(args)
-        parsed_output = json.loads(output)
-        instance = parsed_output['Instances'][0]
-        instance_id = instance['InstanceId']
+        block_device_mappings = [{"DeviceName": "/dev/xvda", "Ebs": {"VolumeSize": 16}}]
+
+        if self.spot:
+            launch_specification = {
+                'InstanceType': self.instance_type,
+                'SecurityGroupIds': ['sg-0780fe1760c00d96d'],
+                'BlockDeviceMappings': block_device_mappings,
+                'KeyName': self.identity,
+                'ImageId': 'ami-0b59bfac6be064b78'
+            }
+            run_com = lambda com: json.loads(subprocess.check_output(com))['SpotInstanceRequests'][0]
+            com = [
+                'aws', 'ec2', 'request-spot-instances',
+                '--launch-specification', json.dumps(launch_specification)
+            ]
+            if self.spot > 0:
+                com.extend(['--block-duration-minutes', str(self.spot * 60)])
+            output = run_com(com)
+            print('Submitted spot instance request, ${}/hour'.format(
+                float(output['SpotPrice']),
+            ))
+
+            try:
+                while 'InstanceId' not in output:
+                    print('\rWaiting for spot request to be fulfilled ({})...'.format(
+                        output['Status']['Code']
+                    ), end=' ' * 20 + '\r')
+
+                    time.sleep(1)
+                    output = run_com([
+                        'aws', 'ec2', 'describe-spot-instance-requests',
+                        '--spot-instance-request-ids', output['SpotInstanceRequestId'],
+                    ])
+
+            except KeyboardInterrupt:
+                subprocess.check_call([
+                    'aws', 'ec2', 'cancel-spot-instance-requests',
+                    '--spot-instance-request-ids', output['SpotInstanceRequestId'],
+                ])
+                sys.exit(1)
+
+            print() # clear status message
+
+            instance_id = output['InstanceId']
+            # set the name, since spot instances don't let us do that in the creation request
+            subprocess.check_call([
+                'aws', 'ec2', 'create-tags',
+                '--resources', instance_id,
+                '--tags', 'Key=Name,Value="{}"'.format(self.name)
+            ])
+        else:
+            args = [
+                'aws', 'ec2', 'run-instances',
+                '--instance-type', self.instance_type,
+                '--key-name', self.identity,
+                '--image-id', 'ami-0b59bfac6be064b78',
+                '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name),
+                '--security-group-ids', 'sg-0780fe1760c00d96d',
+                '--block-device-mappings', json.dumps(block_device_mappings),
+            ]
+            output = subprocess.check_output(args)
+            parsed_output = json.loads(output)
+            instance = parsed_output['Instances'][0]
+            instance_id = instance['InstanceId']
 
         print('Started instance! Waiting for connection...')
 
@@ -123,6 +177,10 @@ def main():
     parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
     parser.add_argument('--no-connect', help='Don\'t connect to the instance after it is started', default=False, action='store_true')
 
+    spot_group = parser.add_mutually_exclusive_group()
+    spot_group.add_argument('--spot-reserved', '-sr', help='Start a spot instance, reserved for a specific duration (between 1 and 6 hours)', type=int, dest='spot')
+    spot_group.add_argument('--spot-preempt', '-sp', help='Start a spot instance, preemptable', action='store_const', const=-1, dest='spot')
+
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--prod-ro-db', help='Use the read-only prod database (default)', action='store_true')
     group.add_argument('--prod-db', help='Use the writeable prod database', action='store_true')
@@ -137,7 +195,12 @@ def main():
     else:
         db = 'prod-ro'
 
-    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force, args.no_connect)
+    # spot can be either unspecified, -1 (for preemptible), or between 1 and 6
+    if args.spot not in (None, -1, 1, 2, 3, 4, 5, 6):
+        print('Spot duration must be between 1 and 6 hours')
+        return
+
+    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force, args.no_connect, args.spot)
     instance_maker.start_instance()
 
 if __name__ == '__main__':
