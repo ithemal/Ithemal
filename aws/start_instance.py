@@ -21,7 +21,7 @@ except NameError:
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
-    def __init__(self, identity, name, instance_type, db, force, no_connect, spot):
+    def __init__(self, identity, name, instance_type, db, force, no_connect, spot, queue):
         super(InstanceMaker, self).__init__(identity, require_pem=True)
         self.name = name
         self.instance_type = instance_type
@@ -29,6 +29,7 @@ class InstanceMaker(AwsInstance):
         self.force = force
         self.no_connect = no_connect
         self.spot = spot
+        self.queue_url = queue
 
     def start_instance(self):
         if not self.force:
@@ -52,6 +53,7 @@ class InstanceMaker(AwsInstance):
             name += ': {}'.format(self.name)
 
         block_device_mappings = [{"DeviceName": "/dev/xvda", "Ebs": {"VolumeSize": 16}}]
+        iam_profile_name = 'ithemal-ec2'
 
         if self.spot:
             launch_specification = {
@@ -59,7 +61,8 @@ class InstanceMaker(AwsInstance):
                 'SecurityGroupIds': ['sg-0780fe1760c00d96d'],
                 'BlockDeviceMappings': block_device_mappings,
                 'KeyName': self.identity,
-                'ImageId': 'ami-0b59bfac6be064b78'
+                'ImageId': 'ami-0b59bfac6be064b78',
+                'IamInstanceProfile': {'Name': iam_profile_name},
             }
             run_com = lambda com: json.loads(subprocess.check_output(com))['SpotInstanceRequests'][0]
             com = [
@@ -108,6 +111,7 @@ class InstanceMaker(AwsInstance):
                 '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name),
                 '--security-group-ids', 'sg-0780fe1760c00d96d',
                 '--block-device-mappings', json.dumps(block_device_mappings),
+                '--iam-instance-profile', iam_profile_name,
             ]
             output = subprocess.check_output(args)
             parsed_output = json.loads(output)
@@ -154,14 +158,21 @@ class InstanceMaker(AwsInstance):
             mysql_password,
             mysql_host,
             mysql_port,
+            iam_profile_name,
         ])))
 
-        print(initialization_command)
         ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, 'ec2-user@{}'.format(instance['PublicDnsName']), initialization_command],
                                stdin=tar.stdout)
         ls_files.wait()
         tar.wait()
         ssh.wait()
+
+        if self.queue_url:
+            ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
+            subprocess.check_call([
+                'ssh', '-i', self.pem_key, ssh_address,
+                'sudo docker exec -u ithemal -dit ithemal bash -lc "~/ithemal/aws/aws_utils/queue_process.py {}"'.format(self.queue_url)
+            ])
 
         if not self.no_connect:
             os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
@@ -173,10 +184,11 @@ def main():
     parser.add_argument('-n', '--name', help='Name to start the container with', default=None)
     parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
     parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
-    parser.add_argument('--no-connect', help='Don\'t connect to the instance after it is started', default=False, action='store_true')
+    parser.add_argument('-nc', '--no-connect', help='Don\'t connect to the instance after it is started', default=False, action='store_true')
+    parser.add_argument('-q', '--queue', metavar='QUEUE_URL', help='Perform actions consumed from the queue at the provided URL')
 
     spot_group = parser.add_mutually_exclusive_group()
-    spot_group.add_argument('--spot-reserved', '-sr', help='Start a spot instance, reserved for a specific duration (between 1 and 6 hours)', type=int, dest='spot')
+    spot_group.add_argument('--spot-reserved', '-sr', help='Start a spot instance, reserved for a specific duration (between 1 and 6 hours)', type=int, dest='spot', metavar='DURATION')
     spot_group.add_argument('--spot-preempt', '-sp', help='Start a spot instance, preemptable', action='store_const', const=-1, dest='spot')
 
     group = parser.add_mutually_exclusive_group()
@@ -198,7 +210,7 @@ def main():
         print('Spot duration must be between 1 and 6 hours')
         return
 
-    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force, args.no_connect, args.spot)
+    instance_maker = InstanceMaker(args.identity, args.name, args.type, db, args.force, args.no_connect, args.spot, args.queue)
     instance_maker.start_instance()
 
 if __name__ == '__main__':
