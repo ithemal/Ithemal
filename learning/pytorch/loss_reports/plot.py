@@ -21,20 +21,20 @@ def plot_measurements(measurements, blur):
     for midx, measurement in enumerate(measurements):
         color = 'C{}'.format(midx)
         epochs = np.array(measurement.epochs)
-        times = np.array(measurement.times)
+        times = np.array(measurement.times) / 3600
         losses = np.array(measurement.losses)
         if blur > 0:
             losses = scipy.ndimage.filters.gaussian_filter1d(losses, blur)
         label = measurement.label
-        plt.plot(times / 60, losses, label=label, color=color)
+        plt.plot(times, losses, label=label, color=color)
 
         ep_advance = np.where(np.diff(epochs))[0] + 1
         for idx in ep_advance:
-            x = times[idx] / 60
+            x = times[idx]
             plt.plot([x,x], [losses[idx] - 0.005, losses[idx] + 0.005], color=color)
 
     plt.title('Training loss over time')
-    plt.xlabel('Time in minutes')
+    plt.xlabel('Time in hours')
     plt.ylabel('Training loss (MSE / actual)')
     plt.ylim([0, 0.4])
     plt.legend()
