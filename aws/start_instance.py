@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from instance_utils import format_instance, AwsInstance
+from aws_utils.instance_utils import format_instance, AwsInstance
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -146,7 +146,7 @@ class InstanceMaker(AwsInstance):
         mysql_host = mysql_credentials['host']
         mysql_port = mysql_credentials['port']
 
-        initialization_command = 'mkdir ithemal; cd ithemal; cat | tar xz; aws/remote_setup.sh {}'.format(' '.join(map(str, [
+        initialization_command = 'mkdir ithemal; cd ithemal; cat | tar xz; aws/aws_utils/remote_setup.sh {}'.format(' '.join(map(str, [
             aws_authorization_user,
             aws_authorization_token,
             aws_endpoint,

@@ -3,7 +3,7 @@
 import argparse
 import subprocess
 
-from instance_utils import format_instance, AwsInstance
+from aws_utils.instance_utils import format_instance, AwsInstance
 
 # Ithemal runs on Python 2 mostly
 try:

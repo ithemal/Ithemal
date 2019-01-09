@@ -5,7 +5,7 @@ import subprocess
 import os
 import sys
 
-from instance_utils import format_instance, AwsInstance
+from aws_utils.instance_utils import format_instance, AwsInstance
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -23,7 +23,7 @@ class InstanceConnector(AwsInstance):
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
         ssh_args = ['ssh', '-X', '-i', self.pem_key, '-t', ssh_address]
 
-        conn_com = "bash -lc '~/ithemal/aws/tmux_attach.sh || /home/ithemal/ithemal/aws/tmux_attach.sh'"
+        conn_com = "bash -lc '~/ithemal/aws/aws_utils/tmux_attach.sh || /home/ithemal/ithemal/aws/aws_utils/tmux_attach.sh'"
 
         if self.host:
             ssh_args.append(conn_com)

@@ -5,7 +5,7 @@ import subprocess
 import os
 import sys
 
-from instance_utils import format_instance, AwsInstance
+from aws_utils.instance_utils import format_instance, AwsInstance
 import connect_instance
 
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
