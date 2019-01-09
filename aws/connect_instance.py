@@ -27,10 +27,12 @@ class InstanceConnector(AwsInstance):
 
         if self.host:
             ssh_args.append(conn_com)
-        elif self.root:
-            ssh_args.append('sudo docker exec -u root -it ithemal {}'.format(conn_com))
         else:
-            ssh_args.append('sudo docker exec -u ithemal -it ithemal {}'.format(conn_com))
+            if self.root:
+                user = 'root'
+            else:
+                user = 'ithemal'
+            ssh_args.append('sudo docker exec -u {} -it ithemal {}'.format(user, conn_com))
 
         os.execvp('ssh', ssh_args)
         sys.exit(1)
