@@ -69,9 +69,7 @@ class InstanceMaker(AwsInstance):
             if self.spot > 0:
                 com.extend(['--block-duration-minutes', str(self.spot * 60)])
             output = run_com(com)
-            print('Submitted spot instance request, ${}/hour'.format(
-                float(output['SpotPrice']),
-            ))
+            print('Submitted spot instance request')
 
             try:
                 while 'InstanceId' not in output:
@@ -99,7 +97,7 @@ class InstanceMaker(AwsInstance):
             subprocess.check_call([
                 'aws', 'ec2', 'create-tags',
                 '--resources', instance_id,
-                '--tags', 'Key=Name,Value="{}"'.format(self.name)
+                '--tags', 'Key=Name,Value="{}"'.format(name)
             ])
         else:
             args = [
