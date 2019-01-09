@@ -16,14 +16,16 @@ def format_instance(instance):
     launch_time = instance['LaunchTime']
     key_name = instance['KeyName']
     ip_addr = instance['PublicIpAddress']
+    is_spot = bool(instance.get('SpotInstanceRequestId'))
 
-    return '{} :: {} :: {} :: {} :: {} :: {}'.format(
+    return '{} :: {} :: {} :: {} :: {} :: {} :: {}'.format(
         name,
         instance_id,
         instance_type,
         launch_time,
         ip_addr,
         key_name,
+        'Spot' if is_spot else 'On Demand',
     )
 
 class AwsInstance(object):
