@@ -190,7 +190,7 @@ class InstanceMaker(AwsInstance):
 
         subprocess.check_call([
             'ssh', '-i', self.pem_key, ssh_address,
-            'sudo docker exec -u ithemal -dit ithemal bash -lc "~/ithemal/aws/aws_utils/queue_process.py {}"'.format(queue_url)
+            'sudo docker exec -u ithemal -dit ithemal bash -lc "~/ithemal/aws/aws_utils/queue_process.py --kill {}"'.format(queue_url)
         ])
 
 def main():

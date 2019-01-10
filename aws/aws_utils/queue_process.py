@@ -47,7 +47,7 @@ def watch_for_instance_death(queue_url, instance_id):
         subprocess.call([os.path.join(os.environ['ITHEMAL_HOME'], 'aws', 'ping_slack.py'),
                          ':skull_and_crossbones: Spot instance {} dying :skull_and_crossbones:'.format(instance_id)])
 
-def process_queue(queue_url):
+def process_queue(queue_url, kill_on_fail):
     global curr_com
 
     instance_id = requests.get('http://169.254.169.254/latest/meta-data/instance-id').text
@@ -60,7 +60,10 @@ def process_queue(queue_url):
         try:
             output = subprocess.check_output(['aws', 'sqs', 'receive-message', '--queue-url', queue_url, '--wait-time-seconds', '20'])
         except subprocess.CalledProcessError:
-            kill_instance(instance_id)
+            if kill_on_fail:
+                kill_instance(instance_id)
+            else:
+                return
 
         if not output:
             continue
@@ -80,9 +83,10 @@ def process_queue(queue_url):
 def main():
     parser = argparse.ArgumentParser('Indefinitely pull messages from a given AWS queue')
     parser.add_argument('queue_url', help='The AWS SQS queue URL to pull from')
+    parser.add_argument('--kill', help='Kill the instance if a queue pull fails', action='store_true', default=False)
     args = parser.parse_args()
 
-    process_queue(args.queue_url)
+    process_queue(args.queue_url, args.kill)
 
 if __name__ == '__main__':
     main()
