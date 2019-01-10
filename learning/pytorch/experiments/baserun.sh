@@ -11,17 +11,14 @@ NAME=$1; shift
 
 cd "${ITHEMAL_HOME}/learning/pytorch"
 
-if [ ! -f saved/time_skylake_1217.data ]; then
-   mkdir -p saved
-   pushd saved
-   wget https://www.dropbox.com/s/qjcjje5hjrljd5a/time_skylake_1217.data
-   popd
-fi
+experiments/download_data.sh
 
 NAMEDATE="${NAME}_$(date '+%m-%d-%y_%H:%M:%S')"
 SAVEFILE="saved/${NAMEDATE}.mdl"
 LOSS_REPORT_FILE="loss_reports/${NAMEDATE}.log"
 
-python ithemal/run_ithemal.py --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 2 --epochs 5 --savefile "${SAVEFILE}" --loss-report-file "${LOSS_REPORT_FILE}" "${@}"
+mkdir -p saved/checkpoints
+
+python ithemal/run_ithemal.py --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 2 --epochs 5 --savefile "${SAVEFILE}" --loss-report-file "${LOSS_REPORT_FILE}" --checkpoint-dir saved/checkpoints "${@}"
 
 "${ITHEMAL_HOME}/aws/ping_slack.py" "Experiment ${NAME} complete"
