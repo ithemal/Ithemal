@@ -68,17 +68,6 @@ def create_queue(identity, queue, instance_type, instance_count):
     except KeyboardInterrupt:
         kill_queue(queue)
 
-def _send_message(queue_url, com):
-    ''' Utility to send a message directly to a URL without checking
-    '''
-    subprocess.check_call([
-        'aws', 'sqs', 'send-message',
-        '--queue-url', queue_url,
-        '--message-body', com,
-        '--message-group-id', 'none',
-        '--message-deduplication-id', str(uuid.uuid4()),
-    ])
-
 def send_messages(queue, com):
     url = queue_url_of_name(queue)
     if not url:
@@ -86,12 +75,12 @@ def send_messages(queue, com):
         return
 
     if com:
-        _send_message(url, ' '.join(com))
+        queue_process.send_message(url, ' '.join(com))
     else:
         try:
             while True:
                 com = input('com> ')
-                _send_message(url, com)
+                queue_process.send_message(url, com)
         except EOFError, KeyboardInterrupt:
             pass
 
