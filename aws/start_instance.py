@@ -11,6 +11,7 @@ import sys
 import time
 
 from aws_utils.instance_utils import format_instance, AwsInstance
+import queue
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -21,7 +22,7 @@ except NameError:
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
-    def __init__(self, identity, name, instance_type, db, force, no_connect, spot, queue):
+    def __init__(self, identity, name, instance_type, db, force, no_connect, spot, queue_name):
         super(InstanceMaker, self).__init__(identity, require_pem=True)
         self.name = name
         self.instance_type = instance_type
@@ -29,7 +30,7 @@ class InstanceMaker(AwsInstance):
         self.force = force
         self.no_connect = no_connect
         self.spot = spot
-        self.queue_url = queue
+        self.queue_name = queue_name
 
     def start_instance(self):
         if not self.force:
@@ -124,9 +125,10 @@ class InstanceMaker(AwsInstance):
         subprocess.check_call(['aws', 'ec2', 'wait', 'instance-running', '--instance-ids', instance_id])
 
         instance = next(instance for instance in self.get_running_instances() if instance['InstanceId'] == instance_id)
+        ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
 
         # wait for SSH to actually become available
-        while subprocess.call(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, 'ec2-user@{}'.format(instance['PublicDnsName']), 'exit'],
+        while subprocess.call(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, ssh_address, 'exit'],
                               stdout=open(os.devnull, 'w'),
                               stderr=open(os.devnull, 'w'),
         ):
@@ -162,22 +164,32 @@ class InstanceMaker(AwsInstance):
             iam_profile_name,
         ])))
 
-        ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, 'ec2-user@{}'.format(instance['PublicDnsName']), initialization_command],
+        ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, ssh_address, initialization_command],
                                stdin=tar.stdout)
         ls_files.wait()
         tar.wait()
         ssh.wait()
 
-        if self.queue_url:
-            ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
-            subprocess.check_call([
-                'ssh', '-i', self.pem_key, ssh_address,
-                'sudo docker exec -u ithemal -dit ithemal bash -lc "~/ithemal/aws/aws_utils/queue_process.py {}"'.format(self.queue_url)
-            ])
+        if self.queue_name:
+            self.start_queue_on_instance(ssh_address)
 
         if not self.no_connect:
             os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
 
+    def start_queue_on_instance(self, ssh_address):
+        # get the URL of the queue, first by checking the name
+        # with .fifo, then just the name itself, then finally
+        # assuming the param is a url
+        queue_url = queue.queue_url_of_name(self.queue_name + '.fifo')
+        if queue_url is None:
+            queue_url = queue.queue_url_of_name(self.queue_name)
+        if queue_url is None:
+            queue_url = self.queue_name
+
+        subprocess.check_call([
+            'ssh', '-i', self.pem_key, ssh_address,
+            'sudo docker exec -u ithemal -dit ithemal bash -lc "~/ithemal/aws/aws_utils/queue_process.py {}"'.format(queue_url)
+        ])
 
 def main():
     parser = argparse.ArgumentParser(description='Create an AWS instance to run Ithemal')
@@ -186,7 +198,7 @@ def main():
     parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
     parser.add_argument('-f', '--force', help='Make a new instance without worrying about old instances', default=False, action='store_true')
     parser.add_argument('-nc', '--no-connect', help='Don\'t connect to the instance after it is started', default=False, action='store_true')
-    parser.add_argument('-q', '--queue', metavar='QUEUE_URL', help='Perform actions consumed from the queue at the provided URL')
+    parser.add_argument('-q', '--queue', metavar='QUEUE_NAME', help='Perform actions consumed from given queue')
 
     spot_group = parser.add_mutually_exclusive_group()
     spot_group.add_argument('--spot-reserved', '-sr', help='Start a spot instance, reserved for a specific duration (between 1 and 6 hours)', type=int, dest='spot', metavar='DURATION')
