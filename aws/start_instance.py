@@ -146,6 +146,8 @@ class InstanceMaker(AwsInstance):
         aws_authorization_token = aws_authorization[aws_authorization.index(':')+1:]
         aws_endpoint = authorization_datum['proxyEndpoint']
 
+        region = json.loads(subprocess.check_output(['aws', 'configure', 'get', 'region']).strip())
+
         mysql_credentials_dict = json.loads(subprocess.check_output(['aws', 'secretsmanager', 'get-secret-value', '--secret-id', 'ithemal/mysql-{}'.format(self.db)]).strip())
         mysql_credentials = json.loads(mysql_credentials_dict['SecretString'])
         mysql_user = mysql_credentials['username']
@@ -161,7 +163,7 @@ class InstanceMaker(AwsInstance):
             mysql_password,
             mysql_host,
             mysql_port,
-            iam_profile_name,
+            region,
         ])))
 
         ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, ssh_address, initialization_command],
