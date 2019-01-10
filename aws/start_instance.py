@@ -54,6 +54,7 @@ class InstanceMaker(AwsInstance):
 
         block_device_mappings = [{"DeviceName": "/dev/xvda", "Ebs": {"VolumeSize": 16}}]
         iam_profile_name = 'ithemal-ec2'
+        iam_profile_struct = {'Name': iam_profile_name}
 
         if self.spot:
             launch_specification = {
@@ -62,7 +63,7 @@ class InstanceMaker(AwsInstance):
                 'BlockDeviceMappings': block_device_mappings,
                 'KeyName': self.identity,
                 'ImageId': 'ami-0b59bfac6be064b78',
-                'IamInstanceProfile': {'Name': iam_profile_name},
+                'IamInstanceProfile': iam_profile_struct,
             }
             run_com = lambda com: json.loads(subprocess.check_output(com))['SpotInstanceRequests'][0]
             com = [
@@ -111,7 +112,7 @@ class InstanceMaker(AwsInstance):
                 '--tag-specifications', 'ResourceType="instance",Tags=[{{Key="Name",Value="{}"}}]'.format(name),
                 '--security-group-ids', 'sg-0780fe1760c00d96d',
                 '--block-device-mappings', json.dumps(block_device_mappings),
-                '--iam-instance-profile', iam_profile_name,
+                '--iam-instance-profile', json.dumps(iam_profile_struct),
             ]
             output = subprocess.check_output(args)
             parsed_output = json.loads(output)
