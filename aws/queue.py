@@ -121,7 +121,6 @@ def list_queues():
 
 def main():
     parser = argparse.ArgumentParser('Manage AWS SQS queues and their associated workers')
-    parser.add_argument('identity', help='Identity to use to connect')
 
     def add_queue_arg(sp):
         sp.add_argument('queue_name', help='Queue to manage')
@@ -130,8 +129,9 @@ def main():
 
     create_parser = subparsers.add_parser('create', help='Create AWS queues')
     add_queue_arg(create_parser)
-    create_parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
+    create_parser.add_argument('identity', help='Identity to use to connect')
     create_parser.add_argument('-c', '--count', help='Number of queue processors to create', default=4, type=int)
+    create_parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
 
     send_parser = subparsers.add_parser('send', help='Send messages to AWS queues')
     add_queue_arg(send_parser)
