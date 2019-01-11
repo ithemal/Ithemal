@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 import argparse
-import aws_utils.queue_process
+from aws_utils.queue_process import send_message
 import json
 import os
 import start_instance
 import subprocess
-import uuid
+import sys
 import urlparse
+from typing import Optional
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -18,18 +19,21 @@ except NameError:
 _DIRNAME = os.path.dirname(os.path.abspath(__file__))
 
 def queue_url_of_name(queue_name):
+    # type: (str) -> Optional[str]
     proc = subprocess.Popen(
         ['aws', 'sqs', 'get-queue-url', '--queue-name', queue_name],
         stdout=subprocess.PIPE,
         stderr=open('/dev/null', 'w'),
     )
-    if proc.wait():
+    if proc.wait() or not proc.stdout:
         return None
 
     output = json.load(proc.stdout)
     return output['QueueUrl']
 
 def create_queue(identity, queue, instance_type, instance_count):
+    # type: (str, str, str, int) -> None
+
     if queue_url_of_name(queue):
         print('Queue {} already exists!'.format(queue))
         return
@@ -69,22 +73,29 @@ def create_queue(identity, queue, instance_type, instance_count):
         kill_queue(queue)
 
 def send_messages(queue, com):
+    # type: (str, str) -> None
+
     url = queue_url_of_name(queue)
     if not url:
         print('Queue {} doesn\'t exist!'.format(queue))
         return
 
     if com:
-        queue_process.send_message(url, ' '.join(com))
+        send_message(url, ' '.join(com))
     else:
         try:
             while True:
-                com = input('com> ')
-                queue_process.send_message(url, com)
+                if sys.stdin.isatty():
+                    com = input('com> ')
+                else:
+                    com = input()
+                send_message(url, com)
         except EOFError, KeyboardInterrupt:
             pass
 
 def kill_queue(queue):
+    # type: (str) -> None
+
     url = queue_url_of_name(queue)
     if not url:
         print('Queue {} doesn\'t exist!'.format(queue))
@@ -95,10 +106,36 @@ def kill_queue(queue):
         '--queue-url', url,
     ])
 
+def preview_queue(queue):
+    # type: (str) -> None
+
+    url = queue_url_of_name(queue)
+    if not url:
+        print('Queue {} doesn\'t exist!'.format(queue))
+        return
+
+    output = subprocess.check_output([
+        'aws', 'sqs', 'receive-message',
+        '--queue-url', url,
+        '--max-number-of-messages', '10',
+        '--visibility-timeout', '0',
+    ])
+
+    if not output:
+        print('No messages in queue!')
+        return
+
+    messages = json.loads(output)['Messages']
+
+    for message in messages:
+        print('> {}'.format(message['Body']))
+
 def list_queues():
+    # type: () -> None
     queues = json.loads(subprocess.check_output(['aws', 'sqs', 'list-queues']))['QueueUrls']
 
     def parse_url(url):
+        # type: (str) -> str
         full_name = urlparse.urlparse(url).path.split('/')[-1]
         suffix = '.fifo'
         if full_name.endswith(suffix):
@@ -109,16 +146,20 @@ def list_queues():
     print('\n'.join(map(parse_url, queues)))
 
 def main():
+    # type: () -> None
     parser = argparse.ArgumentParser('Manage AWS SQS queues and their associated workers')
 
     def add_queue_arg(sp):
+        # type: (argparse.ArgumentParser) -> None
         sp.add_argument('queue_name', help='Queue to manage')
 
     subparsers = parser.add_subparsers(dest='subparser')
 
+    list_parser = subparsers.add_parser('list', help='List AWS queues')
+
     create_parser = subparsers.add_parser('create', help='Create AWS queues')
-    add_queue_arg(create_parser)
     create_parser.add_argument('identity', help='Identity to use to connect')
+    add_queue_arg(create_parser)
     create_parser.add_argument('-c', '--count', help='Number of queue processors to create', default=4, type=int)
     create_parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
 
@@ -129,7 +170,8 @@ def main():
     kill_parser = subparsers.add_parser('kill', help='Kill AWS queue')
     add_queue_arg(kill_parser)
 
-    list_parser = subparsers.add_parser('list', help='List AWS queues')
+    preview_parser = subparsers.add_parser('preview', help='Preview an AWS queue')
+    add_queue_arg(preview_parser)
 
     args = parser.parse_args()
 
@@ -147,8 +189,10 @@ def main():
         send_messages(queue_name, args.com)
     elif args.subparser == 'kill':
         kill_queue(queue_name)
+    elif args.subparser == 'preview':
+        preview_queue(queue_name)
     else:
-        raise ValueError('Unrecognized subparser {}'.format(args.queue_name))
+        raise ValueError('Unrecognized subparser {}'.format(args.subparser))
 
 if __name__ == '__main__':
     main()

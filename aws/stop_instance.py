@@ -2,6 +2,7 @@
 
 import argparse
 import subprocess
+from typing import Any, Dict, List, Optional
 
 from aws_utils.instance_utils import format_instance, AwsInstance
 
@@ -13,10 +14,12 @@ except NameError:
 
 class InstanceKiller(AwsInstance):
     def __init__(self, identity, force):
+        # type: (str, bool) -> None
         super(InstanceKiller, self).__init__(identity)
         self.force = force
 
     def kill_instances(self, instances_to_kill):
+        # type: (List[Dict[str, Any]]) -> None
         if not instances_to_kill:
             return
 
@@ -36,7 +39,7 @@ class InstanceKiller(AwsInstance):
 
             if res != 'y':
                 print('Not killing.')
-                return False
+                return
 
         instance_ids = [instance if isinstance(instance, str) else instance['InstanceId'] for instance in instances_to_kill]
         args = ['aws', 'ec2', 'terminate-instances', '--instance-ids'] + instance_ids
@@ -44,6 +47,8 @@ class InstanceKiller(AwsInstance):
 
 
 def interactively_kill_instances(instance_killer):
+    # type: (InstanceKiller) -> None
+
     while True:
         instances = instance_killer.get_running_instances()
         if not instances:
@@ -82,6 +87,8 @@ def interactively_kill_instances(instance_killer):
 
 
 def kill_all_instances(instance_killer):
+    # type: (InstanceKiller) -> None
+
     instances = instance_killer.get_running_instances()
     if not instances:
         print('No instances to kill!')
@@ -90,6 +97,8 @@ def kill_all_instances(instance_killer):
     instance_killer.kill_instances(instances)
 
 def main():
+    # type: () -> None
+
     parser = argparse.ArgumentParser(description='Kill running AWS EC2 instances')
     parser.add_argument('-a', '--all', help='Kill all running instances by default', default=False, action='store_true')
     parser.add_argument('-f', '--force', help="Don't ask for confirmation", default=False, action='store_true')

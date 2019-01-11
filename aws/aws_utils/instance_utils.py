@@ -2,11 +2,13 @@ import json
 import os
 import subprocess
 import time
+from typing import Any, Dict, List, Tuple
 
 def format_instance(instance):
+    # type: (Dict[str, Any]) -> str
     name = 'Unnamed'
     try:
-        name_tag = next(tag for tag in instance.get('Tags', []) if tag['Key'] == 'Name')
+        name_tag = next(tag for tag in instance.get('Tags', {}) if tag['Key'] == 'Name')
         name = name_tag['Value']
     except StopIteration:
         pass
@@ -30,12 +32,16 @@ def format_instance(instance):
 
 class AwsInstance(object):
     def __init__(self, identity, require_pem=False):
+        # type: (str, bool) -> None
+
         self.identity = identity
         self.pem_key = os.path.expanduser('~/.ssh/{}.pem'.format(identity))
         if require_pem and not os.path.exists(os.path.expanduser(self.pem_key)):
             raise ValueError('Cannot create an AWS instance without the key at {}'.format(self.pem_key))
 
     def get_running_instances(self):
+        # type: () -> List[Dict[str, Any]]
+
         args = ['aws', 'ec2', 'describe-instances', '--filters', 'Name=instance-state-name,Values=pending,running']
 
         if self.identity:
@@ -50,6 +56,7 @@ class AwsInstance(object):
                      for instance in reservation['Instances']]
 
         def sort_key_of_instance(instance):
+            # type: (Dict[str, Any]) -> Tuple[time.struct_time, str]
             return (time.strptime(instance['LaunchTime'], '%Y-%m-%dT%H:%M:%S.%fZ'), instance['InstanceId'])
 
         return sorted(instances, key=sort_key_of_instance)

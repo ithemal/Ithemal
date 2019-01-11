@@ -5,6 +5,7 @@ import json
 import subprocess
 import urllib2
 import os
+from typing import Optional
 
 WEBHOOK_URL = 'https://hooks.slack.com/services/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'
 SLACK_USERNAME = 'AWS'
@@ -19,6 +20,7 @@ USER_MAP = {
 }
 
 def get_starting_user():
+    # type: () -> Optional[str]
     '''Get the IAM key (user) that started this AWS instance, or None if this is not an AWS instance
     '''
     proc = subprocess.Popen(
@@ -35,6 +37,7 @@ def get_starting_user():
     return stdout.split()[2]
 
 def send_message(message):
+    # type: (str) -> None
     ''' Send the given message to slack
     '''
     payload = {
@@ -48,6 +51,7 @@ def send_message(message):
     urllib2.urlopen(request)
 
 def main():
+    # type: () -> None
     parser = argparse.ArgumentParser('Ping a user in the #aws-notifications channel on Slack')
     parser.add_argument('--user', default=None, help='User to ping (default: user that started instance on AWS)')
     parser.add_argument('message', help='Message to send')

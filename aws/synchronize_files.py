@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import os
 import sys
+from typing import Any, Dict, List
 
 from aws_utils.instance_utils import format_instance, AwsInstance
 import connect_instance
@@ -11,8 +12,10 @@ import connect_instance
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _GITROOT = os.path.abspath(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], cwd=_DIRNAME).strip())
 
-class InstanceSynchronizer(AwsInstance):
+class InstanceSynchronizer(connect_instance.InstanceConnectorABC):
     def __init__(self, identity, direction, files):
+        # type: (str, str, List[str]) -> None
+
         super(InstanceSynchronizer, self).__init__(identity, require_pem=True)
         if direction not in ('to', 'from'):
             raise ValueError('Direction "{}" must be either "to" or "from"'.format(direction))
@@ -27,6 +30,8 @@ class InstanceSynchronizer(AwsInstance):
         self.files = files
 
     def connect_to_instance(self, instance):
+        # type: (Dict[str, Any]) -> None
+
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
 
         if self.direction == 'to':
@@ -45,11 +50,12 @@ class InstanceSynchronizer(AwsInstance):
 
 
 def main():
+    # type: () -> None
     parser = argparse.ArgumentParser(description='Synchronize files in the Ithemal directory to a running AWS EC2 instance')
 
     direction_group = parser.add_mutually_exclusive_group(required=True)
-    direction_group.add_argument('--to', help='Connect directly to the host', default=False, action='store_true')
-    direction_group.add_argument('--from', help='Connect to root in the Docker instance', default=False, action='store_true')
+    direction_group.add_argument('--to', help='Send files to the instance', default=False, action='store_true')
+    direction_group.add_argument('--from', help='Pull files from the instance', default=False, action='store_true')
 
     parser.add_argument('identity', help='Identity to use to connect')
     parser.add_argument('--all', help='Synchronize with all instances', default=False, action='store_true')

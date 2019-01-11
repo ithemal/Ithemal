@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import time
+from typing import Optional
 
 from aws_utils.instance_utils import format_instance, AwsInstance
 import queue
@@ -23,6 +24,7 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
 class InstanceMaker(AwsInstance):
     def __init__(self, identity, name, instance_type, db, force, no_connect, spot, queue_name):
+        # type: (str, str, str, str, bool, bool, Optional[int], str) -> None
         super(InstanceMaker, self).__init__(identity, require_pem=True)
         self.name = name
         self.instance_type = instance_type
@@ -33,6 +35,8 @@ class InstanceMaker(AwsInstance):
         self.queue_name = queue_name
 
     def start_instance(self):
+        # type: () -> None
+
         if not self.force:
             running_instances = self.get_running_instances()
             if running_instances:
@@ -146,7 +150,7 @@ class InstanceMaker(AwsInstance):
         aws_authorization_token = aws_authorization[aws_authorization.index(':')+1:]
         aws_endpoint = authorization_datum['proxyEndpoint']
 
-        region = json.loads(subprocess.check_output(['aws', 'configure', 'get', 'region']).strip())
+        region = subprocess.check_output(['aws', 'configure', 'get', 'region']).strip()
 
         mysql_credentials_dict = json.loads(subprocess.check_output(['aws', 'secretsmanager', 'get-secret-value', '--secret-id', 'ithemal/mysql-{}'.format(self.db)]).strip())
         mysql_credentials = json.loads(mysql_credentials_dict['SecretString'])
@@ -179,6 +183,8 @@ class InstanceMaker(AwsInstance):
             os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
 
     def start_queue_on_instance(self, ssh_address):
+        # type: (str) -> None
+
         # get the URL of the queue, first by checking the name
         # with .fifo, then just the name itself, then finally
         # assuming the param is a url
@@ -194,6 +200,8 @@ class InstanceMaker(AwsInstance):
         ])
 
 def main():
+    # type: () -> None
+
     parser = argparse.ArgumentParser(description='Create an AWS instance to run Ithemal')
     parser.add_argument('identity', help='Key identity to create with')
     parser.add_argument('-n', '--name', help='Name to start the container with', default=None)

@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
+from abc import ABCMeta, abstractmethod
 import argparse
 import subprocess
 import os
 import sys
+from typing import Any, Dict, Union
 
 from aws_utils.instance_utils import format_instance, AwsInstance
 
@@ -13,13 +15,23 @@ try:
 except NameError:
     pass
 
-class InstanceConnector(AwsInstance):
+class InstanceConnectorABC(AwsInstance):
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def connect_to_instance(self, instance):
+        # type: (Dict[str, Any]) -> None
+        return NotImplemented
+
+class InstanceConnector(InstanceConnectorABC):
     def __init__(self, identity, host, root):
+        # type: (str, str, bool) -> None
         super(InstanceConnector, self).__init__(identity, require_pem=True)
         self.host = host
         self.root = root
 
     def connect_to_instance(self, instance):
+        # type: (Dict[str, Any]) -> None
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
         ssh_args = ['ssh', '-X', '-i', self.pem_key, '-t', ssh_address]
 
@@ -38,6 +50,7 @@ class InstanceConnector(AwsInstance):
         sys.exit(1)
 
 def list_instances(instances):
+    # (List[Dict[str, Any]]) -> None
     if not instances:
         print('No instances running!')
         return
@@ -48,6 +61,7 @@ def list_instances(instances):
 
 
 def interactively_connect_to_instance(aws_instances):
+    # type: (InstanceConnectorABC) -> None
     while True:
         instances = aws_instances.get_running_instances()
         if not instances:
@@ -85,6 +99,7 @@ def interactively_connect_to_instance(aws_instances):
             return
 
 def connect_to_instance_id_or_index(aws_instances, id_or_index):
+    # type: (InstanceConnectorABC, str) -> None
     instances = aws_instances.get_running_instances()
 
     if len(instances) == 0:
@@ -107,6 +122,8 @@ def connect_to_instance_id_or_index(aws_instances, id_or_index):
         raise ValueError('{} is not a valid instance ID or index'.format(id_or_index))
 
 def main():
+    # type: () -> None
+
     parser = argparse.ArgumentParser(description='Connect to a running AWS EC2 instance')
 
     user_group = parser.add_mutually_exclusive_group()
