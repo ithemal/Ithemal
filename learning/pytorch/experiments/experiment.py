@@ -25,6 +25,12 @@ EXPERIMENT_BUCKET = 'ithemal-experiments'
 DATASET_BUCKET = 'ithemal-datasets'
 CHECKPOINT_QUEUE = 'checkpoint_queue'
 
+DEBUG = True
+
+def debug_print(params):
+    if DEBUG:
+        print(' '.join(params))
+
 def get_s3_url(bucket, path):
     # type: (str, str) -> str
     return urlparse.urlunsplit(['s3', bucket, path, '', ''])
@@ -70,10 +76,11 @@ class Experiment(object):
     def download_data(self):
         # type: () -> None
         # download the data if not present on this machine
-        data_url = get_s3_url(DATASET_BUCKET, self.data)
+        data_url = get_s3_url(DATASET_BUCKET, '')
         # sync is smarter than cp, but only works on directories: tell it to only sync that one file
-        subprocess.check_call(['aws', 's3', 'sync', data_url, os.path.join(PYTORCH_HOME, 'saved'), '--exclude', '*', '--include', self.data])
-
+        sync_args = ['aws', 's3', 'sync', data_url, os.path.join(PYTORCH_HOME, 'saved'), '--exclude', '*', '--include', self.data]
+        debug_print(sync_args)
+        subprocess.check_call(sync_args)
 
     def start_experiment(self):
         # type: () -> None
@@ -89,6 +96,7 @@ class Experiment(object):
         with open(os.path.join(root, 'cmdline'), 'w') as f:
             f.write(' '.join(params))
 
+        debug_print(params)
         self.proc = subprocess.Popen(params, stdout=open(os.path.join(root, 'stdout'), 'w'))
 
     def enqueue_checkpoints(self, checkpoint_times):
@@ -99,11 +107,14 @@ class Experiment(object):
         )
 
         for checkpoint_time in checkpoint_times:
-            subprocess.call([
-                os.path.join(ITHEMAL_HOME, 'aws', 'queue.py'),
+            params = [
+                os.path.join(ITHEMAL_HOME, 'aws', 'command_queue.py'),
                 'send', CHECKPOINT_QUEUE,
-                benchmark_checkpoint, self.name, self.time, checkpoint_time,
-            ] + self.params, stdout=open('/dev/null', 'w'))
+                benchmark_checkpoint, self.name, self.time, self.data, checkpoint_time,
+            ] + self.params
+
+            debug_print(params)
+            subprocess.call(params, stdout=open('/dev/null', 'w'))
 
     def run_and_sync(self):
         # type: () -> None
@@ -121,29 +132,36 @@ class Experiment(object):
             os.makedirs(checkpoint_path)
         except OSError:
             pass
-            raise ValueError()
 
         def sync():
             # type: () -> None
 
             # sync checkpoints, capturing the new checkpoints and enqueuing them for validation
-            checkpoints_output = subprocess.check_output(['aws', 's3', 'sync', checkpoint_path, get_s3_url(EXPERIMENT_BUCKET, s3_bucket_checkpoint_path)]).strip()
-            checkpoint_files = [line.split()[1] for line in checkpoints_output]
-            checkpoint_times = [os.path.basename(fname)[:-len('.mdl')] for fname in checkpoint_files]
-            self.enqueue_checkpoints(checkpoint_times)
+            params = ['aws', 's3', 'sync', '--no-progress', checkpoint_path, get_s3_url(EXPERIMENT_BUCKET, s3_bucket_checkpoint_path)]
+            debug_print(params)
+            checkpoints_output = subprocess.check_output(params).strip()
+            if checkpoints_output:
+                print('Checkpoints Output: "{}", split: "{}"'.format(checkpoints_output, checkpoints_output.strip().split('\n')))
+                checkpoint_files = [line.split()[1] for line in checkpoints_output.split('\n')]
+                checkpoint_times = [os.path.basename(fname)[:-len('.mdl')] for fname in checkpoint_files]
+                self.enqueue_checkpoints(checkpoint_times)
 
-            subprocess.check_call(['aws', 's3', 'sync', self.experiment_root_path(), get_s3_url(EXPERIMENT_BUCKET, s3_bucket_path_root)])
+            params = ['aws', 's3', 'sync', self.experiment_root_path(), get_s3_url(EXPERIMENT_BUCKET, s3_bucket_path_root)]
+            debug_print(params)
+            subprocess.check_call(params)
 
         while proc.poll() is None:
             sync()
             time.sleep(60)
         sync()
 
-        subprocess.check_call([os.path.join(ITHEMAL_HOME, 'aws', 'ping_slack.py'), 'Experiment {}_{} finished with exit code {}'.format(
+        params = [os.path.join(ITHEMAL_HOME, 'aws', 'ping_slack.py'), 'Experiment {}_{} finished with exit code {}'.format(
             self.name,
             self.time,
             proc.returncode,
-        )])
+        )]
+        debug_print(params)
+        subprocess.check_call()
 
 def main():
     # type: () -> None
@@ -159,8 +177,15 @@ def main():
         experiment.run_and_sync()
     except:
         traceback.print_exc()
-        if experiment.proc:
-            experiment.proc.terminate()
+
+        if experiment.proc is not None:
+            try:
+                print('Terminating Ithemal process!')
+                experiment.proc.terminate()
+                experiment.proc.wait()
+            except KeyboardInterrupt:
+                print('Force killing Ithemal')
+                experiment.proc.kill()
 
 if __name__ == '__main__':
     main()
