@@ -31,10 +31,10 @@ def queue_url_of_name(queue_name):
     output = json.load(proc.stdout)
     return output['QueueUrl']
 
-def create_queue(identity, queue, instance_type, instance_count):
+def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
     # type: (str, str, str, int) -> None
 
-    if queue_url_of_name(queue):
+    if queue_url_of_name(queue) and not ignore_exists:
         print('Queue {} already exists!'.format(queue))
         return
 
@@ -69,7 +69,9 @@ def create_queue(identity, queue, instance_type, instance_count):
     try:
         for proc in procs:
             proc.wait()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
+        for proc in procs:
+            proc.terminate()
         kill_queue(queue)
 
 def send_messages(queue, com):
@@ -169,6 +171,7 @@ def main():
     add_queue_arg(create_parser)
     create_parser.add_argument('-c', '--count', help='Number of queue processors to create', default=4, type=int)
     create_parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
+    create_parser.add_argument('--ignore-exists', help='Fork instances regardless of if the queue exists or not', action='store_true', default=False)
 
     send_parser = subparsers.add_parser('send', help='Send messages to AWS queues')
     add_queue_arg(send_parser)
@@ -191,7 +194,7 @@ def main():
         queue_name += '.fifo'
 
     if args.subparser == 'create':
-        create_queue(args.identity, queue_name, args.type, args.count)
+        create_queue(args.identity, queue_name, args.type, args.count, args.ignore_exists)
     elif args.subparser == 'send':
         send_messages(queue_name, args.com)
     elif args.subparser == 'kill':

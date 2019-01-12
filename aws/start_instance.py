@@ -91,7 +91,7 @@ class InstanceMaker(AwsInstance):
                         '--spot-instance-request-ids', output['SpotInstanceRequestId'],
                     ])
 
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, SystemExit):
                 subprocess.check_call([
                     'aws', 'ec2', 'cancel-spot-instance-requests',
                     '--spot-instance-request-ids', output['SpotInstanceRequestId'],

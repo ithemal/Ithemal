@@ -54,6 +54,7 @@ def watch_for_instance_death(queue_url, instance_id):
 
         subprocess.call([os.path.join(os.environ['ITHEMAL_HOME'], 'aws', 'ping_slack.py'),
                          ':skull_and_crossbones: Spot instance {} dying :skull_and_crossbones:'.format(instance_id)])
+        return
 
 def process_queue(instance_id, queue_url, kill_on_fail):
     # type: (str, str, bool) -> None
