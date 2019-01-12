@@ -144,9 +144,11 @@ def list_queues():
         full_name = urlparse.urlparse(url).path.split('/')[-1]
         suffix = '.fifo'
         if full_name.endswith(suffix):
-            return full_name[:-len(suffix)]
+            name = full_name[:-len(suffix)]
         else:
-            return full_name
+            name = full_name
+
+        return '{} ({})'.format(name, url)
 
     print('\n'.join(map(parse_url, queues)))
 
