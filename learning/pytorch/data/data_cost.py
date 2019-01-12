@@ -6,7 +6,7 @@ import torch.autograd as autograd
 import torch.optim as optim
 import torch
 from tqdm import tqdm
-from data import Data
+from .data import Data
 import matplotlib.pyplot as plt
 import statistics
 import pandas as pd
