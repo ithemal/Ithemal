@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, Tuple
 
 LossReportMessage = NamedTuple('LossReportMessage', [
     ('rank', int),
@@ -8,4 +8,9 @@ LossReportMessage = NamedTuple('LossReportMessage', [
 
 EpochAdvanceMessage = NamedTuple('EpochAdvanceMessage', [
     ('epoch', int),
+    ('n_trainers', int),
+])
+
+TrainerDeathMessage = NamedTuple('TrainerDeathMessage', [
+    ('remaining_partition', Tuple[int, int]),
 ])
