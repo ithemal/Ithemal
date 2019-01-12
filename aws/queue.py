@@ -132,7 +132,12 @@ def preview_queue(queue):
 
 def list_queues():
     # type: () -> None
-    queues = json.loads(subprocess.check_output(['aws', 'sqs', 'list-queues']))['QueueUrls']
+    output = subprocess.check_output(['aws', 'sqs', 'list-queues'])
+    if not output:
+        print('No running queues!')
+        return
+
+    queues = json.loads(output)['QueueUrls']
 
     def parse_url(url):
         # type: (str) -> str
@@ -147,7 +152,7 @@ def list_queues():
 
 def main():
     # type: () -> None
-    parser = argparse.ArgumentParser('Manage AWS SQS queues and their associated workers')
+    parser = argparse.ArgumentParser(description='Manage AWS SQS queues and their associated workers')
 
     def add_queue_arg(sp):
         # type: (argparse.ArgumentParser) -> None

@@ -10,7 +10,6 @@ import subprocess
 import sys
 import time
 from typing import Optional
-
 from aws_utils.instance_utils import format_instance, AwsInstance
 import queue
 

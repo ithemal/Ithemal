@@ -113,7 +113,7 @@ def process_queue(instance_id, queue_url, kill_on_fail):
 
 def main():
     # type: () -> None
-    parser = argparse.ArgumentParser('Indefinitely pull messages from a given AWS queue')
+    parser = argparse.ArgumentParser(description='Indefinitely pull messages from a given AWS queue')
     parser.add_argument('queue_url', help='The AWS SQS queue URL to pull from')
     parser.add_argument('--kill', help='Kill the instance if a queue pull fails', action='store_true', default=False)
     args = parser.parse_args()

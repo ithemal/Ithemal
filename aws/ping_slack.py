@@ -52,7 +52,7 @@ def send_message(message):
 
 def main():
     # type: () -> None
-    parser = argparse.ArgumentParser('Ping a user in the #aws-notifications channel on Slack')
+    parser = argparse.ArgumentParser(description='Ping a user in the #aws-notifications channel on Slack')
     parser.add_argument('--user', default=None, help='User to ping (default: user that started instance on AWS)')
     parser.add_argument('message', help='Message to send')
 
