@@ -221,7 +221,9 @@ def graph_model_learning(base_params, train_params):
             pbar.set_description(format_loss(ep_no, ema_loss))
 
     message_q = mp.Queue()
-    mp.Process(target=loss_report_func, args=(message_q,)).start()
+    loss_proc = mp.Process(target=loss_report_func, args=(message_q,))
+    loss_proc.daemon = True
+    loss_proc.start()
 
     for i in range(train_params.epochs):
         if train_params.decay_trainers:
@@ -246,6 +248,7 @@ def graph_model_learning(base_params, train_params):
 
                 m_args = (partition_queue, i, rank, message_q.put)
                 p = mp.Process(target=run_training, args=m_args)
+                p.daemon = True
                 p.start()
                 print("Starting process %d" % (rank,))
                 processes.append(p)
@@ -291,6 +294,7 @@ def graph_model_benchmark(base_params, benchmark_params):
             partition = (rank * partition_size, (rank + 1) * partition_size)
 
             p = mp.Process(target=train, args=(0, rank, partition))
+            p.daemon = True
             p.start()
             processes.append(p)
 
