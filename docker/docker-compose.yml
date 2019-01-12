@@ -22,6 +22,9 @@ services:
        - type: bind
          source: /tmp/.X11-unix
          target: /tmp/.X11-unix
+       - type: bind
+         source: "${HOME}/.aws"
+         target: /home/ithemal/.aws
      image: ithemal:latest
      tty: true
      environment:
