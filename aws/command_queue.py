@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
-from aws_utils.queue_process import send_message
+import aws_utils.queue_process
 import json
 import os
 import start_instance
@@ -81,7 +81,7 @@ def send_messages(queue, com):
         return
 
     if com:
-        send_message(url, ' '.join(com))
+        aws_utils.queue_process.send_message(url, ' '.join(com))
     else:
         try:
             while True:
@@ -89,7 +89,7 @@ def send_messages(queue, com):
                     com = input('com> ')
                 else:
                     com = input()
-                send_message(url, com)
+                aws_utils.queue_process.send_message(url, com)
         except EOFError, KeyboardInterrupt:
             pass
 

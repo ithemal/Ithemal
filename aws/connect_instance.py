@@ -5,7 +5,7 @@ import argparse
 import subprocess
 import os
 import sys
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 from aws_utils.instance_utils import format_instance, AwsInstance
 
@@ -50,7 +50,7 @@ class InstanceConnector(InstanceConnectorABC):
         sys.exit(1)
 
 def list_instances(instances):
-    # (List[Dict[str, Any]]) -> None
+    # type: (List[Dict[str, Any]]) -> None
     if not instances:
         print('No instances running!')
         return

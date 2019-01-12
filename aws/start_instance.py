@@ -11,7 +11,7 @@ import sys
 import time
 from typing import Optional
 from aws_utils.instance_utils import format_instance, AwsInstance
-import queue
+import command_queue
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -187,9 +187,9 @@ class InstanceMaker(AwsInstance):
         # get the URL of the queue, first by checking the name
         # with .fifo, then just the name itself, then finally
         # assuming the param is a url
-        queue_url = queue.queue_url_of_name(self.queue_name + '.fifo')
+        queue_url = command_queue.queue_url_of_name(self.queue_name + '.fifo')
         if queue_url is None:
-            queue_url = queue.queue_url_of_name(self.queue_name)
+            queue_url = command_queue.queue_url_of_name(self.queue_name)
         if queue_url is None:
             queue_url = self.queue_name
 
