@@ -25,7 +25,7 @@ EXPERIMENT_BUCKET = 'ithemal-experiments'
 DATASET_BUCKET = 'ithemal-datasets'
 CHECKPOINT_QUEUE = 'checkpoint_queue'
 
-DEBUG = True
+DEBUG = False
 
 def debug_print(params):
     if DEBUG:
@@ -107,11 +107,11 @@ class Experiment(object):
         )
 
         for checkpoint_time in checkpoint_times:
+            command_param = ' '.join([benchmark_checkpoint, self.name, self.time, self.data, checkpoint_time] + self.params)
             params = [
                 os.path.join(ITHEMAL_HOME, 'aws', 'command_queue.py'),
-                'send', CHECKPOINT_QUEUE,
-                benchmark_checkpoint, self.name, self.time, self.data, checkpoint_time,
-            ] + self.params
+                'send', CHECKPOINT_QUEUE, command_param
+            ]
 
             debug_print(params)
             subprocess.call(params, stdout=open('/dev/null', 'w'))
