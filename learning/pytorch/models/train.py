@@ -1,8 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
+
 import torch
 import torch.nn as nn
-import sys
-sys.path.append('..')
+from enum import Enum
 import common_libs.utilities as ut
+import data.data_cost as dt
 import torch.autograd as autograd
 import torch.optim as optim
 import math
@@ -16,9 +20,10 @@ import torch
 from torch import nn
 import utils.messages as messages
 import random
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, IO, List, Optional, Tuple
 
 def memReport():
+    # type: () -> None
     num_obj = 0
     for obj in gc.get_objects():
         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
@@ -26,14 +31,18 @@ def memReport():
     print 'num_obj ' + str(num_obj)
 
 def cpuStats():
-        print(sys.version)
-        print(psutil.cpu_percent())
-        print(psutil.virtual_memory())  # physical memory usage
-        pid = os.getpid()
-        py = psutil.Process(pid)
-        memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB...I think
-        print('memory GB:', memoryUse)
+    # type: () -> None
+    print(sys.version)
+    print(psutil.cpu_percent())
+    print(psutil.virtual_memory())  # physical memory usage
+    pid = os.getpid()
+    py = psutil.Process(pid)
+    memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB...I think
+    print('memory GB:', memoryUse)
 
+class PredictionType(Enum):
+    CLASSIFICATION = 1
+    REGRESSION = 2
 
 class Train():
 
@@ -44,18 +53,22 @@ class Train():
     def __init__(self,
                  model,
                  data,
+                 typ,
+                 loss_fn,
+                 num_losses,
                  batch_size = 1000,
-                 tolerance = 25,
-                 saves_per_epoch = 5,
+                 tolerance = 25.,
                  lr = 0.001,
                  momentum = 0.9,
-                 clip = 2,
+                 clip = 2.,
                  opt = 'SGD',
-                 weight_decay = None,
+                 weight_decay = 0.,
                  predict_log = False,
     ):
+        # type: (nn.Module, dt.Data, PredictionType, Callable[[torch.tensor, torch.tensor], torch.tensor], int, int, float, float, float, Optional[float], str, float, bool) -> None
+
         self.model = model
-        print self.model
+        self.typ = typ
         self.data = data
         self.lr = lr
         self.momentum = momentum
@@ -87,27 +100,21 @@ class Train():
         self.correct = 0
 
         #functions
-        self.loss_fn = None
-        self.print_fn = None
-        self.correct_fn = None
-        self.num_losses = None
+        self.loss_fn = loss_fn
+        self.num_losses = num_losses
 
         #for plotting
-        self.per_epoch_loss = []
-        self.loss = []
+        self.per_epoch_loss = [] # type: List[List[float]]
+        self.loss = [] # type: List[List[List[float]]]
 
-        #training checkpointing
-        self.saves_per_epoch = saves_per_epoch
-
-        self.epoch_id = None
-        self.rank = None
+        self.rank = 0
         self.last_save_time = 0
 
     """
     Print routines for predicted and target values.
     """
     def print_final(self,f,x,y):
-
+        # type: (IO[str], np.array, np.array) -> None
         if x.shape != ():
             size = x.shape[0]
             for i in range(size):
@@ -117,7 +124,7 @@ class Train():
             f.write('%f,%f\n' % (x,y))
 
     def print_max(self,f,x,y):
-
+        # type: (IO[str], np.array, np.array) -> None
         x = torch.argmax(x)
         y = torch.argmax(y)
 
@@ -127,6 +134,7 @@ class Train():
     correct example counting functions
     """
     def correct_classification(self,x,y):
+        # type: (torch.tensor, torch.tensor) -> None
 
         x = torch.argmax(x) + 1
         y = torch.argmax(y) + 1
@@ -137,6 +145,7 @@ class Train():
             self.correct += 1
 
     def correct_regression(self,x,y):
+        # type: (torch.tensor, torch.tensor) -> None
 
         if x.shape != ():
             x = x[-1]
@@ -148,6 +157,7 @@ class Train():
             self.correct += 1
 
     def save_checkpoint(self, epoch, batch_num, filename, **rest):
+        # type: (int, int, str, **Any) -> None
 
         state_dict = {
             'epoch': epoch,
@@ -159,9 +169,16 @@ class Train():
         for (k, v) in rest.items():
             state_dict[k] = v
 
+        # ensure directory exists
+        try:
+            os.makedirs(os.path.dirname(filename))
+        except OSError:
+            pass
+
         torch.save(state_dict, filename)
 
     def load_checkpoint(self, filename):
+        # type: (str) -> Dict[str, Any]
 
         state_dict = torch.load(filename)
         self.model.load_state_dict(state_dict['model'])
@@ -169,14 +186,14 @@ class Train():
 
         return state_dict
 
-    def __call__(self, epoch_id, rank, partition,
-                 savefile=None, start_time=None, report_loss_fn=None):
-        self.epoch_id = epoch_id
+    def __call__(self, rank, partition, report_loss_fn=None):
+        # type: (int, Tuple[int, int], Optional[Callable[[messages.LossReportMessage], None]]) -> None
         self.rank = rank
         self.partition = partition
-        self.train(savefile=savefile, start_time=start_time, report_loss_fn=report_loss_fn)
+        self.train(report_loss_fn=report_loss_fn)
 
     def get_target(self, datum):
+        # type: (dt.DataItem) -> torch.tensor
         target = torch.FloatTensor([datum.y]).squeeze()
         if self.predict_log:
             target.log_()
@@ -186,8 +203,8 @@ class Train():
     Training loop - to do make the average loss for general
     """
 
-    def train(self, savefile=None, loadfile=None, start_time=None, report_loss_fn=None):
-        # type: (Optional[str], Optional[str], Optional[float], Optional[Callable[[messages.LossReportMessage], None]]) -> None
+    def train(self, report_loss_fn=None):
+        # type: (Optional[Callable[[messages.LossReportMessage], None]]) -> None
         self.per_epoch_loss = []
         self.loss = []
 
@@ -225,14 +242,19 @@ class Train():
                 target = self.get_target(datum)
 
                 #get the loss value
-                losses_opt = self.loss_fn(output, target)
-                if self.predict_log:
+                if self.loss_fn:
+                    losses_opt = self.loss_fn(output, target)
+
+                if self.predict_log and self.loss_fn:
                     losses_rep = self.loss_fn(output.exp(), target.exp())
                 else:
                     losses_rep = losses_opt
 
                 #check how many are correct
-                self.correct_fn(output, target)
+                if self.typ == PredictionType.CLASSIFICATION:
+                    self.correct_classification(output, target)
+                elif self.typ == PredictionType.REGRESSION:
+                    self.correct_regression(output, target)
 
                 #accumulate the losses
                 for class_idx, (loss_opt, loss_rep) in enumerate(zip(losses_opt, losses_rep)):
@@ -274,12 +296,6 @@ class Train():
                 losses.append(av / (batch_idx + 1))
             self.per_epoch_loss.append(losses)
 
-            #change learning rates
-            if self.correct_fn == self.correct_regression and self.opt != 'Adam':
-                if epoch_sum_loss[0] / (batch_idx + 1) < 0.10 and self.lr > 0.00001:
-                    print 'reducing learning rate....'
-                    self.set_lr(self.lr * 0.1)
-
             if report_loss_fn is not None:
                 report_loss_fn(messages.LossReportMessage(
                     self.rank,
@@ -303,7 +319,8 @@ class Train():
     """
 
     def validate(self, resultfile, loadfile=None):
-        if loadfile != None:
+        # type: (str, Optional[str]) -> Tuple[List[List[float]], List[List[float]]]
+        if loadfile is not None:
             print 'loaded from checkpoint for validation...'
             self.load_checkpoint(loadfile)
 
@@ -325,16 +342,19 @@ class Train():
                 target.exp_()
 
             #get the target and predicted values into a list
-            if self.correct_fn == self.correct_classification:
+            if self.typ == PredictionType.CLASSIFICATION:
                 actual.append((torch.argmax(target) + 1).data.numpy().tolist())
                 predicted.append((torch.argmax(output) + 1).data.numpy().tolist())
             else:
                 actual.append(target.data.numpy().tolist())
                 predicted.append(output.data.numpy().tolist())
 
-            self.print_fn(f, output, target)
+            self.print_final(f, output, target)
             losses = self.loss_fn(output, target)
-            self.correct_fn(output, target)
+            if self.typ == PredictionType.CLASSIFICATION:
+                self.correct_classification(output, target)
+            else:
+                self.correct_regression(output, target)
 
             #accumulate the losses
             loss = torch.zeros(1)

@@ -21,7 +21,8 @@ import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
 from mpconfig import MPConfig
-from typing import List, Optional
+from typing import Callable, List, Optional, Iterator, Tuple, NamedTuple, Union
+from experiments import experiment
 
 class EdgeAblationType(Enum):
     TRANSITIVE_REDUCTION = 1
@@ -30,18 +31,44 @@ class EdgeAblationType(Enum):
     ONLY_LINEAR_EDGES = 4
     NO_EDGES = 5
 
-def save_data(database, config, format, savefile, arch):
+BaseParameters = NamedTuple('BaseParameters', [
+    ('data', str),
+    ('embed_mode', str),
+    ('embed_file', str),
+    ('random_edge_freq', float),
+    ('predict_log', bool),
+    ('no_residual', bool),
+    ('edge_ablation_type', Optional[EdgeAblationType]),
+    ('embed_size', int),
+    ('hidden_size', int),
+])
 
-    cnx = ut.create_connection_from_config(database=database, config_file=config)
+TrainParameters = NamedTuple('TrainParameters', [
+    ('experiment_name', str),
+    ('experiment_time', str),
+    ('load_file', Optional[str]),
+    ('batch_size', int),
+    ('trainers', int),
+    ('threads', int),
+    ('decay_trainers', bool),
+    ('weight_decay', float),
+    ('initial_lr', float),
+    ('decay_lr', bool),
+    ('epochs', int),
+    ('split_distr', List[float]),
+])
 
-    data = dt.DataInstructionEmbedding()
+BenchmarkParameters = NamedTuple('BenchmarkParameters', [
+    ('batch_size', int),
+    ('trainers', int),
+    ('threads', int),
+    ('examples', int),
+])
 
-    data.extract_data(cnx, format, ['code_id','code_intel'])
-    data.get_timing_data(cnx, arch)
-
-    torch.save(data.raw_data, savefile)
 
 def ablate_data(data, edge_ablation_type, random_edge_freq):
+    # type: (dt.DataCost, Optional[EdgeAblationType], float) -> None
+
     if edge_ablation_type == EdgeAblationType.TRANSITIVE_REDUCTION:
         for data_item in data.data:
             data_item.block.transitive_reduction()
@@ -63,7 +90,19 @@ def ablate_data(data, edge_ablation_type, random_edge_freq):
         for data_item in data.data:
             data_item.block.random_forward_edges(random_edge_freq / len(data_item.block.instrs))
 
+def load_model_and_data(params):
+    # type: (BaseParameters) -> Tuple[md.GraphNN, dt.DataCost]
+    data = dt.load_dataset(params.embed_file, data_savefile=params.data)
+    ablate_data(data, params.edge_ablation_type, params.random_edge_freq)
+
+    model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1, use_residual=not params.no_residual)
+    model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
+
+    return model, data
+
 def get_partition_splits(n_datapoints, n_trainers, split_distr):
+    # type: (int, int, List[float]) -> Iterator[Tuple[int, int]]
+
     assert abs(sum(split_distr) - 1) < 1e-4
     assert all(elem >= 0 for elem in split_distr)
 
@@ -75,34 +114,33 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
             idx += split_size
     yield (idx, n_datapoints)
 
-def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, split_dist, no_decay_procs, initial_lr, edge_ablation_type=None, random_edge_freq=0, no_residual=False, loss_report_file_name=None, weight_decay=None, predict_log=False, decay_lr=False):
-    # type: (str, str, str, str, List[float], bool, float, Optional[EdgeAblationType], float, bool, Optional[str], Optional[float], Optional[bool], bool) -> None
-    data = dt.load_dataset(embed_file, data_savefile=data_savefile)
-    ablate_data(data, edge_ablation_type, random_edge_freq)
+def graph_model_learning(base_params, train_params):
+    # type: (BaseParameters, TrainParameters) -> None
 
-    #regression
-    num_classes = 1
+    expt = experiment.Experiment(train_params.experiment_name, train_params.experiment_time, base_params.data, [])
 
-    #get the embedding size
-    embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
+    expt_root = expt.experiment_root_path()
 
-    model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
+    try:
+        os.makedirs(expt_root)
+    except OSError:
+        pass
 
-    lr = initial_lr
-    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=lr, weight_decay=weight_decay, predict_log=predict_log)
+    model, data = load_model_and_data(base_params)
+
+    lr = train_params.initial_lr
+    train = tr.Train(
+        model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
+        batch_size=train_params.batch_size, clip=None, opt='Adam', lr=lr,
+        weight_decay=train_params.weight_decay, predict_log=base_params.predict_log
+    )
 
     #defining losses, correctness and printing functions
-    train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final
-    train.correct_fn = train.correct_regression
-    train.num_losses = 1
-
     restored_epoch = -1
     restored_batch_num = -1
 
-    if args.loadfile is not None:
-        state_dict = train.load_checkpoint(args.loadfile)
+    if train_params.load_file:
+        state_dict = train.load_checkpoint(train_params.load_file)
         restored_epoch = state_dict['epoch']
         restored_batch_num = state_dict['batch_num']
         print('starting from a checkpointed state... epoch {} batch_num {}'.format(
@@ -115,30 +153,30 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
     start_time = time.time()
 
     def run_training(q, epoch_idx, rank, loss_report_func):
+        # type: (mp.Queue, int, int, Callable[[messages.LossReportMessage], None]) -> None
         while True:
             part = q.get()
             if part is None:
                 return
-            train(epoch_idx, rank, part, savefile, start_time, loss_report_func)
-
-
-    if loss_report_file_name is None:
-        loss_report_file_name = os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch', 'loss_reports', 'loss_report_{}.log'.format(start_time))
-
-    if not os.path.exists(os.path.dirname(loss_report_file_name)):
-        os.makedirs(os.path.dirname(loss_report_file_name))
+            train(rank, part, loss_report_func)
 
     def loss_report_func(message_q):
         # type: (mp.Queue) -> None
-        loss_report_file = open(loss_report_file_name, 'w', 1) # line buffered
+        loss_report_file = open(os.path.join(expt_root, 'loss_report.log'), 'w', 1) # line buffered
         last_report_time = time.time()
+        last_save_time = 0.
 
         def format_loss(ep_no, loss):
+            # type: (Union[float, int, str], Union[float, str]) -> str
             return 'Epoch {}, Loss {:.2}'.format(ep_no, loss)
 
         pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
         ema_loss = 1.0
         ep_no = 0
+        running_trainers = 0
+        ep_proc_instances = 0
+        total_proc_instances = 0
+
         while True:
             item = message_q.get()
             if item is None:
@@ -146,28 +184,55 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
             elif isinstance(item, messages.LossReportMessage):
                 loss = item.loss
                 ema_loss = ema_loss * 0.999 + loss * 0.001
+                ep_proc_instances += item.n_items
+                total_proc_instances += item.n_items
                 pbar.update(item.n_items)
             elif isinstance(item, messages.EpochAdvanceMessage):
+                ep_proc_instances = 0
                 ep_no = item.epoch
+                running_trainers = item.n_trainers
                 pbar.close()
                 pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
+            elif isinstance(item, messages.TrainerDeathMessage):
+                # TODO: send more data
+                running_trainers -= 1
 
             t = time.time()
             if t - last_report_time > 10:
-                loss_report_file.write('{}\t{}\t{}\n'.format(ep_no, t - start_time, ema_loss))
+                message = '\t'.join(map(str, (
+                    ep_no,
+                    t - start_time,
+                    ema_loss,
+                    running_trainers
+                )))
+                loss_report_file.write(message + '\n')
                 last_report_time = t
 
-            pbar.set_description(format_loss(ep_no, ema_loss))
+            if t - last_save_time > 10*60:
+                checkpoint_fname = expt.checkpoint_file_name(t - start_time)
+                train.save_checkpoint(
+                    ep_no, 0, checkpoint_fname,
+                    runtime=t - start_time,
+                    ep_proc_instances=ep_proc_instances,
+                    total_proc_instances=total_proc_instances,
+                )
+                last_save_time = t
 
-    n_trainers = args.trainers
+            pbar.set_description(format_loss(ep_no, ema_loss))
 
     message_q = mp.Queue()
     mp.Process(target=loss_report_func, args=(message_q,)).start()
 
-    for i in range(args.epochs):
-        message_q.put(messages.EpochAdvanceMessage(i + 1))
-        mp_config = MPConfig(n_trainers, args.threads)
-        partitions = list(get_partition_splits(len(data.train), mp_config.trainers, split_dist))
+    for i in range(train_params.epochs):
+        if train_params.decay_trainers:
+            n_trainers = max(1, train_params.trainers - i)
+        else:
+            n_trainers = train_params.trainers
+
+        message_q.put(messages.EpochAdvanceMessage(i + 1, n_trainers))
+
+        mp_config = MPConfig(n_trainers, train_params.threads)
+        partitions = list(get_partition_splits(len(data.train), mp_config.trainers, train_params.split_distr)) # type: List[Optional[Tuple[int, int]]]
         partitions += [None] * mp_config.trainers
 
         processes = []
@@ -191,59 +256,29 @@ def graph_model_learning(data_savefile, embed_file, savefile, embedding_mode, sp
         for p in processes:
             p.join()
 
-        if args.savefile is not None:
-            train.save_checkpoint(i, 0, args.savefile)
+        train.save_checkpoint(i, 0, os.path.join(expt_root, 'trained.mdl'))
 
-        if decay_lr:
+        if train_params.decay_lr:
             lr /= 10
             train.set_lr(lr)
-        if not no_decay_procs and n_trainers > 1:
-            n_trainers -= 1
 
     message_q.put(None)
 
-    resultfile = os.path.join(
-        os.environ['ITHEMAL_HOME'],
-        'learning',
-        'pytorch',
-        'results',
-        'realtime_results.txt',
-    )
+    resultfile = os.path.join(expt_root, 'validation_results.txt')
     results = train.validate(resultfile)
 
-def graph_model_benchmark(data_savefile, embed_file, embedding_mode, n_examples):
-    # type: (str, str, str, int) -> None
-
-    data = dt.DataInstructionEmbedding()
-
-    data.raw_data = torch.load(data_savefile)
-    data.set_embedding(embed_file)
-    data.read_meta_data()
-
-    data.prepare_data()
-    data.generate_datasets()
-
-    #regression
-    num_classes = 1
-
-    #get the embedding size
-    embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes)
-
-    model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
-
-    train = tr.Train(model, data, batch_size=args.batch_size, clip=None, opt='Adam', lr=0.01)
-
-    #defining losses, correctness and printing functions
-    train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final
-    train.correct_fn = train.correct_regression
-    train.num_losses = 1
+def graph_model_benchmark(base_params, benchmark_params):
+    # type: (BaseParameters, BenchmarkParameters) -> None
+    model, data = load_model_and_data(base_params)
+    train = tr.Train(
+        model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
+        batch_size=benchmark_params.batch_size, clip=None, opt='Adam', lr=0.01,
+    )
 
     model.share_memory()
 
-    mp_config = MPConfig(args.trainers, args.threads)
-    partition_size = n_examples // args.trainers
+    mp_config = MPConfig(benchmark_params.trainers, benchmark_params.threads)
+    partition_size = benchmark_params.examples // benchmark_params.trainers
 
     processes = []
 
@@ -257,139 +292,47 @@ def graph_model_benchmark(data_savefile, embed_file, embedding_mode, n_examples)
 
             p = mp.Process(target=train, args=(0, rank, partition))
             p.start()
-            print("Starting process %d" % (rank,))
             processes.append(p)
 
     for p in processes:
         p.join()
 
     end_time = time.time()
-    print('Time to process {} examples: {:.2} seconds'.format(
-        n_examples,
+    print('Time to process {} examples: {} seconds'.format(
+        benchmark_params.examples,
         end_time - start_time,
     ))
 
-def graph_model_validation(data_savefile, embed_file, model_file, embedding_mode, edge_ablation_type=None, random_edge_freq=0, no_residual=False, predict_log=False):
-    data = dt.DataInstructionEmbedding()
-    data.raw_data = torch.load(data_savefile)
-    data.set_embedding(embed_file)
-    data.read_meta_data()
+def graph_model_validate(base_params, model_file):
+    # type: (BaseParameters, str) -> None
+    model, data = load_model_and_data(base_params)
 
-    data.prepare_data()
-    data.generate_datasets()
-
-    ablate_data(data, edge_ablation_type, random_edge_freq)
-
-    #regression
-    num_classes = 1
-
-    #get the embedding size
-    embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
-    model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
-
-    train = tr.Train(model,data, batch_size = 1000, clip=None, predict_log=predict_log)
-
-    #defining losses, correctness and printing functions
-    train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final
-    train.correct_fn = train.correct_regression
-    train.num_losses = 1
+    train = tr.Train(
+        model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
+        batch_size=1000, clip=None, predict_log=base_params.predict_log,
+    )
 
     #train.data.test = train.data.test[:10000]
 
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
 
-    training_size = len(data.train)
-
-
-    f = open(resultfile, 'a+')
-
-    for i,result in enumerate(zip(actual,predicted)):
-
-        (a,p) = result
-        if (abs(a -p) * 100.0 / a) > train.tolerance:
-
-            text = data.raw_data[i + training_size][2]
-            print a, p
-            print text
-            f.write('%f, %f\n' % (a,p))
-            f.write(text + '\n')
-
-    f.close()
-
-def graph_model_gettiming(database, config, format, data_savefile, embed_file, model_file, embedding_mode, arch, edge_ablation_type=None, random_edge_freq=0, use_residual=False):
-
-    cnx = ut.create_connection(database=database, config_file=config)
-
-    data = dt.DataInstructionEmbedding()
-    data.raw_data = torch.load(data_savefile)
-    data.set_embedding(embed_file)
-    data.read_meta_data()
-
-    data.prepare_data()
-    data.test = data.data #all data are test data now
-
-    ablate_data(data, edge_ablation_type, random_edge_freq)
-
-    #regression
-    num_classes = 1
-
-    #get the embedding size
-    embedding_size = data.final_embeddings.shape[1]
-    model = md.GraphNN(embedding_size = embedding_size, hidden_size = 256, num_classes = num_classes, use_residual=not no_residual)
-    model.set_learnable_embedding(mode = embedding_mode, dictsize = max(data.word2id) + 1, seed = data.final_embeddings)
-
-
-    train = tr.Train(model, data,  batch_size = args.batch_size, clip=None, opt='Adam', lr=0.01)
-
-    #defining losses, correctness and printing functions
-    train.loss_fn = ls.mse_loss
-    train.print_fn = train.print_final
-    train.correct_fn = train.correct_regression
-    train.num_losses = 1
-
-    resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
-    (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
-
-
-    #ok now enter the results in the database
-    for i, data in enumerate(tqdm(data.test)):
-
-        code_id = data.code_id
-        kind = 'predicted'
-        time = predicted[i]
-
-
-        sql = 'INSERT INTO times (code_id, arch, kind, time) VALUES ('
-        sql += str(code_id) + ','
-        sql += str(arch) + ','
-        sql += '\'' + kind + '\','
-        sql += str(int(round(time))) + ')'
-
-        ut.execute_query(cnx, sql, False)
-        cnx.commit()
-
-
-    cnx.close()
-
-if __name__ == "__main__":
-
-    #command line arguments
+def main():
+    # type: () -> None
     parser = argparse.ArgumentParser()
-    parser.add_argument('--format',action='store',default='text',type=str)
-    parser.add_argument('--mode',action='store',type=str)
 
-    parser.add_argument('--savedatafile',action='store',type=str,default='../inputs/data/timing.data')
-    parser.add_argument('--embmode',action='store',type=str,default='learnt')
-    parser.add_argument('--embedfile',action='store',type=str,default='../inputs/embeddings/code_delim.emb')
-    parser.add_argument('--savefile',action='store',type=str,default='../inputs/models/graphCost.mdl')
-    parser.add_argument('--loadfile',action='store',type=str,default=None)
-    parser.add_argument('--arch',action='store',type=int, default=1)
+    # data arguments
+    parser.add_argument('--data', required=True, help='The data file to load from')
+    parser.add_argument('--embed-mode', help='The embedding mode to use (default: none)', default='none')
+    parser.add_argument('--embed-file', help='The embedding file to use (default: code_delim.emb)',
+                        default=os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch', 'inputs', 'embeddings', 'code_delim.emb'))
+    parser.add_argument('--embed-size', help='The size of embedding to use (default: 256)', default=256, type=int)
+    parser.add_argument('--hidden-size', help='The size of hidden layer to use (default: 256)', default=256, type=int)
 
-    parser.add_argument('--database',action='store',type=str)
-    parser.add_argument('--config',action='store',type=str)
+    # edge/misc arguments
+    parser.add_argument('--random-edge-freq', type=float, default=0.0, help='The fraction of instructions to add an additional random forward edge to (can be >1)')
+    parser.add_argument('--no-residual', default=False, action='store_true', help='Don\'t use a residual model in Ithemal')
+    parser.add_argument('--predict-log', action='store_true', default=False, help='Predict the log of the time')
 
     edge_ablation_parser_group = parser.add_mutually_exclusive_group()
     edge_ablation_parser_group.add_argument('--transitive-reduction', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_REDUCTION)
@@ -398,35 +341,96 @@ if __name__ == "__main__":
     edge_ablation_parser_group.add_argument('--only-linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.ONLY_LINEAR_EDGES)
     edge_ablation_parser_group.add_argument('--no-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.NO_EDGES)
 
-    parser.add_argument('--random-edge-freq', type=float, default=0)
+    sp = parser.add_subparsers(dest='subparser')
 
-    parser.add_argument('--epochs',action='store',type=int,default=1)
-    parser.add_argument('--trainers',action='store',type=int,default=1)
-    parser.add_argument('--threads',action='store',type=int, default=4)
-    parser.add_argument('--batch-size',action='store',type=int, default=100)
-    parser.add_argument('--n-examples', type=int, default=1000)
-    parser.add_argument('--no-decay-procs', action='store_true', default=False)
-    parser.add_argument('--split-dist', nargs='+', type=float,
-                        default=[0.5, 0.25, 0.125, .0625, .0625])
-    parser.add_argument('--initial-lr', type=float, default=0.0001)
-    parser.add_argument('--no-residual', default=False, action='store_true')
-    parser.add_argument('--loss-report-file',action='store',type=str)
-    parser.add_argument('--weight-decay', type=float, default=None)
-    parser.add_argument('--predict-log', action='store_true', default=False)
-    parser.add_argument('--decay-lr', action='store_true', default=False)
+    train = sp.add_parser('train', help='Train an ithemal model')
+    train.add_argument('--experiment-name', required=True, help='Name of the experiment to run')
+    train.add_argument('--experiment-time', required=True, help='Time the experiment was started at')
+    train.add_argument('--load-file', help='Start by loading the provided model')
 
+    def add_train_arguments(subp, suppress):
+        # utility function to so that we can add all train args to
+        # validate, to ease command duplication, while suppressing
+        # their helps since validate doesn't actually accept any of
+        # these
+        def add_arg(name, help=None, **kwargs):
+            if suppress:
+                subp.add_argument(name, help=argparse.SUPPRESS, **kwargs)
+            else:
+                subp.add_argument(name, help=help, **kwargs)
+        add_arg('--batch-size', type=int, default=4, help='The batch size to use in train')
+        add_arg('--epochs', type=int, default=5, help='Number of epochs to run for')
+        add_arg('--trainers', type=int, default=4, help='Number of trainer processes to use')
+        add_arg('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
+        add_arg('--decay-trainers', action='store_true', default=False, help='Decay the number of trainers at the end of each epoch')
+        add_arg('--weight-decay', type=float, default=0, help='Coefficient of weight decay (L2 regularization) on model')
+        add_arg('--initial-lr', type=float, default=0.0001, help='Initial learning rate')
+        add_arg('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
 
-    args = parser.parse_args(sys.argv[1:])
+        # TODO: improve split dist
+        split_group = subp.add_mutually_exclusive_group()
+        split_group.add_argument(
+            '--split-dist', nargs='+', type=float, default=[0.5, 0.25, 0.125, .0625, .0625],
+            help=argparse.SUPPRESS if suppress else 'Split data partitions between trainers via a distribution'
+        )
 
-    if args.mode == 'save':
-        save_data(args.database, args.config, args.format, args.savedatafile, args.arch)
-    elif args.mode == 'train':
-        graph_model_learning(args.savedatafile, args.embedfile, args.savefile, args.embmode, args.split_dist, args.no_decay_procs, args.initial_lr, args.edge_ablation, args.random_edge_freq, args.no_residual, args.loss_report_file, args.weight_decay, args.predict_log, args.decay_lr)
-    elif args.mode == 'validate':
-        graph_model_validation(args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.edge_ablation, args.random_edge_freq, args.no_residual, args.predict_log)
-    elif args.mode == 'predict':
-        graph_model_gettiming(args.database, args.config, args.format, args.savedatafile, args.embedfile, args.loadfile, args.embmode, args.arch, args.edge_ablation, args.random_edge_freq, args.no_residual)
-    elif args.mode == 'benchmark':
-        graph_model_benchmark(args.savedatafile, args.embedfile, args.embmode, args.n_examples)
+    add_train_arguments(train, False)
+
+    benchmark = sp.add_parser('benchmark', help='Benchmark train performance of an Ithemal setup')
+    benchmark.add_argument('--n-examples', type=int, default=1000, help='Number of examples to use in benchmark')
+    benchmark.add_argument('--trainers', type=int, default=4, help='Number of trainer processes to use')
+    benchmark.add_argument('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
+    benchmark.add_argument('--batch-size', type=int, default=4, help='The batch size to use in train')
+
+    validate = sp.add_parser('validate', help='Get performance of a dataset')
+    validate.add_argument('--load-file', help='File to load the model from')
+    add_train_arguments(validate, True)
+
+    args = parser.parse_args()
+
+    base_params = BaseParameters(
+        data=args.data,
+        embed_mode=args.embed_mode,
+        embed_file=args.embed_file,
+        random_edge_freq=args.random_edge_freq,
+        predict_log=args.predict_log,
+        no_residual=args.no_residual,
+        edge_ablation_type=args.edge_ablation,
+        embed_size=args.embed_size,
+        hidden_size=args.hidden_size,
+    )
+
+    if args.subparser == 'train':
+        train_params = TrainParameters(
+            experiment_name=args.experiment_name,
+            experiment_time=args.experiment_time,
+            load_file=args.load_file,
+            batch_size=args.batch_size,
+            trainers=args.trainers,
+            threads=args.threads,
+            decay_trainers=args.decay_trainers,
+            weight_decay=args.weight_decay,
+            initial_lr=args.initial_lr,
+            decay_lr=args.decay_lr,
+            epochs=args.epochs,
+            split_distr=args.split_dist,
+        )
+        graph_model_learning(base_params, train_params)
+
+    elif args.subparser == 'validate':
+        graph_model_validate(base_params, args.load_file)
+
+    elif args.subparser == 'benchmark':
+        benchmark_params = BenchmarkParameters(
+            batch_size=args.batch_size,
+            trainers=args.trainers,
+            threads=args.threads,
+            examples=args.n_examples,
+        )
+        graph_model_benchmark(base_params, benchmark_params)
+
     else:
-        raise ValueError('Unknown mode "{}"'.format(args.mode))
+        raise ValueError('Unknown mode "{}"'.format(args.subparser))
+
+if __name__ == '__main__':
+    main()
