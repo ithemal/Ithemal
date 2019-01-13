@@ -51,8 +51,8 @@ class Experiment(object):
         self.name = name
         self.time = time
         self.data = os.path.basename(data)
-        self.base_args = base_args
-        self.train_args = train_args
+        self.base_args = list(map(str, base_args))
+        self.train_args = list(map(str, train_args))
         self.proc = None # type: Optional[subprocess.Popen]
 
     @staticmethod
