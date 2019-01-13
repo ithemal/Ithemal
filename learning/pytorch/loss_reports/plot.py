@@ -26,37 +26,35 @@ TestMeasurement = NamedTuple('TestMeasurement', [
 
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
+_TRAIN = 'Train'
+_TEST = 'Test'
+
 def plot_measurements(train_measurements, test_measurements, train_blur, test_blur):
     # type: (List[TrainMeasurement], List[TestMeasurement], float, float) -> None
 
-    def plot(typ, measurement, color):
-        # type: (str, Union[TrainMeasurement, TestMeasurement], str) -> None
-
-        if typ == 'Train':
-            blur = train_blur
-        else:
-            blur = test_blur
-
+    def get_times_and_losses(measurement, blur):
+        # type: (Union[TrainMeasurement, TestMeasurement], float) -> Tuple[np.array, np.array]
+        times = np.array(measurement.times) / 3600
         if blur > 0:
             losses = scipy.ndimage.filters.gaussian_filter1d(measurement.losses, blur)
         else:
             losses = measurement.losses
+        return times, losses
 
-        plt.plot(np.array(measurement.times) / 3600, measurement.losses, label='{} Error: {}'.format(typ, measurement.experiment_name), color=color)
 
+    for idx, (train_measurement, test_measurement) in enumerate(zip(train_measurements, test_measurements)):
+        train_color = 'C{}'.format(2 * idx)
+        test_color = 'C{}'.format(2 * idx + 1)
 
-    for train_idx, train_measurement in enumerate(train_measurements):
-        color = 'C{}'.format(train_idx)
-        plot('Train', train_measurement, color)
+        train_times, train_losses = get_times_and_losses(train_measurement, train_blur)
+        test_times, test_losses = get_times_and_losses(test_measurement, test_blur)
+        plt.plot(train_times, train_losses, label='{} train'.format(train_measurement.experiment_name), color=train_color)
+        plt.plot(test_times, test_losses, label='{} test'.format(test_measurement.experiment_name), color=test_color)
 
         ep_advance = np.where(np.diff(train_measurement.epochs))[0] + 1
         for idx in ep_advance:
-            x = train_measurement.times[idx] / 3600
-            plt.plot([x,x], [train_measurement.losses[idx] - 0.005, train_measurement.losses[idx] + 0.005], color=color)
-
-    for test_idx, test_measurement in enumerate(test_measurements):
-        color = 'C{}'.format(test_idx + len(train_measurements))
-        plot('Test', test_measurement, color)
+            x = train_times[idx]
+            plt.plot([x,x], [train_losses[idx] - 0.005, train_losses[idx] + 0.005], color=train_color)
 
     plt.title('Loss over time')
     plt.xlabel('Time in hours')
