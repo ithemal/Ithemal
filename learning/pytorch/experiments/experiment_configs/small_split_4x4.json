@@ -1,0 +1,6 @@
+{
+    "name": "small_split_4x4",
+    "dataset": "time_skylake_test.data",
+    "base_args": [],
+    "train_args": ["--trainers", 4, "--threads", 4, "--split-size", 1000]
+}
