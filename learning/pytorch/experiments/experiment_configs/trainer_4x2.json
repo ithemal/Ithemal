@@ -1,5 +1,5 @@
 {
-    "name": "trainer_4x4",
+    "name": "trainer_4x42,
     "dataset": "time_skylake_1217.data",
     "base_args": [],
     "train_args": ["--trainers", "4", "--threads", "2"]
