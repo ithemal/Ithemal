@@ -2,13 +2,15 @@
 
 import argparse
 import datetime
+import json
 import os
 import subprocess
 import sys
 import urlparse
-from typing import Any, Dict, List, NamedTuple, Optional
+import tempfile
 import time
 import traceback
+from typing import Any, Dict, List, NamedTuple, Optional
 
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 PYTHON = sys.executable
@@ -28,6 +30,7 @@ CHECKPOINT_QUEUE = 'checkpoint_queue'
 DEBUG = False
 
 def debug_print(params):
+    # type: (List[str]) -> None
     if DEBUG:
         print(' '.join(params))
 
@@ -35,14 +38,55 @@ def get_s3_url(bucket, path):
     # type: (str, str) -> str
     return urlparse.urlunsplit(['s3', bucket, path, '', ''])
 
+def mkdir(directory):
+    # type: (str) -> None
+    try:
+        os.makedirs(directory)
+    except OSError:
+        pass
+
 class Experiment(object):
-    def __init__(self, name, time, data, params):
-        # type: (str, str, str, List[str]) -> None
+    def __init__(self, name, time, data, base_args=[], train_args=[]):
+        # type: (str, str, str, List[str], List[str]) -> None
         self.name = name
         self.time = time
         self.data = os.path.basename(data)
-        self.params = params
+        self.base_args = base_args
+        self.train_args = train_args
         self.proc = None # type: Optional[subprocess.Popen]
+
+    @staticmethod
+    def make_experiment_from_name_and_time(experiment_name, experiment_time):
+        # type: (str, str) -> Experiment
+        remote_config_file_url = get_s3_url(EXPERIMENT_BUCKET, os.path.join(experiment_name, experiment_time, 'config.json'))
+        local_config_file_url = os.path.join(PYTORCH_HOME, 'saved', experiment_name, experiment_time, 'config.json')
+        subprocess.check_call(['aws', 's3', 'cp', remote_config_file_url, local_config_file_url])
+        return Experiment.make_experiment_from_config_file(local_config_file_url)
+
+    @staticmethod
+    def make_experiment_from_config_file(config_file):
+        # type: (str) -> Experiment
+
+        with open(config_file) as f:
+            config = json.load(f)
+
+        return Experiment(
+            config['name'],
+            datetime.datetime.fromtimestamp(time.time()).isoformat(),
+            config['dataset'],
+            config.get('base_args', []),
+            config.get('train_args', []),
+        )
+
+    def config_of_experiment(self):
+        # type: () -> Dict[str, Any]
+
+        return {
+            'name': self.name,
+            'dataset': self.data,
+            'base_args': self.base_args,
+            'train_args': self.train_args,
+        }
 
     def experiment_root_path(self):
         # type: () -> str
@@ -56,6 +100,10 @@ class Experiment(object):
         # type: (float) -> str
         return os.path.join(self.checkpoint_file_dir(), '{}.mdl'.format(run_time))
 
+    def s3_root_path(self):
+        # type: () -> str
+        return get_s3_url(EXPERIMENT_BUCKET, os.path.join(self.name, self.time))
+
     def get_ithemal_command_root(self):
         # type: () -> List[str]
         return [
@@ -65,13 +113,11 @@ class Experiment(object):
 
     def get_params(self):
         # type: () -> List[str]
-        base_args = self.get_ithemal_command_root() + [
+        return self.get_ithemal_command_root() + self.base_args + [
             'train',
             '--experiment-name', self.name,
             '--experiment-time', self.time,
-        ]
-        params = base_args + self.params
-        return params
+        ] + self.train_args
 
     def download_data(self):
         # type: () -> None
@@ -86,13 +132,13 @@ class Experiment(object):
         # type: () -> None
         self.download_data()
         root = self.experiment_root_path()
-
-        try:
-            os.makedirs(root)
-        except OSError:
-            pass
+        mkdir(root)
 
         params = self.get_params()
+
+        with open(os.path.join(root, 'config.json'), 'w') as f:
+            json.dump(self.config_of_experiment(), f)
+
         with open(os.path.join(root, 'cmdline'), 'w') as f:
             f.write(' '.join(params))
 
@@ -107,7 +153,7 @@ class Experiment(object):
         )
 
         for checkpoint_time in checkpoint_times:
-            command_param = ' '.join([benchmark_checkpoint, self.name, self.time, self.data, checkpoint_time] + self.params)
+            command_param = ' '.join([benchmark_checkpoint, self.name, self.time, checkpoint_time])
             params = [
                 os.path.join(ITHEMAL_HOME, 'aws', 'command_queue.py'),
                 'send', CHECKPOINT_QUEUE, command_param
@@ -115,6 +161,12 @@ class Experiment(object):
 
             debug_print(params)
             subprocess.call(params, stdout=open('/dev/null', 'w'))
+
+    def sync_all(self):
+        # type: () -> None
+        params = ['aws', 's3', 'sync', self.experiment_root_path(), self.s3_root_path()]
+        debug_print(params)
+        subprocess.check_call(params)
 
     def run_and_sync(self):
         # type: () -> None
@@ -124,20 +176,15 @@ class Experiment(object):
         if proc is None:
             raise Exception('Process not created!')
 
-        s3_bucket_path_root = os.path.join(self.name, self.time)
-        s3_bucket_checkpoint_path = os.path.join(s3_bucket_path_root, 'checkpoints')
+        s3_bucket_checkpoint_path = os.path.join(self.s3_root_path(), 'checkpoints')
         checkpoint_path = self.checkpoint_file_dir()
-
-        try:
-            os.makedirs(checkpoint_path)
-        except OSError:
-            pass
+        mkdir(checkpoint_path)
 
         def sync():
             # type: () -> None
 
             # sync checkpoints, capturing the new checkpoints and enqueuing them for validation
-            params = ['aws', 's3', 'sync', '--no-progress', checkpoint_path, get_s3_url(EXPERIMENT_BUCKET, s3_bucket_checkpoint_path)]
+            params = ['aws', 's3', 'sync', '--no-progress', checkpoint_path, s3_bucket_checkpoint_path]
             debug_print(params)
             checkpoints_output = subprocess.check_output(params).strip()
             if checkpoints_output:
@@ -146,9 +193,7 @@ class Experiment(object):
                 checkpoint_times = [os.path.basename(fname)[:-len('.mdl')] for fname in checkpoint_files]
                 self.enqueue_checkpoints(checkpoint_times)
 
-            params = ['aws', 's3', 'sync', self.experiment_root_path(), get_s3_url(EXPERIMENT_BUCKET, s3_bucket_path_root)]
-            debug_print(params)
-            subprocess.check_call(params)
+            self.sync_all()
 
         while proc.poll() is None:
             sync()
@@ -161,21 +206,20 @@ class Experiment(object):
             proc.returncode,
         )]
         debug_print(params)
-        subprocess.check_call()
+        subprocess.check_call(params)
 
 def main():
     # type: () -> None
-    parser = argparse.ArgumentParser(description='Run experiments, syncing with AWS', prefix_chars='?')
-    parser.add_argument('name', help='Name of the experiment to run')
-    parser.add_argument('data', help='Datafile to run with (must be on S3)')
-    parser.add_argument('rest', nargs='*', help='Remaining arguments passed to Ithemal')
+    parser = argparse.ArgumentParser(description='Run experiments, syncing with AWS')
+    parser.add_argument('experiment', help='Experiment file to run')
     args = parser.parse_args()
 
-    start_time = datetime.datetime.fromtimestamp(time.time()).isoformat()
-    experiment = Experiment(args.name, start_time, args.data, args.rest)
+    experiment = Experiment.make_experiment_from_config_file(args.experiment)
+
     try:
         experiment.run_and_sync()
     except:
+        # catch literally anything (including KeyboardInterrupt, SystemExit)
         traceback.print_exc()
 
         if experiment.proc is not None:
@@ -186,6 +230,9 @@ def main():
             except KeyboardInterrupt:
                 print('Force killing Ithemal')
                 experiment.proc.kill()
+    finally:
+        print('Synchronizing files...')
+        experiment.sync_all()
 
 if __name__ == '__main__':
     main()

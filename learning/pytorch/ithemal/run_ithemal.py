@@ -117,8 +117,7 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
 def graph_model_learning(base_params, train_params):
     # type: (BaseParameters, TrainParameters) -> None
 
-    expt = experiment.Experiment(train_params.experiment_name, train_params.experiment_time, base_params.data, [])
-
+    expt = experiment.Experiment(train_params.experiment_name, train_params.experiment_time, base_params.data)
     expt_root = expt.experiment_root_path()
 
     try:
@@ -293,7 +292,7 @@ def graph_model_benchmark(base_params, benchmark_params):
 
             partition = (rank * partition_size, (rank + 1) * partition_size)
 
-            p = mp.Process(target=train, args=(0, rank, partition))
+            p = mp.Process(target=train, args=(rank, partition))
             p.daemon = True
             p.start()
             processes.append(p)
@@ -352,33 +351,21 @@ def main():
     train.add_argument('--experiment-time', required=True, help='Time the experiment was started at')
     train.add_argument('--load-file', help='Start by loading the provided model')
 
-    def add_train_arguments(subp, suppress):
-        # utility function to so that we can add all train args to
-        # validate, to ease command duplication, while suppressing
-        # their helps since validate doesn't actually accept any of
-        # these
-        def add_arg(name, help=None, **kwargs):
-            if suppress:
-                subp.add_argument(name, help=argparse.SUPPRESS, **kwargs)
-            else:
-                subp.add_argument(name, help=help, **kwargs)
-        add_arg('--batch-size', type=int, default=4, help='The batch size to use in train')
-        add_arg('--epochs', type=int, default=5, help='Number of epochs to run for')
-        add_arg('--trainers', type=int, default=4, help='Number of trainer processes to use')
-        add_arg('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
-        add_arg('--decay-trainers', action='store_true', default=False, help='Decay the number of trainers at the end of each epoch')
-        add_arg('--weight-decay', type=float, default=0, help='Coefficient of weight decay (L2 regularization) on model')
-        add_arg('--initial-lr', type=float, default=0.0001, help='Initial learning rate')
-        add_arg('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
+    train.add_argument('--batch-size', type=int, default=4, help='The batch size to use in train')
+    train.add_argument('--epochs', type=int, default=5, help='Number of epochs to run for')
+    train.add_argument('--trainers', type=int, default=4, help='Number of trainer processes to use')
+    train.add_argument('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
+    train.add_argument('--decay-trainers', action='store_true', default=False, help='Decay the number of trainers at the end of each epoch')
+    train.add_argument('--weight-decay', type=float, default=0, help='Coefficient of weight decay (L2 regularization) on model')
+    train.add_argument('--initial-lr', type=float, default=0.0001, help='Initial learning rate')
+    train.add_argument('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
 
-        # TODO: improve split dist
-        split_group = subp.add_mutually_exclusive_group()
-        split_group.add_argument(
-            '--split-dist', nargs='+', type=float, default=[0.5, 0.25, 0.125, .0625, .0625],
-            help=argparse.SUPPRESS if suppress else 'Split data partitions between trainers via a distribution'
-        )
-
-    add_train_arguments(train, False)
+    # TODO: improve split dist
+    split_group = train.add_mutually_exclusive_group()
+    split_group.add_argument(
+        '--split-dist', nargs='+', type=float, default=[0.5, 0.25, 0.125, .0625, .0625],
+        help='Split data partitions between trainers via a distribution',
+    )
 
     benchmark = sp.add_parser('benchmark', help='Benchmark train performance of an Ithemal setup')
     benchmark.add_argument('--n-examples', type=int, default=1000, help='Number of examples to use in benchmark')
@@ -388,7 +375,6 @@ def main():
 
     validate = sp.add_parser('validate', help='Get performance of a dataset')
     validate.add_argument('--load-file', help='File to load the model from')
-    add_train_arguments(validate, True)
 
     args = parser.parse_args()
 
