@@ -31,7 +31,7 @@ def benchmark_checkpoint(name, time, checkpoint):
         subprocess.check_call(
             expt.get_ithemal_command_root()
             + expt.base_args
-            + ['validate' '--load-file', local_checkpoint_url],
+            + ['validate', '--load-file', local_checkpoint_url],
             stdout=f
         )
 

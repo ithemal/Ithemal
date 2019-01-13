@@ -61,18 +61,23 @@ class Experiment(object):
         remote_config_file_url = get_s3_url(EXPERIMENT_BUCKET, os.path.join(experiment_name, experiment_time, 'config.json'))
         local_config_file_url = os.path.join(PYTORCH_HOME, 'saved', experiment_name, experiment_time, 'config.json')
         subprocess.check_call(['aws', 's3', 'cp', remote_config_file_url, local_config_file_url])
-        return Experiment.make_experiment_from_config_file(local_config_file_url)
+        return Experiment.make_experiment_from_config_file(local_config_file_url, experiment_time=experiment_time)
 
     @staticmethod
-    def make_experiment_from_config_file(config_file):
-        # type: (str) -> Experiment
+    def make_experiment_from_config_file(config_file, experiment_time=None):
+        # type: (str, Optional[str]) -> Experiment
 
         with open(config_file) as f:
             config = json.load(f)
 
+        if experiment_time is None:
+            start_time = datetime.datetime.fromtimestamp(time.time()).isoformat()
+        else:
+            start_time = experiment_time
+
         return Experiment(
             config['name'],
-            datetime.datetime.fromtimestamp(time.time()).isoformat(),
+            start_time,
             config['dataset'],
             config.get('base_args', []),
             config.get('train_args', []),
