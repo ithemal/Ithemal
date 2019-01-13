@@ -57,6 +57,7 @@ TrainParameters = NamedTuple('TrainParameters', [
     ('decay_lr', bool),
     ('epochs', int),
     ('split', Union[int, List[float]]),
+    ('optimizer', tr.OptimizerType),
 ])
 
 BenchmarkParameters = NamedTuple('BenchmarkParameters', [
@@ -137,7 +138,7 @@ def graph_model_learning(base_params, train_params):
     lr = train_params.initial_lr
     train = tr.Train(
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
-        batch_size=train_params.batch_size, clip=None, opt='Adam', lr=lr,
+        batch_size=train_params.batch_size, clip=None, opt=train_params.optimizer, lr=lr,
         weight_decay=train_params.weight_decay, predict_log=base_params.predict_log
     )
 
@@ -310,7 +311,7 @@ def graph_model_benchmark(base_params, benchmark_params):
     model, data = load_model_and_data(base_params)
     train = tr.Train(
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
-        batch_size=benchmark_params.batch_size, clip=None, opt='Adam', lr=0.01,
+        batch_size=benchmark_params.batch_size, clip=None, opt=tr.OptimizerType.ADAM_PRIVATE, lr=0.01,
     )
 
     model.share_memory()
@@ -404,6 +405,12 @@ def main():
     )
     split_group.add_argument('--split-size', type=int, help='Partitions of a fixed size', dest='split')
 
+    optimizer_group = train.add_mutually_exclusive_group()
+    optimizer_group.add_argument('--adam-private', action='store_const', const=tr.OptimizerType.ADAM_PRIVATE, dest='optimizer', help='Use Adam with private moments',
+                                 default=tr.OptimizerType.ADAM_PRIVATE)
+    optimizer_group.add_argument('--adam-shared', action='store_const', const=tr.OptimizerType.ADAM_SHARED, dest='optimizer', help='Use Adam with shared moments')
+    optimizer_group.add_argument('--sgd', action='store_const', const=tr.OptimizerType.SGD, dest='optimizer', help='Use SGD')
+
     benchmark = sp.add_parser('benchmark', help='Benchmark train performance of an Ithemal setup')
     benchmark.add_argument('--n-examples', type=int, default=1000, help='Number of examples to use in benchmark')
     benchmark.add_argument('--trainers', type=int, default=4, help='Number of trainer processes to use')
@@ -441,6 +448,7 @@ def main():
             decay_lr=args.decay_lr,
             epochs=args.epochs,
             split=args.split,
+            optimizer=args.optimizer,
         )
         graph_model_learning(base_params, train_params)
 

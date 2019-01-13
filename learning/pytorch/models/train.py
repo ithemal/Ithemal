@@ -44,6 +44,11 @@ class PredictionType(Enum):
     CLASSIFICATION = 1
     REGRESSION = 2
 
+class OptimizerType(Enum):
+    ADAM_PRIVATE = 1
+    ADAM_SHARED = 2
+    SGD = 3
+
 class Train():
 
     """
@@ -61,30 +66,26 @@ class Train():
                  lr = 0.001,
                  momentum = 0.9,
                  clip = 2.,
-                 opt = 'SGD',
+                 opt = OptimizerType.SGD,
                  weight_decay = 0.,
                  predict_log = False,
     ):
-        # type: (nn.Module, dt.Data, PredictionType, Callable[[torch.tensor, torch.tensor], torch.tensor], int, int, float, float, float, Optional[float], str, float, bool) -> None
+        # type: (nn.Module, dt.Data, PredictionType, Callable[[torch.tensor, torch.tensor], torch.tensor], int, int, float, float, float, Optional[float], OptimizerType, float, bool) -> None
 
         self.model = model
         self.typ = typ
         self.data = data
         self.lr = lr
-        self.momentum = momentum
         self.clip = clip
-        self.opt = opt
-        self.weight_decay = weight_decay
         self.predict_log = predict_log
 
-        if opt == 'SGD':
-            self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum)
-        elif opt == 'Adam':
-            if self.weight_decay:
-                wd = self.weight_decay
-            else:
-                wd = 0
-            self.optimizer = optim.Adam(self.model.parameters(), weight_decay=wd, lr=lr)
+        if opt == OptimizerType.SGD:
+            self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+        elif opt == OptimizerType.ADAM_PRIVATE or opt == OptimizerType.ADAM_SHARED:
+            self.optimizer = optim.Adam(self.model.parameters(), weight_decay=weight_decay, lr=lr)
+            if opt == OptimizerType.ADAM_SHARED:
+                for param in self.optimizer.param_groups[0]['params']:
+                    param.share_memory_()
         else:
             raise ValueError('unknown optimizer...')
 
