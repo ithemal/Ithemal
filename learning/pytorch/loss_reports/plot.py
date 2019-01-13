@@ -1,63 +1,62 @@
 #!/usr/bin/env python3
 
-import argparse
 from matplotlib import pyplot as plt
+from typing import List, NamedTuple, Union, Optional, Tuple
+import argparse
 import numpy as np
 import os
-import time
-from typing import List, NamedTuple, Union, Optional, Tuple
 import re
 import scipy.ndimage.filters
+import subprocess
+import time
 
 TrainMeasurement = NamedTuple('TrainMeasurement', [
-    ('file_name', str),
-    ('label', str),
-    ('start_time_label', str),
-    ('start_time', float),
+    ('experiment_name', str),
     ('epochs', List[int]),
     ('times', List[float]),
     ('losses', List[float]),
+    ('trainers', List[int]),
 ])
 
 TestMeasurement = NamedTuple('TestMeasurement', [
-    ('label', str),
+    ('experiment_name', str),
     ('times', List[float]),
     ('losses', List[float]),
 ])
 
 _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 
-def plot_measurements(train_measurements, test_measurements, blur):
-    # type: (List[TrainMeasurement], List[TestMeasurement], float) -> None
+def plot_measurements(train_measurements, test_measurements, train_blur, test_blur):
+    # type: (List[TrainMeasurement], List[TestMeasurement], float, float) -> None
 
-    all_labels = {t.label for t in train_measurements} | {t.label for t in test_measurements}
-    label_colors = {l: i for (i, l) in enumerate(all_labels)}
+    def plot(typ, measurement, color):
+        # type: (str, Union[TrainMeasurement, TestMeasurement], str) -> None
 
-    def plot_measurement(idx, measurement, typ):
-        # type: (int, Union[TrainMeasurement, TestMeasurement], str) -> None
-        color = 'C{}'.format(idx)
-        times = np.array(measurement.times) / 3600
-        losses = np.array(measurement.losses)
-        if blur > 0 and False:
-            losses = scipy.ndimage.filters.gaussian_filter1d(losses, blur)
-        label = measurement.label
-        plt.plot(times, losses, label='{} {}'.format(typ, label), color=color)
+        if typ == 'Train':
+            blur = train_blur
+        else:
+            blur = test_blur
 
-    for m_idx, train_measurement in enumerate(train_measurements):
-        plot_measurement(m_idx, train_measurement, 'Train')
+        if blur > 0:
+            losses = scipy.ndimage.filters.gaussian_filter1d(measurement.losses, blur)
+        else:
+            losses = measurement.losses
 
-        color = 'C{}'.format(label_colors[train_measurement.label])
-        times = np.array(train_measurement.times) / 3600
-        epochs = np.array(train_measurement.epochs)
-        losses = np.array(train_measurement.losses)
+        plt.plot(np.array(measurement.times) / 3600, measurement.losses, label='{} Error: {}'.format(typ, measurement.experiment_name), color=color)
 
-        ep_advance = np.where(np.diff(epochs))[0] + 1
+
+    for train_idx, train_measurement in enumerate(train_measurements):
+        color = 'C{}'.format(train_idx)
+        plot('Train', train_measurement, color)
+
+        ep_advance = np.where(np.diff(train_measurement.epochs))[0] + 1
         for idx in ep_advance:
-            x = times[idx]
-            plt.plot([x,x], [losses[idx] - 0.005, losses[idx] + 0.005], color=color)
+            x = train_measurement.times[idx] / 3600
+            plt.plot([x,x], [train_measurement.losses[idx] - 0.005, train_measurement.losses[idx] + 0.005], color=color)
 
-    for m_idx, test_measurement in enumerate(test_measurements):
-        plot_measurement(m_idx + len(train_measurements), test_measurement, 'Test')
+    for test_idx, test_measurement in enumerate(test_measurements):
+        color = 'C{}'.format(test_idx + len(train_measurements))
+        plot('Test', test_measurement, color)
 
     plt.title('Loss over time')
     plt.xlabel('Time in hours')
@@ -66,89 +65,114 @@ def plot_measurements(train_measurements, test_measurements, blur):
     plt.legend()
     plt.show()
 
-TRAIN_FILE_PAT = re.compile(r'(?P<base>.*?)_(?P<time>\d\d-\d\d-\d\d_\d\d:\d\d:\d\d).log$')
+def synchronize_experiment_files(experiment_name):
+    # type: (str) -> str
 
-def extract_train_measurement(fname):
-    # type: (str) -> Optional[TrainMeasurement]
+    try:
+        output = subprocess.check_output(['aws', 's3', 'ls', 's3://ithemal-experiments/{}/'.format(experiment_name)]).strip()
+    except subprocess.CalledProcessError:
+        raise ValueError('Unknown experiment {}'.format(experiment_name))
+
+    if isinstance(output, bytes):
+        output = output.decode('utf8') # type: ignore
+
+    times = [line.strip().split()[1][:-1] for line in output.split('\n')]
+    experiment_time = sorted(times)[-1]
+
+    subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}'.format(experiment_name, experiment_time),
+                           os.path.join(_DIRNAME, 'data', experiment_name, experiment_time),
+                           '--exclude', '*', '--include', 'loss_report.log'])
+
+    subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}/checkpoint_reports'.format(experiment_name, experiment_time),
+                           os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'checkpoint_reports')])
+
+    return experiment_time
+
+def extract_train_measurement(experiment_name, experiment_time):
+    # type: (str, str) -> TrainMeasurement
+
+    fname = os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'loss_report.log')
+
+    epochs = []
+    times = []
+    losses = []
+    trainers = []
+
     with open(fname) as f:
-        train_datum = [] # type: List[List[float]]
         for line in f.readlines():
-            train_datum.append(list(map(float, line.split())))
+            split = line.split()
 
-        if not train_datum:
-            return None
+            epochs.append(int(split[0]))
+            times.append(float(split[1]))
+            losses.append(float(split[2]))
+            trainers.append(int(split[3]))
 
-        epochs, times, losses = list(zip(*train_datum))[:3]
-        match = TRAIN_FILE_PAT.search(os.path.basename(fname))
+    return TrainMeasurement(
+        experiment_name,
+        np.array(epochs),
+        np.array(times),
+        np.array(losses),
+        np.array(trainers),
+    )
+
+def extract_test_measurement(experiment_name, experiment_time):
+    # type: (str, str) -> TestMeasurement
+
+    checkpoint_fname_pat = re.compile('(?P<time>\d+\.\d+).report')
+
+    times = []
+    losses = []
+    checkpoint_reports_dir = os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'checkpoint_reports')
+
+    for checkpoint_report in os.listdir(checkpoint_reports_dir):
+        checkpoint_report = os.path.basename(checkpoint_report)
+
+        match = checkpoint_fname_pat.search(checkpoint_report)
+
         if not match:
-            return None
+            raise ValueError('Invalid checkpoint report name {} (in {}/{})'.format(checkpoint_report, experiment_name, experiment_time))
 
-        time_label = match.group('time')
-        start_time = time.mktime(time.strptime(time_label, '%m-%d-%y_%H:%M:%S'))
-        label = match.group('base')
-        return TrainMeasurement(
-            os.path.abspath(fname),
-            label,
-            time_label,
-            start_time,
-            epochs,
-            times,
-            losses,
-        )
+        elapsed_time = float(match.group('time'))
 
-def get_measurements(files):
-    # type: (List[str]) -> Tuple[List[TrainMeasurement], List[TestMeasurement]]
-    train_measurements = {}
-    test_measurements = {}
-
-    for fname in files:
-        train_measurement = extract_train_measurement(fname)
-        if (train_measurement and (
-                train_measurement.label not in train_measurements or
-                train_measurements[train_measurement.label] < train_measurement.start_time
-        )):
-            train_measurements[train_measurement.label] = train_measurement
-
-    for (label, train_measurement) in train_measurements.items():
-        checkpoint_path = os.path.join(_DIRNAME, 'test_loss_checkpoint_reports')
-        times = []
-        losses = []
-
-        from tqdm import tqdm
-
-        for fname in tqdm(os.listdir(checkpoint_path)):
-            checkpoint_fname_pat = re.compile(r'{}_{}.mdl_checkpoint_(?P<time>\d+\.\d+).report$'.format(
-                re.escape(label),
-                re.escape(train_measurement.start_time_label),
-            ))
-            match = checkpoint_fname_pat.search(os.path.basename(fname))
-            if not match:
-                continue
-
-            elapsed_time = float(match.group('time'))
-            with open(os.path.join(checkpoint_path, fname)) as f:
-                line = f.readlines()[-1]
-                loss = float(line[1:line.index(']')])
+        with open(os.path.join(checkpoint_reports_dir, checkpoint_report)) as f:
+            line = f.readlines()[-1]
+            loss = float(line[1:line.index(']')])
             times.append(elapsed_time)
             losses.append(loss)
 
-        times = np.array(times)
-        losses = np.array(losses)
-        sorted_idxs = np.argsort(times)
-        times = times[sorted_idxs]
-        losses = losses[sorted_idxs]
-        test_measurements[label] = TestMeasurement(label, times, losses)
+    times = np.array(times)
+    losses = np.array(losses)
+    sorted_idxs = np.argsort(times)
+    times = times[sorted_idxs]
+    losses = losses[sorted_idxs]
 
-    return train_measurements.values(), test_measurements.values()
+    return TestMeasurement(experiment_name, times, losses)
+
+def get_measurements(experiments):
+    # type: (List[str]) -> Tuple[List[TrainMeasurement], List[TestMeasurement]]
+
+    train_measurements = [] # type: List[TrainMeasurement]
+    test_measurements = [] # type: List[TestMeasurement]
+
+    for experiment_name in experiments:
+        experiment_time = synchronize_experiment_files(experiment_name)
+        train_measurements.append(extract_train_measurement(experiment_name, experiment_time))
+        test_measurements.append(extract_test_measurement(experiment_name, experiment_time))
+
+    return train_measurements, test_measurements
 
 def main():
+    # type: () -> None
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--blur', type=float, default=25)
-    parser.add_argument('files', nargs='+')
+    parser.add_argument('--train-blur', type=float, default=25)
+    parser.add_argument('--test-blur', type=float, default=0.5)
+    parser.add_argument('experiments', nargs='+')
     args = parser.parse_args()
 
-    train_measurements, test_measurements = get_measurements(args.files)
-    plot_measurements(train_measurements, test_measurements, args.blur)
+    train_measurements, test_measurements = get_measurements(args.experiments)
+
+    plot_measurements(train_measurements, test_measurements, args.train_blur, args.test_blur)
 
 if __name__ == '__main__':
     main()
