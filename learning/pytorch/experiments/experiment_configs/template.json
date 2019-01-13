@@ -1,0 +1,6 @@
+{
+    "name": "template_experiment",
+    "dataset": "time_skylake_1217.data",
+    "base_args": ["--no-edges"],
+    "train_args": ["--threads 6"]
+}
