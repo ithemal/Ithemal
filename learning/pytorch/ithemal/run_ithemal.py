@@ -23,6 +23,7 @@ from tqdm import tqdm
 from mpconfig import MPConfig
 from typing import Callable, List, Optional, Iterator, Tuple, NamedTuple, Union
 from experiments import experiment
+import random
 
 class EdgeAblationType(Enum):
     TRANSITIVE_REDUCTION = 1
@@ -55,7 +56,7 @@ TrainParameters = NamedTuple('TrainParameters', [
     ('initial_lr', float),
     ('decay_lr', bool),
     ('epochs', int),
-    ('split_distr', List[float]),
+    ('split', Union[int, List[float]]),
 ])
 
 BenchmarkParameters = NamedTuple('BenchmarkParameters', [
@@ -100,7 +101,7 @@ def load_model_and_data(params):
 
     return model, data
 
-def get_partition_splits(n_datapoints, n_trainers, split_distr):
+def get_partition_splits_from_distr(n_datapoints, n_trainers, split_distr):
     # type: (int, int, List[float]) -> Iterator[Tuple[int, int]]
 
     assert abs(sum(split_distr) - 1) < 1e-4
@@ -113,6 +114,12 @@ def get_partition_splits(n_datapoints, n_trainers, split_distr):
             yield (idx, idx + split_size)
             idx += split_size
     yield (idx, n_datapoints)
+
+def get_partition_splits_from_size(n_datapoints, split_size):
+    # type: (int, int) -> Iterator[Tuple[int, int]]
+
+    for i in range(0, n_datapoints, split_size):
+        yield (i, i + split_size)
 
 def graph_model_learning(base_params, train_params):
     # type: (BaseParameters, TrainParameters) -> None
@@ -151,16 +158,8 @@ def graph_model_learning(base_params, train_params):
 
     start_time = time.time()
 
-    def run_training(q, epoch_idx, rank, loss_report_func):
-        # type: (mp.Queue, int, int, Callable[[messages.LossReportMessage], None]) -> None
-        while True:
-            part = q.get()
-            if part is None:
-                return
-            train(rank, part, loss_report_func)
-
-    def loss_report_func(message_q):
-        # type: (mp.Queue) -> None
+    def loss_report_func(message_q, partition_q):
+        # type: (mp.Queue, mp.Queue) -> None
         loss_report_file = open(os.path.join(expt_root, 'loss_report.log'), 'w', 1) # line buffered
         last_report_time = time.time()
         last_save_time = 0.
@@ -186,15 +185,28 @@ def graph_model_learning(base_params, train_params):
                 ep_proc_instances += item.n_items
                 total_proc_instances += item.n_items
                 pbar.update(item.n_items)
+
             elif isinstance(item, messages.EpochAdvanceMessage):
                 ep_proc_instances = 0
                 ep_no = item.epoch
                 running_trainers = item.n_trainers
                 pbar.close()
                 pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
+
             elif isinstance(item, messages.TrainerDeathMessage):
-                # TODO: send more data
                 running_trainers -= 1
+                pbar.write('Trainer died! Down to {} trainers'.format(running_trainers))
+                remaining_part = item.remaining_partition
+                if remaining_part[0] < remaining_part[1]:
+                    partition_queue.put(remaining_part)
+
+                if running_trainers == 0:
+                    pbar.write('All trainers dead! Terminating learning')
+                    try:
+                        while True:
+                            partition_queue.task_done()
+                    except ValueError:
+                        pass
 
             t = time.time()
             if t - last_report_time > 10:
@@ -219,12 +231,27 @@ def graph_model_learning(base_params, train_params):
 
             pbar.set_description(format_loss(ep_no, ema_loss))
 
+    def run_training(part_q, loss_report_func):
+        # type: (mp.Queue, Callable[[messages.Message], None]) -> None
+        while True:
+            part = part_q.get()
+
+            if p is None:
+                part_q.task_done()
+                return
+
+            train(rank, part, loss_report_func)
+            part_q.task_done()
+
     message_q = mp.Queue()
-    loss_proc = mp.Process(target=loss_report_func, args=(message_q,))
+    partition_queue = mp.JoinableQueue()
+
+    loss_proc = mp.Process(target=loss_report_func, args=(message_q, partition_queue))
     loss_proc.daemon = True
     loss_proc.start()
 
     for i in range(train_params.epochs):
+        i = restored_epoch + i + 1
         if train_params.decay_trainers:
             n_trainers = max(1, train_params.trainers - i)
         else:
@@ -232,34 +259,43 @@ def graph_model_learning(base_params, train_params):
 
         message_q.put(messages.EpochAdvanceMessage(i + 1, n_trainers))
 
+        # shuffle the data before forking processes
+        random.shuffle(data.train)
+
         mp_config = MPConfig(n_trainers, train_params.threads)
-        partitions = list(get_partition_splits(len(data.train), mp_config.trainers, train_params.split_distr)) # type: List[Optional[Tuple[int, int]]]
-        partitions += [None] * mp_config.trainers
-
         processes = []
-        i = restored_epoch + i + 1
-
-        partition_queue = mp.Queue()
-
         with mp_config:
             for rank in range(mp_config.trainers):
                 mp_config.set_env(rank)
 
-                m_args = (partition_queue, i, rank, message_q.put)
-                p = mp.Process(target=run_training, args=m_args)
+                p = mp.Process(target=run_training, args=(partition_queue, message_q.put))
                 p.daemon = True
                 p.start()
                 print("Starting process %d" % (rank,))
                 processes.append(p)
 
-        for split in partitions:
-            partition_queue.put(split)
+        if isinstance(train_params.split, int):
+            partitions = list(get_partition_splits_from_size(len(data.train), train_params.split))
+        else:
+            partitions = list(get_partition_splits_from_distr(len(data.train), mp_config.trainers, train_params.split))
 
+        for partition in partitions:
+            partition_queue.put(partition)
+
+        # wait until all partitions processed
+        partition_queue.join()
+
+        # kill all trainer procs
+        for p in processes:
+            partition_queue.put(None)
+
+        # wait for all trainer procs to finish
         for p in processes:
             p.join()
 
         train.save_checkpoint(i, 0, os.path.join(expt_root, 'trained.mdl'))
 
+        # decay LR if necessary
         if train_params.decay_lr:
             lr /= 10
             train.set_lr(lr)
@@ -360,12 +396,13 @@ def main():
     train.add_argument('--initial-lr', type=float, default=0.0001, help='Initial learning rate')
     train.add_argument('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
 
-    # TODO: improve split dist
     split_group = train.add_mutually_exclusive_group()
     split_group.add_argument(
         '--split-dist', nargs='+', type=float, default=[0.5, 0.25, 0.125, .0625, .0625],
         help='Split data partitions between trainers via a distribution',
+        dest='split',
     )
+    split_group.add_argument('--split-size', type=int, help='Partitions of a fixed size', dest='split')
 
     benchmark = sp.add_parser('benchmark', help='Benchmark train performance of an Ithemal setup')
     benchmark.add_argument('--n-examples', type=int, default=1000, help='Number of examples to use in benchmark')
@@ -403,7 +440,7 @@ def main():
             initial_lr=args.initial_lr,
             decay_lr=args.decay_lr,
             epochs=args.epochs,
-            split_distr=args.split_dist,
+            split=args.split,
         )
         graph_model_learning(base_params, train_params)
 

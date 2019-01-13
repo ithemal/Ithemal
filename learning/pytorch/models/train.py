@@ -103,10 +103,6 @@ class Train():
         self.loss_fn = loss_fn
         self.num_losses = num_losses
 
-        #for plotting
-        self.per_epoch_loss = [] # type: List[List[float]]
-        self.loss = [] # type: List[List[List[float]]]
-
         self.rank = 0
         self.last_save_time = 0
 
@@ -187,7 +183,7 @@ class Train():
         return state_dict
 
     def __call__(self, rank, partition, report_loss_fn=None):
-        # type: (int, Tuple[int, int], Optional[Callable[[messages.LossReportMessage], None]]) -> None
+        # type: (int, Tuple[int, int], Optional[Callable[[messages.Message], None]]) -> None
         self.rank = rank
         self.partition = partition
         self.train(report_loss_fn=report_loss_fn)
@@ -204,38 +200,34 @@ class Train():
     """
 
     def train(self, report_loss_fn=None):
-        # type: (Optional[Callable[[messages.LossReportMessage], None]]) -> None
-        self.per_epoch_loss = []
-        self.loss = []
+        # type: (Optional[Callable[[messages.Message], None]]) -> None
 
-        train_length = self.partition[1] - self.partition[0]
-        epoch_len = train_length // self.batch_size
-        leftover = train_length % self.batch_size
+        (partition_start, partition_end) = self.partition
 
-        epoch_sum_loss = np.zeros(self.num_losses)
+        def report_trainer_death(idx):
+            # type: (int) -> None
 
-        data = [self.data.train[i] for i in random.sample(range(*self.partition), train_length)]
+            if report_loss_fn is not None:
+                report_loss_fn(messages.TrainerDeathMessage(
+                    (idx + self.batch_size, partition_end),
+                ))
 
-        for batch_idx in range(epoch_len + 1):
+        for idx in range(partition_start, partition_end, self.batch_size):
             batch_loss_sum = np.zeros(self.num_losses)
             self.correct = 0
 
             self.optimizer.zero_grad()
             loss_tensor = torch.FloatTensor([0]).squeeze()
-
-            batch_idx_start = batch_idx * self.batch_size
-            batch = data[batch_idx_start:batch_idx_start+self.batch_size]
+            batch = self.data.train[idx:idx+self.batch_size]
 
             if not batch:
-                break
+                continue
 
             for datum in batch:
                 output = self.model(datum)
 
                 if torch.isnan(output).any():
-                    print 'output nan detected, quit learning, please use the saved model...'
-                    #also add the per epch loss to the main loss accumulation
-                    self.loss.append(self.per_epoch_loss)
+                    report_trainer_death(idx)
                     return
 
                 #target as a tensor
@@ -260,7 +252,6 @@ class Train():
                 for class_idx, (loss_opt, loss_rep) in enumerate(zip(losses_opt, losses_rep)):
                     loss_tensor += loss_opt
                     l = loss_rep.item()
-                    epoch_sum_loss[class_idx] += l
                     batch_loss_sum[class_idx] += l
 
             batch_loss_avg = batch_loss_sum / len(batch)
@@ -276,11 +267,8 @@ class Train():
                 if param.grad is None:
                     continue
 
-                isnan = torch.isnan(param.grad)
-                if isnan.any():
-                    print 'gradient values are nan...'
-                    #append the loss before returning
-                    self.loss.append(self.per_epoch_loss)
+                if torch.isnan(param.grad).any():
+                    report_trainer_death(idx)
                     return
 
             #optimizer step to update parameters
@@ -290,23 +278,12 @@ class Train():
             for datum in batch:
                 self.model.remove_refs(datum)
 
-            #losses accumulation to visualize learning
-            losses = []
-            for av in epoch_sum_loss:
-                losses.append(av / (batch_idx + 1))
-            self.per_epoch_loss.append(losses)
-
             if report_loss_fn is not None:
                 report_loss_fn(messages.LossReportMessage(
                     self.rank,
                     batch_loss_avg[0],
                     len(batch),
                 ))
-
-        #loss accumulation
-        self.loss.append(self.per_epoch_loss)
-        self.per_epoch_loss = []
-        self.set_lr(self.lr * 0.1)
 
     def set_lr(self, lr):
         # type: (float) -> None
