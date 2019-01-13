@@ -399,11 +399,10 @@ def main():
 
     split_group = train.add_mutually_exclusive_group()
     split_group.add_argument(
-        '--split-dist', nargs='+', type=float, default=[0.5, 0.25, 0.125, .0625, .0625],
+        '--split-dist', action='store_const', const=[0.5, 0.25, 0.125, .0625, .0625],
         help='Split data partitions between trainers via a distribution',
-        dest='split',
     )
-    split_group.add_argument('--split-size', type=int, help='Partitions of a fixed size', dest='split')
+    split_group.add_argument('--split-size', type=int, help='Partitions of a fixed size')
 
     optimizer_group = train.add_mutually_exclusive_group()
     optimizer_group.add_argument('--adam-private', action='store_const', const=tr.OptimizerType.ADAM_PRIVATE, dest='optimizer', help='Use Adam with private moments',
@@ -435,6 +434,11 @@ def main():
     )
 
     if args.subparser == 'train':
+        if args.split_dist:
+            split = args.split_dist
+        else:
+            split = args.split_size or 1000
+
         train_params = TrainParameters(
             experiment_name=args.experiment_name,
             experiment_time=args.experiment_time,
@@ -447,7 +451,7 @@ def main():
             initial_lr=args.initial_lr,
             decay_lr=args.decay_lr,
             epochs=args.epochs,
-            split=args.split,
+            split=split,
             optimizer=args.optimizer,
         )
         graph_model_learning(base_params, train_params)
