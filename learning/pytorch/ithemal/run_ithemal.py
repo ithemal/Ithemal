@@ -24,6 +24,7 @@ from mpconfig import MPConfig
 from typing import Callable, List, Optional, Iterator, Tuple, NamedTuple, Union
 from experiments import experiment
 import random
+import Queue
 
 class EdgeAblationType(Enum):
     TRANSITIVE_REDUCTION = 1
@@ -293,6 +294,14 @@ def graph_model_learning(base_params, train_params):
         # wait for all trainer procs to finish
         for p in processes:
             p.join()
+
+        # flush the queue
+        try:
+            while True:
+                partition_queue.get_nowait()
+                partition_queue.task_done()
+        except Queue.Empty:
+            pass
 
         train.save_checkpoint(i, 0, os.path.join(expt_root, 'trained.mdl'))
 
