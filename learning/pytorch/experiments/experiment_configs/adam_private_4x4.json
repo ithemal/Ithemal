@@ -1,5 +1,5 @@
 {
-    "name": "adam_shared_4x4",
+    "name": "adam_private_4x4",
     "dataset": "time_skylake_1217.data",
     "base_args": [],
     "train_args": ["--trainers", "4", "--threads", "4", "--adam-private"]
