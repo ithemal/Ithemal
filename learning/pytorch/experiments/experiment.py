@@ -213,6 +213,8 @@ class Experiment(object):
         debug_print(params)
         subprocess.check_call(params)
 
+        return proc.returncode == 0
+
 def main():
     # type: () -> None
     parser = argparse.ArgumentParser(description='Run experiments, syncing with AWS')
@@ -222,8 +224,9 @@ def main():
     experiment = Experiment.make_experiment_from_config_file(args.experiment)
 
     try:
-        experiment.run_and_sync()
+        success = experiment.run_and_sync()
     except:
+        success = False
         # catch literally anything (including KeyboardInterrupt, SystemExit)
         traceback.print_exc()
 
@@ -238,6 +241,9 @@ def main():
     finally:
         print('Synchronizing files...')
         experiment.sync_all()
+
+    if not success:
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
