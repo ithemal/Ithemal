@@ -1,0 +1,6 @@
+{
+    "name": "sgd_4x4_lr_0.1_decay",
+    "dataset": "time_skylake_1217.data",
+    "base_args": [],
+    "train_args": ["--trainers", "4", "--threads", "4", "--sgd", "--initial-lr", "0.1", "--decay-lr"]
+}
