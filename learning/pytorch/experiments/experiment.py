@@ -148,7 +148,9 @@ class Experiment(object):
             f.write(' '.join(params))
 
         debug_print(params)
-        self.proc = subprocess.Popen(params, stdout=open(os.path.join(root, 'stdout'), 'w'))
+        # open proc, line buffer stdout
+
+        self.proc = subprocess.Popen(params, stdout=open(os.path.join(root, 'stdout'), 'w', 1))
 
     def enqueue_checkpoints(self, checkpoint_times):
         # type: (List[str]) -> None
