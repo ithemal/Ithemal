@@ -64,7 +64,14 @@ def plot_measurements(train_measurements, test_measurements, train_blur, test_bl
     plt.show()
 
 def synchronize_experiment_files(experiment_name):
-    # type: (str) -> str
+    # type: (str) -> Tuple[str, List[str]]
+
+    match = re.match(r'^(?P<experiment_name>.*?)(:?\+(?P<time_count>\d+))?$', experiment_name)
+    experiment_name = match.group('experiment_name')
+    if match.group('time_count'):
+        time_count = max(int(match.group('time_count')), 1)
+    else:
+        time_count = 1
 
     try:
         output = subprocess.check_output(['aws', 's3', 'ls', 's3://ithemal-experiments/{}/'.format(experiment_name)]).strip()
@@ -75,16 +82,17 @@ def synchronize_experiment_files(experiment_name):
         output = output.decode('utf8') # type: ignore
 
     times = [line.strip().split()[1][:-1] for line in output.split('\n')]
-    experiment_time = sorted(times)[-1]
+    experiment_times = sorted(times)[-time_count:]
 
-    subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}'.format(experiment_name, experiment_time),
-                           os.path.join(_DIRNAME, 'data', experiment_name, experiment_time),
-                           '--exclude', '*', '--include', 'loss_report.log'])
+    for experiment_time in experiment_times:
+        subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}'.format(experiment_name, experiment_time),
+                               os.path.join(_DIRNAME, 'data', experiment_name, experiment_time),
+                               '--exclude', '*', '--include', 'loss_report.log'])
 
-    subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}/checkpoint_reports'.format(experiment_name, experiment_time),
-                           os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'checkpoint_reports')])
+        subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}/checkpoint_reports'.format(experiment_name, experiment_time),
+                               os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'checkpoint_reports')])
 
-    return experiment_time
+    return experiment_name, experiment_times
 
 def extract_train_measurement(experiment_name, experiment_time):
     # type: (str, str) -> TrainMeasurement
@@ -153,9 +161,10 @@ def get_measurements(experiments):
     test_measurements = [] # type: List[TestMeasurement]
 
     for experiment_name in experiments:
-        experiment_time = synchronize_experiment_files(experiment_name)
-        train_measurements.append(extract_train_measurement(experiment_name, experiment_time))
-        test_measurements.append(extract_test_measurement(experiment_name, experiment_time))
+        name, experiment_times = synchronize_experiment_files(experiment_name)
+        for experiment_time in experiment_times:
+            train_measurements.append(extract_train_measurement(name, experiment_time))
+            test_measurements.append(extract_test_measurement(name, experiment_time))
 
     return train_measurements, test_measurements
 
