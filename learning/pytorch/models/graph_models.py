@@ -8,6 +8,7 @@ import torch.optim as optim
 import math
 import numpy as np
 
+from . import model_utils
 
 class GraphNN(nn.Module):
 
@@ -61,6 +62,11 @@ class GraphNN(nn.Module):
             print 'embedding not selected...'
             exit()
 
+    def dump_shared_params(self):
+        return model_utils.dump_shared_params(self)
+
+    def load_shared_params(self, params):
+        model_utils.load_shared_params(self, params)
 
     def init_hidden(self):
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),

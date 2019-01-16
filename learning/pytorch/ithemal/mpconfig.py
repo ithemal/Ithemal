@@ -9,12 +9,10 @@ class MPConfig(object):
     PYTORCH_THREAD_OFFSET = 2
 
 
-    def __init__(self, trainers, threads):
-        # type: (int, int) -> None
-        assert 0 < trainers
+    def __init__(self, threads):
+        # type: (int) -> None
         assert 2 <= threads
 
-        self.trainers = trainers
         self.threads = threads
         self.saved_env = None # type: Optional[Tuple[Optional[str], Optional[str]]]
 
@@ -27,7 +25,6 @@ class MPConfig(object):
 
     def set_env(self, trainer_id):
         # type: (int) -> None
-        assert trainer_id < self.trainers
 
         # set the OMP config, to get threads on sequential CPUs, ideally on the same socket
         os.environ[MPConfig.THREADS_KEY] = str(self.threads - MPConfig.PYTORCH_THREAD_OFFSET)

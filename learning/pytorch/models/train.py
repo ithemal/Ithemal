@@ -22,6 +22,8 @@ import utils.messages as messages
 import random
 from typing import Any, Callable, Dict, IO, List, Optional, Tuple
 
+from . import model_utils
+
 def memReport():
     # type: () -> None
     num_obj = 0
@@ -78,6 +80,7 @@ class Train():
         self.lr = lr
         self.clip = clip
         self.predict_log = predict_log
+        self.opt_type = opt
 
         if opt == OptimizerType.SGD:
             self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
@@ -106,6 +109,20 @@ class Train():
 
         self.rank = 0
         self.last_save_time = 0
+
+    def dump_shared_params(self):
+        # type: () -> Dict[str, object]
+
+        if self.opt_type == OptimizerType.ADAM_SHARED:
+            return model_utils.dump_shared_params(self.optimizer)
+        else:
+            return {}
+
+    def load_shared_params(self, params):
+        # type: (Dict[str, object]) -> None
+
+        if self.opt_type == OptimizerType.ADAM_SHARED:
+            model_utils.load_shared_params(self.optimizer, params)
 
     """
     Print routines for predicted and target values.

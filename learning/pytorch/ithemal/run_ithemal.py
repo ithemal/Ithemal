@@ -1,323 +1,28 @@
 import sys
 import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
-from enum import Enum
-import mysql.connector
-import struct
-import word2vec as w2v
+
 import argparse
-import matplotlib
-import common_libs.utilities as ut
-import numpy as np
 import time
 import torch
 import torch.multiprocessing as mp
 torch.backends.cudnn.enabled = False
-
 from utils import messages
-import models.graph_models as md
-import data.data_cost as dt
 import models.losses as ls
 import models.train as tr
 from tqdm import tqdm
 from mpconfig import MPConfig
 from typing import Callable, List, Optional, Iterator, Tuple, NamedTuple, Union
-from experiments import experiment
 import random
 import Queue
-
-class EdgeAblationType(Enum):
-    TRANSITIVE_REDUCTION = 1
-    TRANSITIVE_CLOSURE = 2
-    ADD_LINEAR_EDGES = 3
-    ONLY_LINEAR_EDGES = 4
-    NO_EDGES = 5
-
-BaseParameters = NamedTuple('BaseParameters', [
-    ('data', str),
-    ('embed_mode', str),
-    ('embed_file', str),
-    ('random_edge_freq', float),
-    ('predict_log', bool),
-    ('no_residual', bool),
-    ('edge_ablation_type', Optional[EdgeAblationType]),
-    ('embed_size', int),
-    ('hidden_size', int),
-])
-
-TrainParameters = NamedTuple('TrainParameters', [
-    ('experiment_name', str),
-    ('experiment_time', str),
-    ('load_file', Optional[str]),
-    ('batch_size', int),
-    ('trainers', int),
-    ('threads', int),
-    ('decay_trainers', bool),
-    ('weight_decay', float),
-    ('initial_lr', float),
-    ('decay_lr', bool),
-    ('epochs', int),
-    ('split', Union[int, List[float]]),
-    ('optimizer', tr.OptimizerType),
-])
-
-BenchmarkParameters = NamedTuple('BenchmarkParameters', [
-    ('batch_size', int),
-    ('trainers', int),
-    ('threads', int),
-    ('examples', int),
-])
-
-
-def ablate_data(data, edge_ablation_type, random_edge_freq):
-    # type: (dt.DataCost, Optional[EdgeAblationType], float) -> None
-
-    if edge_ablation_type == EdgeAblationType.TRANSITIVE_REDUCTION:
-        for data_item in data.data:
-            data_item.block.transitive_reduction()
-    elif edge_ablation_type == EdgeAblationType.TRANSITIVE_CLOSURE:
-        for data_item in data.data:
-            data_item.block.transitive_closure()
-    elif edge_ablation_type == EdgeAblationType.ADD_LINEAR_EDGES:
-        for data_item in data.data:
-            data_item.block.linearize_edges()
-    elif edge_ablation_type == EdgeAblationType.ONLY_LINEAR_EDGES:
-        for data_item in data.data:
-            data_item.block.remove_edges()
-            data_item.block.linearize_edges()
-    elif edge_ablation_type == EdgeAblationType.NO_EDGES:
-        for data_item in data.data:
-            data_item.block.remove_edges()
-
-    if random_edge_freq > 0:
-        for data_item in data.data:
-            data_item.block.random_forward_edges(random_edge_freq / len(data_item.block.instrs))
-
-def load_model_and_data(params):
-    # type: (BaseParameters) -> Tuple[md.GraphNN, dt.DataCost]
-    data = dt.load_dataset(params.embed_file, data_savefile=params.data)
-    ablate_data(data, params.edge_ablation_type, params.random_edge_freq)
-
-    model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1, use_residual=not params.no_residual)
-    model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
-
-    return model, data
-
-def get_partition_splits_from_distr(n_datapoints, n_trainers, split_distr):
-    # type: (int, int, List[float]) -> Iterator[Tuple[int, int]]
-
-    assert abs(sum(split_distr) - 1) < 1e-4
-    assert all(elem >= 0 for elem in split_distr)
-
-    idx = 0
-    for frac in split_distr:
-        split_size = int((n_datapoints / n_trainers) * frac)
-        for tr in range(n_trainers):
-            yield (idx, idx + split_size)
-            idx += split_size
-    yield (idx, n_datapoints)
-
-def get_partition_splits_from_size(n_datapoints, split_size):
-    # type: (int, int) -> Iterator[Tuple[int, int]]
-
-    for i in range(0, n_datapoints, split_size):
-        yield (i, i + split_size)
-
-def graph_model_learning(base_params, train_params):
-    # type: (BaseParameters, TrainParameters) -> None
-
-    expt = experiment.Experiment(train_params.experiment_name, train_params.experiment_time, base_params.data)
-    expt_root = expt.experiment_root_path()
-
-    try:
-        os.makedirs(expt_root)
-    except OSError:
-        pass
-
-    model, data = load_model_and_data(base_params)
-
-    lr = train_params.initial_lr
-    train = tr.Train(
-        model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
-        batch_size=train_params.batch_size, clip=None, opt=train_params.optimizer, lr=lr,
-        weight_decay=train_params.weight_decay, predict_log=base_params.predict_log
-    )
-
-    #defining losses, correctness and printing functions
-    restored_epoch = -1
-    restored_batch_num = -1
-
-    if train_params.load_file:
-        state_dict = train.load_checkpoint(train_params.load_file)
-        restored_epoch = state_dict['epoch']
-        restored_batch_num = state_dict['batch_num']
-        print('starting from a checkpointed state... epoch {} batch_num {}'.format(
-            restored_epoch,
-            restored_batch_num,
-        ))
-
-    model.share_memory()
-
-    start_time = time.time()
-
-    def loss_report_func(message_q, partition_q):
-        # type: (mp.Queue, mp.Queue) -> None
-        loss_report_file = open(os.path.join(expt_root, 'loss_report.log'), 'w', 1) # line buffered
-        last_report_time = time.time()
-        last_save_time = 0.
-
-        def format_loss(ep_no, loss):
-            # type: (Union[float, int, str], Union[float, str]) -> str
-            return 'Epoch {}, Loss {:.2}'.format(ep_no, loss)
-
-        pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
-        ema_loss = 1.0
-        ep_no = 0
-        running_trainers = 0
-        ep_proc_instances = 0
-        total_proc_instances = 0
-
-        while True:
-            item = message_q.get()
-            if item is None:
-                return
-            elif isinstance(item, messages.LossReportMessage):
-                loss = item.loss
-                ema_loss = ema_loss * 0.999 + loss * 0.001
-                ep_proc_instances += item.n_items
-                total_proc_instances += item.n_items
-                pbar.update(item.n_items)
-
-            elif isinstance(item, messages.EpochAdvanceMessage):
-                ep_proc_instances = 0
-                ep_no = item.epoch
-                running_trainers = item.n_trainers
-                pbar.close()
-                pbar = tqdm(desc=format_loss('??', '??'), total=len(data.train))
-
-            elif isinstance(item, messages.TrainerDeathMessage):
-                running_trainers -= 1
-                pbar.write('Trainer died! Down to {} trainers'.format(running_trainers))
-                remaining_part = item.remaining_partition
-                if remaining_part[0] < remaining_part[1]:
-                    partition_queue.put(remaining_part)
-
-                if running_trainers == 0:
-                    pbar.write('All trainers dead! Terminating learning')
-                    try:
-                        while True:
-                            partition_queue.task_done()
-                    except ValueError:
-                        pass
-
-            t = time.time()
-            if t - last_report_time > 10:
-                message = '\t'.join(map(str, (
-                    ep_no,
-                    t - start_time,
-                    ema_loss,
-                    running_trainers
-                )))
-                loss_report_file.write(message + '\n')
-                last_report_time = t
-
-            if t - last_save_time > 10*60:
-                checkpoint_fname = expt.checkpoint_file_name(t - start_time)
-                train.save_checkpoint(
-                    ep_no, 0, checkpoint_fname,
-                    runtime=t - start_time,
-                    ep_proc_instances=ep_proc_instances,
-                    total_proc_instances=total_proc_instances,
-                )
-                last_save_time = t
-
-            pbar.set_description(format_loss(ep_no, ema_loss))
-
-    def run_training(part_q, loss_report_func):
-        # type: (mp.Queue, Callable[[messages.Message], None]) -> None
-        while True:
-            part = part_q.get()
-
-            if p is None:
-                part_q.task_done()
-                return
-
-            train(rank, part, loss_report_func)
-            part_q.task_done()
-
-    message_q = mp.Queue()
-    partition_queue = mp.JoinableQueue()
-
-    loss_proc = mp.Process(target=loss_report_func, args=(message_q, partition_queue))
-    loss_proc.daemon = True
-    loss_proc.start()
-
-    for i in range(train_params.epochs):
-        i = restored_epoch + i + 1
-        if train_params.decay_trainers:
-            n_trainers = max(1, train_params.trainers - i)
-        else:
-            n_trainers = train_params.trainers
-
-        message_q.put(messages.EpochAdvanceMessage(i + 1, n_trainers))
-
-        # shuffle the data before forking processes
-        random.shuffle(data.train)
-
-        mp_config = MPConfig(n_trainers, train_params.threads)
-        processes = []
-        with mp_config:
-            for rank in range(mp_config.trainers):
-                mp_config.set_env(rank)
-
-                p = mp.Process(target=run_training, args=(partition_queue, message_q.put))
-                p.daemon = True
-                p.start()
-                print("Starting process %d" % (rank,))
-                processes.append(p)
-
-        if isinstance(train_params.split, int):
-            partitions = list(get_partition_splits_from_size(len(data.train), train_params.split))
-        else:
-            partitions = list(get_partition_splits_from_distr(len(data.train), mp_config.trainers, train_params.split))
-
-        for partition in partitions:
-            partition_queue.put(partition)
-
-        # wait until all partitions processed
-        partition_queue.join()
-
-        # kill all trainer procs
-        for p in processes:
-            partition_queue.put(None)
-
-        # wait for all trainer procs to finish
-        for p in processes:
-            p.join()
-
-        # flush the queue
-        try:
-            while True:
-                partition_queue.get_nowait()
-                partition_queue.task_done()
-        except Queue.Empty:
-            pass
-
-        train.save_checkpoint(i, 0, os.path.join(expt_root, 'trained.mdl'))
-
-        # decay LR if necessary
-        if train_params.decay_lr:
-            lr /= 10
-            train.set_lr(lr)
-
-    message_q.put(None)
-
-    resultfile = os.path.join(expt_root, 'validation_results.txt')
-    results = train.validate(resultfile)
+from ithemal_utils import *
+import training
 
 def graph_model_benchmark(base_params, benchmark_params):
     # type: (BaseParameters, BenchmarkParameters) -> None
-    model, data = load_model_and_data(base_params)
+    data = load_data(base_params)
+    model = load_model(base_params, data)
+
     train = tr.Train(
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
         batch_size=benchmark_params.batch_size, clip=None, opt=tr.OptimizerType.ADAM_PRIVATE, lr=0.01,
@@ -325,7 +30,7 @@ def graph_model_benchmark(base_params, benchmark_params):
 
     model.share_memory()
 
-    mp_config = MPConfig(benchmark_params.trainers, benchmark_params.threads)
+    mp_config = MPConfig(benchmark_params.threads)
     partition_size = benchmark_params.examples // benchmark_params.trainers
 
     processes = []
@@ -333,7 +38,7 @@ def graph_model_benchmark(base_params, benchmark_params):
     start_time = time.time()
 
     with mp_config:
-        for rank in range(mp_config.trainers):
+        for rank in range(benchmark_params.trainers):
             mp_config.set_env(rank)
 
             partition = (rank * partition_size, (rank + 1) * partition_size)
@@ -354,7 +59,8 @@ def graph_model_benchmark(base_params, benchmark_params):
 
 def graph_model_validate(base_params, model_file):
     # type: (BaseParameters, str) -> None
-    model, data = load_model_and_data(base_params)
+    data = load_data(base_params)
+    model = load_model(base_params, data)
 
     train = tr.Train(
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
@@ -463,7 +169,7 @@ def main():
             split=split,
             optimizer=args.optimizer,
         )
-        graph_model_learning(base_params, train_params)
+        training.run_training_coordinator(base_params, train_params)
 
     elif args.subparser == 'validate':
         graph_model_validate(base_params, args.load_file)

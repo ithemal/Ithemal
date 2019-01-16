@@ -176,7 +176,7 @@ class Experiment(object):
         subprocess.check_call(params)
 
     def run_and_sync(self):
-        # type: () -> None
+        # type: () -> bool
 
         self.start_experiment()
         proc = self.proc
