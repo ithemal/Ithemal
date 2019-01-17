@@ -59,7 +59,6 @@ def list_instances(instances):
         print('No instances running!')
         return
 
-    print('Active instances:')
     for i, instance in enumerate(instances):
         print('{}) {}'.format(i + 1, format_instance(instance)))
 
