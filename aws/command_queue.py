@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+import atexit
 import aws_utils.queue_process
+import curses
 import json
 import os
 import start_instance
@@ -9,6 +11,7 @@ import subprocess
 import sys
 import urlparse
 from typing import Optional
+import tempfile
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -156,6 +159,106 @@ def preview_queue(queue):
     for message in messages:
         print('> {}'.format(message['Body']))
 
+def manage_queue(queue):
+    # type: (str) -> None
+
+    url = queue_url_of_name(queue)
+    if not url:
+        print('Queue {} doesn\'t exist!'.format(queue))
+        return
+
+    messages = None
+
+    def reset_messages():
+        if messages is None:
+            return
+
+        with tempfile.NamedTemporaryFile(suffix='.json', bufsize=0) as f:
+            json.dump([{
+                'Id': message['MessageId'],
+                'ReceiptHandle': message['ReceiptHandle'],
+                'VisibilityTimeout': 0,
+            } for message in messages], f)
+
+            output = subprocess.check_output([
+                'aws', 'sqs', 'change-message-visibility-batch',
+                '--queue-url', url,
+                '--entries', 'file://{}'.format(f.name),
+            ])
+
+    def get_messages():
+        reset_messages()
+
+        output = subprocess.check_output([
+            'aws', 'sqs', 'receive-message',
+            '--queue-url', url,
+            '--visibility-timeout', '30',
+            '--max-number-of-messages', '10',
+        ])
+
+        if not output:
+            return None
+        else:
+            return json.loads(output)['Messages']
+
+    messages = get_messages()
+
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
+    stdscr.keypad(1)
+
+    def cleanup():
+        curses.nocbreak()
+        stdscr.keypad(0);
+        curses.echo()
+        curses.endwin()
+        reset_messages()
+
+    atexit.register(cleanup)
+
+    selected_idx = 0
+
+    while True:
+        if messages is None:
+            return
+
+        stdscr.erase()
+        stdscr.addstr(0, 0, 'Queue Management mode. Arrow keys to move, x to delete an item, q to exit', curses.A_STANDOUT)
+        stdscr.addstr(selected_idx + 2, 0, '>')
+
+        (maxy, maxx) = stdscr.getmaxyx()
+        for i, message in enumerate(messages):
+            body = message['Body'][:maxx-5] + (message['Body'][maxx-5:] and '...')
+            stdscr.addstr(i + 2, 2, body)
+        stdscr.refresh()
+
+        c = stdscr.getch()
+        if c == ord('x'):
+            message = messages[selected_idx]
+
+            stdscr.erase()
+            stdscr.addstr(0, 0, 'Really delete the following item? (y/n)')
+            stdscr.addstr(1, 0, message['Body'])
+            stdscr.refresh()
+
+            while True:
+                c = stdscr.getch()
+                if c == ord('y'):
+                    subprocess.check_call(['aws', 'sqs', 'delete-message', '--queue-url', url, '--receipt-handle', message['ReceiptHandle']])
+                    selected_idx = 0
+                    break
+                elif c == ord('n'):
+                    break
+
+            messages = get_messages()
+        elif c == ord('q'):
+            break
+        elif c == curses.KEY_DOWN:
+            selected_idx = min(selected_idx + 1, len(messages) - 1)
+        elif c == curses.KEY_UP:
+            selected_idx = max(selected_idx - 1, 0)
+
 def list_queues():
     # type: () -> None
     output = subprocess.check_output(['aws', 'sqs', 'list-queues'])
@@ -207,6 +310,9 @@ def main():
     preview_parser = subparsers.add_parser('preview', help='Preview an AWS queue')
     add_queue_arg(preview_parser)
 
+    manage_parser = subparsers.add_parser('manage', help='Manage an AWS queue')
+    add_queue_arg(manage_parser)
+
     running_parser = subparsers.add_parser('running', help='Get commands currently running on an AWS queue')
     running_parser.add_argument('identity', help='Identity to use to connect')
     add_queue_arg(running_parser)
@@ -225,6 +331,8 @@ def main():
         kill_queue(args.queue_name)
     elif args.subparser == 'preview':
         preview_queue(args.queue_name)
+    elif args.subparser == 'manage':
+        manage_queue(args.queue_name)
     elif args.subparser == 'running':
         running_of_queue(args.identity, args.queue_name)
     else:
