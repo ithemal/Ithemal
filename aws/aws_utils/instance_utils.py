@@ -1,8 +1,16 @@
+import calendar
+import datetime
 import json
 import os
 import subprocess
 import time
 from typing import Any, Dict, List, Tuple
+
+def utc_to_local_time(dt):
+    # https://stackoverflow.com/a/13287083
+    timestamp = calendar.timegm(dt.timetuple())
+    local_dt = datetime.datetime.fromtimestamp(timestamp)
+    return local_dt.replace(microsecond=dt.microsecond)
 
 def format_instance(instance):
     # type: (Dict[str, Any]) -> str
@@ -20,15 +28,19 @@ def format_instance(instance):
     ip_addr = instance['PublicIpAddress']
     is_spot = bool(instance.get('SpotInstanceRequestId'))
 
-    return '{} :: {} :: {} :: {} :: {} :: {} :: {}'.format(
+    launch_datetime_utc = datetime.datetime.strptime(launch_time, '%Y-%m-%dT%H:%M:%S.%fZ')
+    local_launch_time = utc_to_local_time(launch_datetime_utc).strftime('%m/%d/%Y %H:%M:%S')
+
+    identifiers = [
         name,
         instance_id,
         instance_type,
-        launch_time,
+        local_launch_time,
         ip_addr,
-        key_name,
         'Spot' if is_spot else 'On Demand',
-    )
+    ]
+
+    return ' :: '.join(identifiers)
 
 class AwsInstance(object):
     def __init__(self, identity, require_pem=False):
