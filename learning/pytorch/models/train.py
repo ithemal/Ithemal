@@ -67,12 +67,13 @@ class Train():
                  tolerance = 25.,
                  lr = 0.001,
                  momentum = 0.9,
+                 nesterov=False,
                  clip = 2.,
                  opt = OptimizerType.SGD,
                  weight_decay = 0.,
                  predict_log = False,
     ):
-        # type: (nn.Module, dt.Data, PredictionType, Callable[[torch.tensor, torch.tensor], torch.tensor], int, int, float, float, float, Optional[float], OptimizerType, float, bool) -> None
+        # type: (nn.Module, dt.Data, PredictionType, Callable[[torch.tensor, torch.tensor], torch.tensor], int, int, float, float, float, bool, Optional[float], OptimizerType, float, bool) -> None
 
         self.model = model
         self.typ = typ
@@ -83,7 +84,7 @@ class Train():
         self.opt_type = opt
 
         if opt == OptimizerType.SGD:
-            self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+            self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
         elif opt == OptimizerType.ADAM_PRIVATE or opt == OptimizerType.ADAM_SHARED:
             self.optimizer = optim.Adam(self.model.parameters(), weight_decay=weight_decay, lr=lr)
             if opt == OptimizerType.ADAM_SHARED:
