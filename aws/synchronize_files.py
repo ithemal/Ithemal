@@ -35,7 +35,7 @@ class InstanceSynchronizer(connect_instance.InstanceConnectorABC):
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
 
         if self.direction == 'to':
-            ssh_command = 'cd ithemal; cat | tar xz'
+            ssh_command = 'cd ithemal; cat | tar --warning=no-unknown-keyword -xz'
 
             tar = subprocess.Popen(['tar', 'cz'] + self.files, cwd=_GITROOT, stdout=subprocess.PIPE)
             ssh = subprocess.Popen(['ssh', '-oStrictHostKeyChecking=no', '-i', self.pem_key, ssh_address, ssh_command], stdin=tar.stdout)
