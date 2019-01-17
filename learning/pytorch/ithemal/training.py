@@ -32,7 +32,7 @@ import random
 class TrainerState(Enum):
     UNINITIALIZED = 0
     LOADING_DATA = 1
-    INITIALIZED = 2
+    READY_FOR_EPOCH = 2
     READY_FOR_DATA = 3
     DEAD = 4
 
@@ -199,7 +199,8 @@ def load_trainer(base_params, train_params, model, data):
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
         batch_size=train_params.batch_size, clip=None, opt=train_params.optimizer,
         lr=train_params.initial_lr, weight_decay=train_params.weight_decay,
-        predict_log=base_params.predict_log
+        predict_log=base_params.predict_log, momentum=train_params.momentum,
+        nesterov=train_params.nesterov,
     )
 
 # -------------------------------- COORDINATION ---------------------------------
@@ -265,14 +266,14 @@ def run_training_coordinator(base_params, train_params):
     model = load_model(base_params, data)
     trainer = load_trainer(base_params, train_params, model, data)
 
-    while not all_in_state(TrainerState.INITIALIZED):
+    while not all_in_state(TrainerState.READY_FOR_EPOCH):
         msg = socket.recv_pyobj()
         if isinstance(msg, TrainerDataReq):
             send_msg(TrainerDataResp(
                 model.dump_shared_params(),
                 trainer.dump_shared_params(),
             ))
-            trainer_states[msg.rank] = TrainerState.INITIALIZED
+            trainer_states[msg.rank] = TrainerState.READY_FOR_EPOCH
         elif isinstance(msg, TrainerStepReq):
             send_msg(WaitResp())
         else:
@@ -295,7 +296,7 @@ def run_training_coordinator(base_params, train_params):
             msg = socket.recv_pyobj()
 
             if isinstance(msg, TrainerStepReq):
-                if trainer_states[msg.rank] == TrainerState.INITIALIZED:
+                if trainer_states[msg.rank] == TrainerState.READY_FOR_EPOCH:
                     if n_started_trainers >= n_trainers:
                         send_msg(KillResp())
                         del trainer_states[msg.rank]
@@ -305,6 +306,8 @@ def run_training_coordinator(base_params, train_params):
                         n_started_trainers += 1
                 else:
                     send_msg([WaitResp()])
+            else:
+                raise ValueError('Unexpected message {}'.format(msg))
 
         # shuffle data locally to permute random state
         random.shuffle(data.train)
@@ -313,14 +316,19 @@ def run_training_coordinator(base_params, train_params):
         partitions = get_partitions(len(data.train), train_params)
         partition_idx = 0
 
-        while partition_idx < len(partitions) and not all_in_state(TrainerState.DEAD):
+        # run until all done with epoch or dead
+        while not all(trainer_states[rank] in (TrainerState.READY_FOR_EPOCH, TrainerState.DEAD) for rank in trainer_states):
             msg = socket.recv_pyobj()
 
             if trainer_states[msg.rank] == TrainerState.DEAD:
                 send_msg(WaitResp())
             elif isinstance(msg, TrainerStepReq):
-                send_msg(RunTrainerResp(partitions[partition_idx]))
-                partition_idx += 1
+                if partition_idx < len(partitions):
+                    send_msg(RunTrainerResp(partitions[partition_idx]))
+                    partition_idx += 1
+                else:
+                    send_msg(WaitResp())
+                    trainer_states[msg.rank] = TrainerState.READY_FOR_EPOCH
             elif isinstance(msg, TrainerLossReq):
                 send_msg(TrainerLossResp())
                 loss_reporter.report_items(msg.n_items, msg.loss)
@@ -335,16 +343,12 @@ def run_training_coordinator(base_params, train_params):
 
             loss_reporter.report()
 
-        if partition_idx < len(partitions):
-            # all trainers died
+        if all_in_state(TrainerState.DEAD):
             break
 
         # decay LR if necessary
         if train_params.decay_lr:
             current_lr /= 10
-
-        for rank in trainer_states:
-            trainer_states[rank] = TrainerState.INITIALIZED
 
     loss_reporter.finish()
 
