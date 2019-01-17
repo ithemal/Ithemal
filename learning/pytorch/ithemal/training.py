@@ -327,6 +327,7 @@ def run_training_coordinator(base_params, train_params):
                 send_msg(WaitResp())
             elif isinstance(msg, TrainerStepReq):
                 if partition_idx < len(partitions):
+                    trainer_states[msg.rank] = TrainerState.READY_FOR_DATA
                     send_msg(RunTrainerResp(partitions[partition_idx]))
                     partition_idx += 1
                 else:
@@ -348,6 +349,10 @@ def run_training_coordinator(base_params, train_params):
 
         if all_in_state(TrainerState.DEAD):
             break
+
+        # reset states
+        for rank in trainer_states:
+            trainer_states[rank] = TrainerState.READY_FOR_EPOCH
 
         # decay LR if necessary
         if train_params.decay_lr:
