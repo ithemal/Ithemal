@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 from aws_utils.instance_utils import format_instance, AwsInstance
 import command_queue
 
@@ -176,22 +176,21 @@ class InstanceMaker(AwsInstance):
         ssh.wait()
 
         if self.queue_name:
-            self.start_queue_on_instance(ssh_address)
+            self.start_queue_on_instance(instance, ssh_address)
 
         if not self.no_connect:
             os.execlp(sys.executable, sys.executable, os.path.join(_DIRNAME, 'connect_instance.py'), self.identity, instance['InstanceId'])
 
-    def start_queue_on_instance(self, ssh_address):
-        # type: (str) -> None
+    def start_queue_on_instance(self, instance, ssh_address):
+        # type: (Dict[str, Any], str) -> None
 
-        # get the URL of the queue, first by checking the name
-        # with .fifo, then just the name itself, then finally
-        # assuming the param is a url
-        queue_url = command_queue.queue_url_of_name(self.queue_name + '.fifo')
-        if queue_url is None:
-            queue_url = command_queue.queue_url_of_name(self.queue_name)
-        if queue_url is None:
-            queue_url = self.queue_name
+        subprocess.check_call([
+            'aws', 'ec2', 'create-tags',
+            '--resources', instance['InstanceId'],
+            '--tags', 'Key=QueueName,Value="{}"'.format(self.queue_name)
+        ])
+
+        queue_url = command_queue.queue_url_of_name(self.queue_name)
 
         subprocess.check_call([
             'ssh', '-i', self.pem_key, ssh_address,
