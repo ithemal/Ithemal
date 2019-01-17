@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, List, Tuple
 
 def utc_to_local_time(dt):
+    # type: (datetime.datetime) -> datetime.datetime
     # https://stackoverflow.com/a/13287083
     timestamp = calendar.timegm(dt.timetuple())
     local_dt = datetime.datetime.fromtimestamp(timestamp)
