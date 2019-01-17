@@ -1,6 +1,0 @@
-{
-    "name": "skylake_random",
-    "dataset": "time_skylake_0113.data",
-    "base_args": [],
-    "train_args": ["--trainers", "4", "--threads", "4"]
-}

@@ -1,6 +1,0 @@
-{
-    "name": "sgd_6x4_lr_0.2",
-    "dataset": "time_skylake_1217.data",
-    "base_args": [],
-    "train_args": ["--trainers", "6", "--threads", "4", "--sgd", "--initial-lr", "0.2"]
-}
