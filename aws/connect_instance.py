@@ -24,18 +24,22 @@ class InstanceConnectorABC(AwsInstance):
         return NotImplemented
 
 class InstanceConnector(InstanceConnectorABC):
-    def __init__(self, identity, host, root):
-        # type: (str, str, bool) -> None
+    def __init__(self, identity, host, root, com):
+        # type: (str, str, bool, List[str]) -> None
         super(InstanceConnector, self).__init__(identity, require_pem=True)
         self.host = host
         self.root = root
+        self.com = com
 
     def connect_to_instance(self, instance):
         # type: (Dict[str, Any]) -> None
         ssh_address = 'ec2-user@{}'.format(instance['PublicDnsName'])
         ssh_args = ['ssh', '-X', '-i', self.pem_key, '-t', ssh_address]
 
-        conn_com = "bash -lc '~/ithemal/aws/aws_utils/tmux_attach.sh || /home/ithemal/ithemal/aws/aws_utils/tmux_attach.sh'"
+        if self.com:
+            conn_com = "bash -lc '{}'".format(' '.join(self.com).replace("'", r"\'"))
+        else:
+            conn_com = "bash -lc '~/ithemal/aws/aws_utils/tmux_attach.sh || /home/ithemal/ithemal/aws/aws_utils/tmux_attach.sh'"
 
         if self.host:
             ssh_args.append(conn_com)
@@ -133,9 +137,10 @@ def main():
 
     parser.add_argument('identity', help='Identity to use to connect')
     parser.add_argument('instance_id', help='Instance IDs to manually connect to', nargs='?', default=None)
+    parser.add_argument('--com', help='Command to run (uninteractive)', nargs='+')
     args = parser.parse_args()
 
-    aws_instances = InstanceConnector(args.identity, args.host, args.root)
+    aws_instances = InstanceConnector(args.identity, args.host, args.root, args.com)
 
     if args.list:
         list_instances(aws_instances.get_running_instances())
