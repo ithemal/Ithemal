@@ -120,14 +120,16 @@ def running_of_queue(identity, queue):
                 return True
         return False
 
-    instances_json = json.loads(subprocess.check_output(['aws', 'ec2', 'describe-instances']))
+    instances_json = json.loads(subprocess.check_output(['aws', 'ec2', 'describe-instances', '--filters', 'Name=instance-state-name,Values=pending,running']))
     instances = [i for res in instances_json['Reservations'] for i in res['Instances'] if has_queue_tag(i)]
 
     for instance in instances:
-        subprocess.check_call([
+        out = subprocess.check_output([
             os.path.join(_DIRNAME, 'connect_instance.py'), identity, instance['InstanceId'],
             '--com', os.path.join('${ITHEMAL_HOME}', 'aws', 'aws_utils', 'get_running_queue_command.sh')
-        ], stderr=open('/dev/null', 'w'))
+        ], stderr=open('/dev/null', 'w')).strip()
+        if out:
+            print('{} || {}'.format(instance['InstanceId'], out))
 
 
 def preview_queue(queue):
