@@ -35,7 +35,7 @@ def kill_instance(instance_id):
 curr_com = None # type: Optional[str]
 
 def watch_for_instance_death(queue_url, instance_id):
-    # type: (str, str) -> NoReturn
+    # type: (str, str) -> None
     global curr_com
 
     while True:
