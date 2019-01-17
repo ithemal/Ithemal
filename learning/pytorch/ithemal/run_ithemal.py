@@ -111,6 +111,8 @@ def main():
     train.add_argument('--weight-decay', type=float, default=0, help='Coefficient of weight decay (L2 regularization) on model')
     train.add_argument('--initial-lr', type=float, default=0.0001, help='Initial learning rate')
     train.add_argument('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
+    train.add_argument('--momentum', type=float, default=0.9, help='Momentum parameter for SGD')
+    train.add_argument('--nesterov', action='store_true', default=False, help='Use Nesterov momentum')
 
     split_group = train.add_mutually_exclusive_group()
     split_group.add_argument(
@@ -168,6 +170,8 @@ def main():
             epochs=args.epochs,
             split=split,
             optimizer=args.optimizer,
+            momentum=args.momentum,
+            nesterov=args.nesterov,
         )
         training.run_training_coordinator(base_params, train_params)
 

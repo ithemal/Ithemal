@@ -43,6 +43,8 @@ TrainParameters = NamedTuple('TrainParameters', [
     ('epochs', int),
     ('split', Union[int, List[float]]),
     ('optimizer', tr.OptimizerType),
+    ('momentum', float),
+    ('nesterov', bool),
 ])
 
 BenchmarkParameters = NamedTuple('BenchmarkParameters', [
