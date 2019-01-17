@@ -25,6 +25,7 @@ import zmq
 from tqdm import tqdm
 import subprocess
 import random
+import uuid
 
 
 # ------------------------------- TRAINER STATE ---------------------------------
@@ -205,10 +206,10 @@ def load_trainer(base_params, train_params, model, data):
 
 # -------------------------------- COORDINATION ---------------------------------
 
-def get_socket_url(experiment_name, experiment_time):
-    # type: (str, str) -> str
+def get_socket_url(identifier):
+    # type: (str) -> str
 
-    return 'ipc:///tmp/{}_{}.socket'.format(experiment_name, experiment_time)
+    return 'ipc:///tmp/{}.socket'.format(identifier)
 
 def run_training_coordinator(base_params, train_params):
     # type: (BaseParameters, TrainParameters) -> None
@@ -216,9 +217,11 @@ def run_training_coordinator(base_params, train_params):
     torch.multiprocessing.set_sharing_strategy('file_system')
     expt = Experiment(train_params.experiment_name, train_params.experiment_time, base_params.data)
 
+    socket_identifier = str(uuid.uuid4())
+
     context = zmq.Context()
     socket = context.socket(zmq.REP)
-    socket.bind(get_socket_url(train_params.experiment_name, train_params.experiment_time))
+    socket.bind(get_socket_url(socket_identifier))
 
     def send_msg(msg):
         # type: (Union[object, List[object]]) -> None
@@ -240,7 +243,7 @@ def run_training_coordinator(base_params, train_params):
         for idx in range(train_params.trainers):
             trainer_states[idx] = TrainerState.UNINITIALIZED
             mp_config.set_env(idx)
-            procs.append(subprocess.Popen([sys.executable, __file__, train_params.experiment_name, train_params.experiment_time, str(idx)]))
+            procs.append(subprocess.Popen([sys.executable, __file__, socket_identifier, str(idx)]))
 
     @atexit.register
     def cleanup_procs():
@@ -354,14 +357,14 @@ def run_training_coordinator(base_params, train_params):
 
 # ----------------------------------- WORKER ------------------------------------
 
-def run_training_worker(experiment_name, experiment_time, rank):
-    # type: (str, str, int) -> None
+def run_training_worker(identifier, rank):
+    # type: (str, int) -> None
 
     print('creating socket...')
     context = zmq.Context()
     socket = context.socket(zmq.REQ)
     print('connecting to coordinator')
-    socket.connect(get_socket_url(experiment_name, experiment_time))
+    socket.connect(get_socket_url(identifier))
 
     def send_msg(msg):
         # type: (Any) -> None
@@ -448,8 +451,8 @@ def run_training_worker(experiment_name, experiment_time, rank):
 def main():
     # type: () -> None
 
-    assert len(sys.argv) == 4, 'Must be passed exactly three parameters: experiment name, experiment time, rank'
-    run_training_worker(sys.argv[1], sys.argv[2], int(sys.argv[3]))
+    assert len(sys.argv) == 3, 'Must be passed exactly two parameters: socket ID, rank'
+    run_training_worker(sys.argv[1], int(sys.argv[2]))
 
 if __name__ == '__main__':
     main()
