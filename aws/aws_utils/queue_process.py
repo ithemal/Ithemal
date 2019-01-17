@@ -49,11 +49,13 @@ def watch_for_instance_death(queue_url, instance_id):
         if sleep_dur > 0:
             time.sleep(sleep_dur)
 
+        death_message = ':skull_and_crossbones: Spot instance {} dying :skull_and_crossbones:'.format(instance_id)
+
         if curr_com:
             send_message(queue_url, curr_com)
+            death_message += '\nRe-queueing {}'.format(curr_com)
 
-        subprocess.call([os.path.join(os.environ['ITHEMAL_HOME'], 'aws', 'ping_slack.py'),
-                         ':skull_and_crossbones: Spot instance {} dying :skull_and_crossbones:'.format(instance_id)])
+        subprocess.call([os.path.join(os.environ['ITHEMAL_HOME'], 'aws', 'ping_slack.py'), death_message])
         return
 
 def process_queue(instance_id, queue_url, kill_on_fail):
