@@ -12,6 +12,7 @@ import sys
 import urlparse
 from typing import Optional
 import tempfile
+from typing import Any, Dict, List
 
 # Ithemal runs on Python 2 mostly
 try:
@@ -115,6 +116,8 @@ def running_of_queue(identity, queue):
     # type: (str, str) -> None
 
     def has_queue_tag(instance):
+        # type: (Dict[str, Any]) -> bool
+
         if 'Tags' not in instance:
             return False
 
@@ -162,15 +165,18 @@ def preview_queue(queue):
 def manage_queue(queue):
     # type: (str) -> None
 
-    url = queue_url_of_name(queue)
-    if not url:
+    url_ = queue_url_of_name(queue)
+    if not url_:
         print('Queue {} doesn\'t exist!'.format(queue))
         return
+    else:
+        url = url_
 
-    messages = None
+    messages = [] # type: List[Dict[str, Any]]
 
     def reset_messages():
-        if messages is None:
+        # type: () -> None
+        if not messages:
             return
 
         with tempfile.NamedTemporaryFile(suffix='.json', bufsize=0) as f:
@@ -187,6 +193,7 @@ def manage_queue(queue):
             ])
 
     def get_messages():
+        # type: () -> List[Dict[str, Any]]
         reset_messages()
 
         output = subprocess.check_output([
@@ -197,7 +204,7 @@ def manage_queue(queue):
         ])
 
         if not output:
-            return None
+            return []
         else:
             return json.loads(output)['Messages']
 
@@ -209,6 +216,7 @@ def manage_queue(queue):
     stdscr.keypad(1)
 
     def cleanup():
+        # type: () -> None
         curses.nocbreak()
         stdscr.keypad(0);
         curses.echo()
@@ -220,7 +228,7 @@ def manage_queue(queue):
     selected_idx = 0
 
     while True:
-        if messages is None:
+        if not messages:
             return
 
         stdscr.erase()
