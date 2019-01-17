@@ -21,7 +21,7 @@ _DIRNAME = os.path.dirname(os.path.abspath(__file__))
 def queue_url_of_name(queue_name):
     # type: (str) -> Optional[str]
     proc = subprocess.Popen(
-        ['aws', 'sqs', 'get-queue-url', '--queue-name', queue_name],
+        ['aws', 'sqs', 'get-queue-url', '--queue-name', queue_name + '.fifo'],
         stdout=subprocess.PIPE,
         stderr=open('/dev/null', 'w'),
     )
@@ -32,7 +32,7 @@ def queue_url_of_name(queue_name):
     return output['QueueUrl']
 
 def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
-    # type: (str, str, str, int) -> None
+    # type: (str, str, str, int, bool) -> None
 
     if queue_url_of_name(queue) and not ignore_exists:
         print('Queue {} already exists!'.format(queue))
@@ -40,7 +40,7 @@ def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
 
     queue_url = json.loads(subprocess.check_output([
         'aws', 'sqs', 'create-queue',
-        '--queue-name', queue,
+        '--queue-name', queue + '.fifo',
         '--attributes', json.dumps({'FifoQueue': 'true'}),
     ]))['QueueUrl']
 
@@ -60,7 +60,7 @@ def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
                 identity, '-f', '--spot-preempt', '--no-connect',
                 '-t', instance_type,
                 '--name', '{} Queue Processor'.format(queue),
-                '--queue', queue_url,
+                '--queue', queue,
             ],
             stdout=stdout,
             stderr=stderr,
@@ -108,6 +108,28 @@ def kill_queue(queue):
         '--queue-url', url,
     ])
 
+def running_of_queue(identity, queue):
+    # type: (str, str) -> None
+
+    def has_queue_tag(instance):
+        if 'Tags' not in instance:
+            return False
+
+        for tag in instance['Tags']:
+            if tag['Key'] == 'QueueName' and tag['Value'] == queue:
+                return True
+        return False
+
+    instances_json = json.loads(subprocess.check_output(['aws', 'ec2', 'describe-instances']))
+    instances = [i for res in instances_json['Reservations'] for i in res['Instances'] if has_queue_tag(i)]
+
+    for instance in instances:
+        subprocess.check_call([
+            os.path.join(_DIRNAME, 'connect_instance.py'), identity, instance['InstanceId'],
+            '--com', os.path.join('${ITHEMAL_HOME}', 'aws', 'aws_utils', 'get_running_queue_command.sh')
+        ], stderr=open('/dev/null', 'w'))
+
+
 def preview_queue(queue):
     # type: (str) -> None
 
@@ -119,8 +141,8 @@ def preview_queue(queue):
     output = subprocess.check_output([
         'aws', 'sqs', 'receive-message',
         '--queue-url', url,
-        '--max-number-of-messages', '10',
         '--visibility-timeout', '0',
+        '--max-number-of-messages', '10',
     ])
 
     if not output:
@@ -183,24 +205,26 @@ def main():
     preview_parser = subparsers.add_parser('preview', help='Preview an AWS queue')
     add_queue_arg(preview_parser)
 
+    running_parser = subparsers.add_parser('running', help='Get commands currently running on an AWS queue')
+    running_parser.add_argument('identity', help='Identity to use to connect')
+    add_queue_arg(running_parser)
+
     args = parser.parse_args()
 
     if args.subparser == 'list':
         list_queues()
         return
 
-    queue_name = args.queue_name
-    if not queue_name.endswith('.fifo'):
-        queue_name += '.fifo'
-
     if args.subparser == 'create':
-        create_queue(args.identity, queue_name, args.type, args.count, args.ignore_exists)
+        create_queue(args.identity, args.queue_name, args.type, args.count, args.ignore_exists)
     elif args.subparser == 'send':
-        send_messages(queue_name, args.com)
+        send_messages(args.queue_name, args.com)
     elif args.subparser == 'kill':
-        kill_queue(queue_name)
+        kill_queue(args.queue_name)
     elif args.subparser == 'preview':
-        preview_queue(queue_name)
+        preview_queue(args.queue_name)
+    elif args.subparser == 'running':
+        running_of_queue(args.identity, args.queue_name)
     else:
         raise ValueError('Unrecognized subparser {}'.format(args.subparser))
 
