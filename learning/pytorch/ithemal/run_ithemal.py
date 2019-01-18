@@ -88,6 +88,7 @@ def main():
     parser.add_argument('--random-edge-freq', type=float, default=0.0, help='The fraction of instructions to add an additional random forward edge to (can be >1)')
     parser.add_argument('--no-residual', default=False, action='store_true', help='Don\'t use a residual model in Ithemal')
     parser.add_argument('--predict-log', action='store_true', default=False, help='Predict the log of the time')
+    parser.add_argument('--linear-embeddings', action='store_true', default=False, help='Use linear embeddings instead of LSTM')
 
     edge_ablation_parser_group = parser.add_mutually_exclusive_group()
     edge_ablation_parser_group.add_argument('--transitive-reduction', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_REDUCTION)
@@ -148,6 +149,7 @@ def main():
         edge_ablation_type=args.edge_ablation,
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,
+        linear_embeddings=args.linear_embeddings,
     )
 
     if args.subparser == 'train':

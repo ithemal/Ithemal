@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import sys
 sys.path.append('..')
 import common_libs.utilities as ut
@@ -12,13 +13,14 @@ from . import model_utils
 
 class GraphNN(nn.Module):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True):
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False):
         super(GraphNN, self).__init__()
 
         self.num_classes = num_classes
 
         self.hidden_size = hidden_size
         self.use_residual = use_residual
+        self.linear_embed = linear_embed
 
         #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
@@ -26,6 +28,15 @@ class GraphNN(nn.Module):
         #lstm - input size, hidden size, num layers
         self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
         self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
+
+        # linear weight for instruction embedding
+        self.opcode_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        self.src_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        self.dst_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        # for sequential model
+        self.opcode_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+        self.src_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+        self.dst_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
 
         #hidden state for the rnn
         #self.hidden_token = self.init_hidden()
@@ -116,6 +127,33 @@ class GraphNN(nn.Module):
 
         return final_hidden
 
+    def get_instruction_embedding(self, instr, seq_model):
+        # type: (ut.Instruction, bool) -> torch.tensor
+        if seq_model:
+            opcode_lin = self.opcode_lin_seq
+            src_lin = self.src_lin_seq
+            dst_lin = self.dst_lin_seq
+        else:
+            opcode_lin = self.opcode_lin
+            src_lin = self.src_lin
+            dst_lin = self.dst_lin
+
+        opc_embed = instr.tokens[0]
+        src_embed = instr.tokens[2:2+len(instr.srcs)]
+        dst_embed = instr.tokens[-1-len(instr.dsts):-1]
+
+        opc_hidden = opcode_lin(opc_embed)
+
+        src_hidden = torch.zeros(self.embedding_size)
+        for s in src_embed:
+            src_hidden = torch.max(F.relu(src_lin(s)))
+
+        dst_hidden = torch.zeros(self.embedding_size)
+        for d in dst_embed:
+            dst_hidden = torch.max(F.relu(dst_lin(d)))
+
+        return (opc_hidden + src_hidden + dst_hidden).unsqueeze(0).unsqueeze(0)
+
     def create_graphlstm_rec(self, instr):
 
         if instr.hidden != None:
@@ -136,37 +174,23 @@ class GraphNN(nn.Module):
             c = self.reduction(c,hidden[1])
         in_hidden_ins = (h,c)
 
-        #do the token based lstm encoding for the instruction
-        token_embeds = torch.FloatTensor(instr.tokens)
-        token_embeds_lstm = token_embeds.unsqueeze(1)
-        in_hidden_token = self.init_hidden()
-        out_token, hidden_token = self.lstm_token(token_embeds_lstm,in_hidden_token)
+        ins_embed = self.get_instruction_embedding(instr, False)
 
-        ins_embed = hidden_token[0] #first out of the tuple
-
-        out_ins, hidden_ins = self.lstm_ins(ins_embed,in_hidden_ins)
+        out_ins, hidden_ins = self.lstm_ins(ins_embed, in_hidden_ins)
         instr.hidden = hidden_ins
 
         return instr.hidden
 
     def create_residual_lstm(self, x, block):
 
-        hidden_token  = self.init_hidden()
-        hidden_ins = self.init_hidden()
 
         ins_embeds = autograd.Variable(torch.zeros(len(x),self.embedding_size))
         for i, ins in enumerate(x):
-
-            token_embeds = block.instrs[i].tokens
-
-            #token_embeds = torch.FloatTensor(ins)
-            token_embeds_lstm = token_embeds.unsqueeze(1)
-            out_token, hidden_token = self.lstm_token_seq(token_embeds_lstm,hidden_token)
-            ins_embeds[i] = hidden_token[0].squeeze()
+            ins_embeds[i] = self.get_instruction_embedding(block.instrs[i], True)
 
         ins_embeds_lstm = ins_embeds.unsqueeze(1)
 
-        out_ins, hidden_ins = self.lstm_ins_seq(ins_embeds_lstm, hidden_ins)
+        _, hidden_ins = self.lstm_ins_seq(ins_embeds_lstm, self.init_hidden())
 
         seq_ret = hidden_ins[0].squeeze()
 

@@ -27,6 +27,7 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('edge_ablation_type', Optional[EdgeAblationType]),
     ('embed_size', int),
     ('hidden_size', int),
+    ('linear_embeddings', bool),
 ])
 
 TrainParameters = NamedTuple('TrainParameters', [
@@ -87,7 +88,8 @@ def load_data(params):
 def load_model(params, data):
     # type: (BaseParameters, dt.DataCost) -> md.GraphNN
 
-    model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1, use_residual=not params.no_residual)
+    model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
+                       use_residual=not params.no_residual, linear_embed=params.linear_embeddings)
     model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
 
     return model
