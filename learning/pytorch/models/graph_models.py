@@ -46,10 +46,6 @@ class GraphNN(nn.Module):
         self.src_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
         self.dst_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
 
-        #hidden state for the rnn
-        #self.hidden_token = self.init_hidden()
-        #self.hidden_ins = self.init_hidden()
-
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
 
@@ -115,9 +111,7 @@ class GraphNN(nn.Module):
         for i, instr in enumerate(item.block.instrs):
             tokens = item.x[i]
             if self.mode == 'learnt':
-                instr.tokens = []
-                for token in tokens:
-                    instr.tokens.append(self.final_embeddings[token])
+                instr.tokens = [self.final_embeddings[token] for token in tokens]
             else:
                 instr.tokens = self.final_embeddings(torch.LongTensor(tokens))
 
