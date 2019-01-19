@@ -87,6 +87,7 @@ def main():
     # edge/misc arguments
     parser.add_argument('--random-edge-freq', type=float, default=0.0, help='The fraction of instructions to add an additional random forward edge to (can be >1)')
     parser.add_argument('--no-residual', default=False, action='store_true', help='Don\'t use a residual model in Ithemal')
+    parser.add_argument('--no-dag-rnn', default=False, action='store_true', help='Don\'t use the DAG-RNN model in Ithemal')
     parser.add_argument('--predict-log', action='store_true', default=False, help='Predict the log of the time')
     parser.add_argument('--linear-embeddings', action='store_true', default=False, help='Use linear embeddings instead of LSTM')
 
@@ -146,6 +147,7 @@ def main():
         random_edge_freq=args.random_edge_freq,
         predict_log=args.predict_log,
         no_residual=args.no_residual,
+        no_dag_rnn=args.no_dag_rnn,
         edge_ablation_type=args.edge_ablation,
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,

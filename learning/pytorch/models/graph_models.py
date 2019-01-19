@@ -1,26 +1,34 @@
+import sys
+import os
+sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import sys
-sys.path.append('..')
 import common_libs.utilities as ut
+import data.data_cost as dt
 import torch.autograd as autograd
 import torch.optim as optim
 import math
 import numpy as np
-
+from typing import Any, Dict, Optional, Tuple
 from . import model_utils
 
 class GraphNN(nn.Module):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False):
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True):
+        # type: (int, int, int, bool, bool, bool) -> None
+
         super(GraphNN, self).__init__()
 
         self.num_classes = num_classes
 
+        assert use_residual or use_dag_rnn, 'Must use some type of predictor'
+
         self.hidden_size = hidden_size
         self.use_residual = use_residual
         self.linear_embed = linear_embed
+        self.use_dag_rnn = use_dag_rnn
 
         #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
@@ -51,6 +59,7 @@ class GraphNN(nn.Module):
         self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
 
     def set_learnable_embedding(self, mode, dictsize, seed = None):
+        # type: (str, int, Optional[int]) -> None
 
         self.mode = mode
 
@@ -74,16 +83,21 @@ class GraphNN(nn.Module):
             exit()
 
     def dump_shared_params(self):
+        # type: () -> Dict[str, Any]
         return model_utils.dump_shared_params(self)
 
     def load_shared_params(self, params):
+    # type: (Dict[str, Any]) -> None
         model_utils.load_shared_params(self, params)
 
     def init_hidden(self):
+        # type: () -> Tuple[autograd.Variable, autograd.Variable]
+
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
 
     def remove_refs(self, item):
+        # type: (dt.DataItem) -> None
 
        for instr in item.block.instrs:
             if instr.lstm != None:
@@ -95,6 +109,7 @@ class GraphNN(nn.Module):
             instr.tokens = None
 
     def init_bblstm(self, item):
+        # type: (dt.DataItem) -> None
 
         self.remove_refs(item)
         for i, instr in enumerate(item.block.instrs):
@@ -107,9 +122,11 @@ class GraphNN(nn.Module):
                 instr.tokens = self.final_embeddings(torch.LongTensor(tokens))
 
     def reduction(self, v1, v2):
+        # type: (torch.tensor, torch.tensor) -> torch.tensor
         return torch.max(v1,v2)
 
-    def create_graphlstm(self, x, block):
+    def create_graphlstm(self, block):
+        # type: (ut.BasicBlock) -> torch.tensor
 
         roots = block.find_roots()
 
@@ -129,6 +146,7 @@ class GraphNN(nn.Module):
 
     def get_instruction_embedding(self, instr, seq_model):
         # type: (ut.Instruction, bool) -> torch.tensor
+
         if seq_model:
             opcode_lin = self.opcode_lin_seq
             src_lin = self.src_lin_seq
@@ -155,6 +173,7 @@ class GraphNN(nn.Module):
         return (opc_hidden + src_hidden + dst_hidden).unsqueeze(0).unsqueeze(0)
 
     def create_graphlstm_rec(self, instr):
+        # type: (ut.Instruction) -> torch.tensor
 
         if instr.hidden != None:
             return instr.hidden
@@ -181,12 +200,12 @@ class GraphNN(nn.Module):
 
         return instr.hidden
 
-    def create_residual_lstm(self, x, block):
+    def create_residual_lstm(self, block):
+        # type: (ut.BasicBlock) -> torch.tensor
 
-
-        ins_embeds = autograd.Variable(torch.zeros(len(x),self.embedding_size))
-        for i, ins in enumerate(x):
-            ins_embeds[i] = self.get_instruction_embedding(block.instrs[i], True)
+        ins_embeds = autograd.Variable(torch.zeros(len(block.instrs),self.embedding_size))
+        for i, ins in enumerate(block.instrs):
+            ins_embeds[i] = self.get_instruction_embedding(ins, True)
 
         ins_embeds_lstm = ins_embeds.unsqueeze(1)
 
@@ -198,24 +217,18 @@ class GraphNN(nn.Module):
 
 
     def forward(self, item):
-
-
-        #self.hidden_ins = self.init_hidden()
-        #self.hidden_token = self.init_hidden()
+        # type: (dt.DataItem) -> torch.tensor
 
         self.init_bblstm(item)
 
-        graph = self.create_graphlstm(item.x, item.block)
+        final_pred = torch.zeros(self.num_classes).squeeze()
+
+        if self.use_dag_rnn:
+            graph = self.create_graphlstm(item.block)
+            final_pred += self.linear(graph).squeeze()
 
         if self.use_residual:
-            sequential = self.create_residual_lstm(item.x, item.block)
-            final = self.linear(graph).squeeze() + self.linear_seq(sequential).squeeze()
-        else:
-            final = self.linear(graph).squeeze()
+            sequential = self.create_residual_lstm(item.block)
+            final_pred += self.linear_seq(sequential).squeeze()
 
-        #final = self.reduction(graph, sequential)
-        #return self.linear(final).squeeze()
-
-        #print final.item()
-
-        return final
+        return final_pred.squeeze()

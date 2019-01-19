@@ -24,6 +24,7 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('random_edge_freq', float),
     ('predict_log', bool),
     ('no_residual', bool),
+    ('no_dag_rnn', bool),
     ('edge_ablation_type', Optional[EdgeAblationType]),
     ('embed_size', int),
     ('hidden_size', int),
@@ -89,7 +90,9 @@ def load_model(params, data):
     # type: (BaseParameters, dt.DataCost) -> md.GraphNN
 
     model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
-                       use_residual=not params.no_residual, linear_embed=params.linear_embeddings)
+                       use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
+                       use_dag_rnn=not params.no_dag_rnn,
+    )
     model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
 
     return model
