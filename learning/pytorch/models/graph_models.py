@@ -137,7 +137,7 @@ class GraphNN(nn.Module):
 
         return final_hidden
 
-    def get_instruction_embedding(self, instr, seq_model):
+    def get_instruction_embedding_linear(self, instr, seq_model):
         # type: (ut.Instruction, bool) -> torch.tensor
 
         if seq_model:
@@ -164,6 +164,24 @@ class GraphNN(nn.Module):
             dst_hidden = torch.max(F.relu(dst_lin(d)))
 
         return (opc_hidden + src_hidden + dst_hidden).unsqueeze(0).unsqueeze(0)
+
+
+    def get_instruction_embedding_lstm(self, instr, seq_model):
+        # type: (ut.Instruction, bool) -> torch.tensor
+        if seq_model:
+            lstm = self.lstm_token_seq
+        else:
+            lstm = self.lstm_token
+
+        _, hidden = lstm(instr.tokens.unsqueeze(1), self.init_hidden())
+        return hidden[0]
+
+    def get_instruction_embedding(self, instr, seq_model):
+        # type: (ut.Instruction, bool) -> torch.tensor
+        if self.linear_embed:
+            return self.get_instruction_embedding_linear(instr, seq_model)
+        else:
+            return self.get_instruction_embedding_lstm(instr, seq_model)
 
     def create_graphlstm_rec(self, instr):
         # type: (ut.Instruction) -> torch.tensor
@@ -198,7 +216,7 @@ class GraphNN(nn.Module):
 
         ins_embeds = autograd.Variable(torch.zeros(len(block.instrs),self.embedding_size))
         for i, ins in enumerate(block.instrs):
-            ins_embeds[i] = self.get_instruction_embedding(ins, True)
+            ins_embeds[i] = self.get_instruction_embedding(ins, True).squeeze()
 
         ins_embeds_lstm = ins_embeds.unsqueeze(1)
 
