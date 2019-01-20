@@ -129,7 +129,6 @@ class GraphNN(nn.Module):
             hidden = self.create_graphlstm_rec(root)
             root_hidden.append(hidden[0].squeeze())
 
-
         final_hidden = torch.zeros(self.hidden_size)
         if len(root_hidden) > 0:
             final_hidden = root_hidden[0]
