@@ -29,8 +29,8 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _TRAIN = 'Train'
 _TEST = 'Test'
 
-def plot_measurements(train_measurements, test_measurements, train_blur, test_blur):
-    # type: (List[TrainMeasurement], List[TestMeasurement], float, float) -> None
+def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur):
+    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float) -> None
 
     def get_times_and_losses(measurement, blur):
         # type: (Union[TrainMeasurement, TestMeasurement], float) -> Tuple[np.array, np.array]
@@ -42,19 +42,22 @@ def plot_measurements(train_measurements, test_measurements, train_blur, test_bl
         return times, losses
 
 
-    for idx, (train_measurement, test_measurement) in enumerate(zip(train_measurements, test_measurements)):
-        train_color = 'C{}'.format(2 * idx)
-        test_color = 'C{}'.format(2 * idx + 1)
-
+    for idx, (train_measurement, test_measurement, finished) in enumerate(zip(train_measurements, test_measurements, has_finished)):
+        color = 'C{}'.format(idx)
         train_times, train_losses = get_times_and_losses(train_measurement, train_blur)
         test_times, test_losses = get_times_and_losses(test_measurement, test_blur)
-        plt.plot(train_times, train_losses, label='{} train'.format(train_measurement.experiment_name), color=train_color)
-        plt.plot(test_times, test_losses, label='{} test'.format(test_measurement.experiment_name), color=test_color)
+        plt.plot(train_times, train_losses, label='{} train'.format(train_measurement.experiment_name), color=color)
+        plt.plot(test_times, test_losses, linestyle='--', label='{} test'.format(test_measurement.experiment_name), color=color)
 
         ep_advance = np.where(np.diff(train_measurement.epochs))[0] + 1
         for idx in ep_advance:
             x = train_times[idx]
-            plt.plot([x,x], [train_losses[idx] - 0.005, train_losses[idx] + 0.005], color=train_color)
+            y = train_losses[idx]
+            plt.plot([x,x], [y - 0.005, y + 0.005], color=color)
+
+        if finished:
+            plt.scatter(train_times[-1:], train_losses[-1:], marker='x', color=color)
+
 
     plt.title('Loss over time')
     plt.xlabel('Time in hours')
@@ -64,9 +67,12 @@ def plot_measurements(train_measurements, test_measurements, train_blur, test_bl
     plt.show()
 
 def synchronize_experiment_files(experiment_name):
-    # type: (str) -> Tuple[str, List[str]]
+    # type: (str) -> Tuple[str, List[str], List[bool]]
 
     match = re.match(r'^(?P<experiment_name>.*?)(:?\+(?P<time_count>\d+))?$', experiment_name)
+    if match is None:
+        raise ValueError('Unrecognized format: {}'.format(experiment_name))
+
     experiment_name = match.group('experiment_name')
     if match.group('time_count'):
         time_count = max(int(match.group('time_count')), 1)
@@ -83,6 +89,7 @@ def synchronize_experiment_files(experiment_name):
 
     times = [line.strip().split()[1][:-1] for line in output.split('\n')]
     experiment_times = sorted(times)[-time_count:]
+    has_finished = [] # type: List[bool]
 
     for experiment_time in experiment_times:
         subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}'.format(experiment_name, experiment_time),
@@ -92,7 +99,14 @@ def synchronize_experiment_files(experiment_name):
         subprocess.check_call(['aws', 's3', 'sync', 's3://ithemal-experiments/{}/{}/checkpoint_reports'.format(experiment_name, experiment_time),
                                os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'checkpoint_reports')])
 
-    return experiment_name, experiment_times
+        has_validation_results_code = subprocess.call(
+            ['aws', 's3', 'ls', 's3://ithemal-experiments/{}/{}/validation_results.txt'.format(experiment_name, experiment_time)],
+            stdout=open('/dev/null', 'w'), stderr=open('/dev/null', 'w'),
+        )
+
+        has_finished.append(has_validation_results_code == 0)
+
+    return experiment_name, experiment_times, has_finished
 
 def extract_train_measurement(experiment_name, experiment_time):
     # type: (str, str) -> TrainMeasurement
@@ -155,18 +169,20 @@ def extract_test_measurement(experiment_name, experiment_time):
     return TestMeasurement(experiment_name, times, losses)
 
 def get_measurements(experiments):
-    # type: (List[str]) -> Tuple[List[TrainMeasurement], List[TestMeasurement]]
+    # type: (List[str]) -> Tuple[List[TrainMeasurement], List[TestMeasurement], List[bool]]
 
     train_measurements = [] # type: List[TrainMeasurement]
     test_measurements = [] # type: List[TestMeasurement]
+    has_finished = [] # type: List[bool]
 
     for experiment_name in experiments:
-        name, experiment_times = synchronize_experiment_files(experiment_name)
+        name, experiment_times, finished = synchronize_experiment_files(experiment_name)
+        has_finished.extend(finished)
         for experiment_time in experiment_times:
             train_measurements.append(extract_train_measurement(name, experiment_time))
             test_measurements.append(extract_test_measurement(name, experiment_time))
 
-    return train_measurements, test_measurements
+    return train_measurements, test_measurements, has_finished
 
 def main():
     # type: () -> None
@@ -177,9 +193,9 @@ def main():
     parser.add_argument('experiments', nargs='+')
     args = parser.parse_args()
 
-    train_measurements, test_measurements = get_measurements(args.experiments)
+    train_measurements, test_measurements, has_finished = get_measurements(args.experiments)
 
-    plot_measurements(train_measurements, test_measurements, args.train_blur, args.test_blur)
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur)
 
 if __name__ == '__main__':
     main()
