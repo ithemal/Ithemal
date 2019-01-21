@@ -29,6 +29,11 @@ CHECKPOINT_QUEUE = 'checkpoint_queue'
 
 DEBUG = False
 
+_BENCHMARK_CHECKPOINT = os.path.join(
+    '${ITHEMAL_HOME}', # whatever ITHEMAL_HOME is on remote machine
+    'learning', 'pytorch', 'experiments', 'benchmarker.py'
+)
+
 def debug_print(params):
     # type: (List[str]) -> None
     if DEBUG:
@@ -154,13 +159,9 @@ class Experiment(object):
 
     def enqueue_checkpoints(self, checkpoint_times):
         # type: (List[str]) -> None
-        benchmark_checkpoint = os.path.join(
-            '${ITHEMAL_HOME}', # whatever ITHEMAL_HOME is on remote machine
-            'learning', 'pytorch', 'experiments', 'benchmark_checkpoint.py'
-        )
 
         for checkpoint_time in checkpoint_times:
-            command_param = ' '.join([benchmark_checkpoint, self.name, self.time, checkpoint_time])
+            command_param = ' '.join([_BENCHMARK_CHECKPOINT, self.name, self.time, '--checkpoint', checkpoint_time])
             params = [
                 os.path.join(ITHEMAL_HOME, 'aws', 'command_queue.py'),
                 'send', CHECKPOINT_QUEUE, command_param
@@ -206,6 +207,19 @@ class Experiment(object):
             sync()
             time.sleep(60)
         sync()
+
+        for iaca_only in (True, False):
+            args = [_BENCHMARK_CHECKPOINT, self.name, self.time]
+            if iaca_only:
+                args.append('--iaca-only')
+            params = [
+                os.path.join(ITHEMAL_HOME, 'aws', 'command_queue.py'),
+                'send', CHECKPOINT_QUEUE, ' '.join(args),
+            ]
+
+            debug_print(params)
+            subprocess.call(params, stdout=open('/dev/null', 'w'))
+
 
         params = [os.path.join(ITHEMAL_HOME, 'aws', 'ping_slack.py'), 'Experiment {}_{} finished with exit code {}'.format(
             self.name,
