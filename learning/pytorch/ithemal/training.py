@@ -355,7 +355,7 @@ def run_training_coordinator(base_params, train_params):
             trainer_states[rank] = TrainerState.READY_FOR_EPOCH
 
         # decay LR if necessary
-        if train_params.decay_lr:
+        if train_params.decay_lr and (train_params.weird_lr and epoch_no > 0):
             current_lr /= 10
 
     loss_reporter.finish()

@@ -17,6 +17,8 @@ import random
 import Queue
 from ithemal_utils import *
 import training
+import pandas as pd
+import common_libs.utilities as ut
 
 def graph_model_benchmark(base_params, benchmark_params):
     # type: (BaseParameters, BenchmarkParameters) -> None
@@ -57,17 +59,23 @@ def graph_model_benchmark(base_params, benchmark_params):
         end_time - start_time,
     ))
 
-def graph_model_validate(base_params, model_file):
-    # type: (BaseParameters, str) -> None
+def graph_model_validate(base_params, model_file, iaca_only):
+    # type: (BaseParameters, str, bool) -> None
     data = load_data(base_params)
+    if iaca_only:
+        cnx = ut.create_connection()
+        legal_code_ids = set(
+            pd.read_sql('SELECT time_id, code_id FROM times WHERE kind="iaca"', cnx)
+            .set_index('time_id')
+            .code_id
+        )
+        data.test = [datum for datum in data.test if datum.code_id in legal_code_ids]
     model = load_model(base_params, data)
 
     train = tr.Train(
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,
         batch_size=1000, clip=None, predict_log=base_params.predict_log,
     )
-
-    #train.data.test = train.data.test[:10000]
 
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
@@ -106,7 +114,7 @@ def main():
     train.add_argument('--load-file', help='Start by loading the provided model')
 
     train.add_argument('--batch-size', type=int, default=4, help='The batch size to use in train')
-    train.add_argument('--epochs', type=int, default=5, help='Number of epochs to run for')
+    train.add_argument('--epochs', type=int, default=3, help='Number of epochs to run for')
     train.add_argument('--trainers', type=int, default=4, help='Number of trainer processes to use')
     train.add_argument('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
     train.add_argument('--decay-trainers', action='store_true', default=False, help='Decay the number of trainers at the end of each epoch')
@@ -115,6 +123,7 @@ def main():
     train.add_argument('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
     train.add_argument('--momentum', type=float, default=0.9, help='Momentum parameter for SGD')
     train.add_argument('--nesterov', action='store_true', default=False, help='Use Nesterov momentum')
+    train.add_argument('--weird-lr', action='store_true', default=False, help='Use unusual LR schedule')
 
     split_group = train.add_mutually_exclusive_group()
     split_group.add_argument(
@@ -137,6 +146,7 @@ def main():
 
     validate = sp.add_parser('validate', help='Get performance of a dataset')
     validate.add_argument('--load-file', help='File to load the model from')
+    validate.add_argument('--iaca-only', help='Only report accuracy on IACA datapoints', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -176,11 +186,12 @@ def main():
             optimizer=args.optimizer,
             momentum=args.momentum,
             nesterov=args.nesterov,
+            weird_lr=args.weird_lr,
         )
         training.run_training_coordinator(base_params, train_params)
 
     elif args.subparser == 'validate':
-        graph_model_validate(base_params, args.load_file)
+        graph_model_validate(base_params, args.load_file, args.iaca_only)
 
     elif args.subparser == 'benchmark':
         benchmark_params = BenchmarkParameters(
