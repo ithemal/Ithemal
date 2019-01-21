@@ -38,7 +38,8 @@ def queue_url_of_name(queue_name):
 def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
     # type: (str, str, str, int, bool) -> None
 
-    if queue_url_of_name(queue) and not ignore_exists:
+    queue_exists = queue_url_of_name(queue)
+    if queue_exists and not ignore_exists:
         print('Queue {} already exists!'.format(queue))
         return
 
@@ -76,7 +77,8 @@ def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
     except (KeyboardInterrupt, SystemExit):
         for proc in procs:
             proc.terminate()
-        kill_queue(queue)
+        if not queue_exists:
+            kill_queue(queue)
 
 def send_messages(queue, com):
     # type: (str, str) -> None
