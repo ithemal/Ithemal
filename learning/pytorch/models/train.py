@@ -196,8 +196,16 @@ class Train():
         # type: (str) -> Dict[str, Any]
 
         state_dict = torch.load(filename)
-        self.model.load_state_dict(state_dict['model'])
-        self.optimizer.load_state_dict(state_dict['optimizer'])
+
+        model_dict = self.model.state_dict()
+        new_model_dict = {k: v for (k, v) in state_dict['model'].items() if k in model_dict}
+        model_dict.update(new_model_dict)
+        self.model.load_state_dict(model_dict)
+
+        try:
+            self.optimizer.load_state_dict(state_dict['optimizer'])
+        except ValueError:
+            print('Couldnt load optimizer!')
 
         return state_dict
 
