@@ -29,8 +29,8 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _TRAIN = 'Train'
 _TEST = 'Test'
 
-def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur):
-    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float) -> None
+def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers):
+    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool) -> None
 
     def get_times_and_losses(measurement, blur):
         # type: (Union[TrainMeasurement, TestMeasurement], float) -> Tuple[np.array, np.array]
@@ -41,29 +41,40 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
             losses = measurement.losses
         return times, losses
 
+    plt.title('Loss over time')
+    fig = plt.figure(1)
+    loss_ax = fig.gca()
+    if plot_trainers:
+        trainer_ax = loss_ax.twinx()
+        trainer_ax.set_ylim([1, 6])
+    else:
+        trainer_ax = None
+
+    loss_ax.set_xlabel('Time in hours')
+    loss_ax.set_ylim([0, 0.4])
+    loss_ax.set_ylabel('Loss (sqrt(MSE) / actual)')
 
     for idx, (train_measurement, test_measurement, finished) in enumerate(zip(train_measurements, test_measurements, has_finished)):
         color = 'C{}'.format(idx)
         train_times, train_losses = get_times_and_losses(train_measurement, train_blur)
         test_times, test_losses = get_times_and_losses(test_measurement, test_blur)
-        plt.plot(train_times, train_losses, label='{} train'.format(train_measurement.experiment_name), color=color)
-        plt.plot(test_times, test_losses, linestyle='--', label='{} test'.format(test_measurement.experiment_name), color=color)
+        loss_ax.plot(train_times, train_losses, label='{} train'.format(train_measurement.experiment_name), color=color)
+        loss_ax.plot(test_times, test_losses, linestyle='--', label='{} test'.format(test_measurement.experiment_name), color=color)
 
         ep_advance = np.where(np.diff(train_measurement.epochs))[0] + 1
         for idx in ep_advance:
             x = train_times[idx]
             y = train_losses[idx]
-            plt.plot([x,x], [y - 0.005, y + 0.005], color=color)
+            loss_ax.plot([x,x], [y - 0.005, y + 0.005], color=color)
 
         if finished:
-            plt.scatter(train_times[-1:], train_losses[-1:], marker='x', color=color)
+            loss_ax.scatter(train_times[-1:], train_losses[-1:], marker='x', color=color)
+
+        if trainer_ax is not None:
+            trainer_ax.plot(train_times, train_measurement.trainers, label='{} trainers'.format(train_measurement.experiment_name), color=color)
 
 
-    plt.title('Loss over time')
-    plt.xlabel('Time in hours')
-    plt.ylabel('Loss (MSE / actual)')
-    plt.ylim([0, 0.4])
-    plt.legend()
+    loss_ax.legend()
     plt.show()
 
 def synchronize_experiment_files(experiment_name):
@@ -191,11 +202,12 @@ def main():
     parser.add_argument('--train-blur', type=float, default=25)
     parser.add_argument('--test-blur', type=float, default=0.5)
     parser.add_argument('experiments', nargs='+')
+    parser.add_argument('--trainers', default=False, action='store_true')
     args = parser.parse_args()
 
     train_measurements, test_measurements, has_finished = get_measurements(args.experiments)
 
-    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur)
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers)
 
 if __name__ == '__main__':
     main()
