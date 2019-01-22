@@ -11,11 +11,11 @@ import models.graph_models as md
 import models.train as tr
 
 class EdgeAblationType(Enum):
-    TRANSITIVE_REDUCTION = 1
-    TRANSITIVE_CLOSURE = 2
-    ADD_LINEAR_EDGES = 3
-    ONLY_LINEAR_EDGES = 4
-    NO_EDGES = 5
+    TRANSITIVE_REDUCTION = 'transitive-reduction'
+    TRANSITIVE_CLOSURE = 'transitive-closure'
+    ADD_LINEAR_EDGES = 'add-linear-edges'
+    ONLY_LINEAR_EDGES = 'only-linear-edges'
+    NO_EDGES = 'no-edges'
 
 BaseParameters = NamedTuple('BaseParameters', [
     ('data', str),
@@ -25,7 +25,7 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('predict_log', bool),
     ('no_residual', bool),
     ('no_dag_rnn', bool),
-    ('edge_ablation_type', Optional[EdgeAblationType]),
+    ('edge_ablation_types', List[EdgeAblationType]),
     ('embed_size', int),
     ('hidden_size', int),
     ('linear_embeddings', bool),
@@ -57,25 +57,26 @@ BenchmarkParameters = NamedTuple('BenchmarkParameters', [
     ('examples', int),
 ])
 
-def ablate_data(data, edge_ablation_type, random_edge_freq):
-    # type: (dt.DataCost, Optional[EdgeAblationType], float) -> None
+def ablate_data(data, edge_ablation_types, random_edge_freq):
+    # type: (dt.DataCost, List[EdgeAblationType], float) -> None
 
-    if edge_ablation_type == EdgeAblationType.TRANSITIVE_REDUCTION:
-        for data_item in data.data:
-            data_item.block.transitive_reduction()
-    elif edge_ablation_type == EdgeAblationType.TRANSITIVE_CLOSURE:
-        for data_item in data.data:
-            data_item.block.transitive_closure()
-    elif edge_ablation_type == EdgeAblationType.ADD_LINEAR_EDGES:
-        for data_item in data.data:
-            data_item.block.linearize_edges()
-    elif edge_ablation_type == EdgeAblationType.ONLY_LINEAR_EDGES:
-        for data_item in data.data:
-            data_item.block.remove_edges()
-            data_item.block.linearize_edges()
-    elif edge_ablation_type == EdgeAblationType.NO_EDGES:
-        for data_item in data.data:
-            data_item.block.remove_edges()
+    for edge_ablation_type in edge_ablation_types:
+        if edge_ablation_type == EdgeAblationType.TRANSITIVE_REDUCTION:
+            for data_item in data.data:
+                data_item.block.transitive_reduction()
+        elif edge_ablation_type == EdgeAblationType.TRANSITIVE_CLOSURE:
+            for data_item in data.data:
+                data_item.block.transitive_closure()
+        elif edge_ablation_type == EdgeAblationType.ADD_LINEAR_EDGES:
+            for data_item in data.data:
+                data_item.block.linearize_edges()
+        elif edge_ablation_type == EdgeAblationType.ONLY_LINEAR_EDGES:
+            for data_item in data.data:
+                data_item.block.remove_edges()
+                data_item.block.linearize_edges()
+        elif edge_ablation_type == EdgeAblationType.NO_EDGES:
+            for data_item in data.data:
+                data_item.block.remove_edges()
 
     if random_edge_freq > 0:
         for data_item in data.data:
@@ -84,7 +85,7 @@ def ablate_data(data, edge_ablation_type, random_edge_freq):
 def load_data(params):
     # type: (BaseParameters) -> dt.DataCost
     data = dt.load_dataset(params.embed_file, data_savefile=params.data)
-    ablate_data(data, params.edge_ablation_type, params.random_edge_freq)
+    ablate_data(data, params.edge_ablation_types, params.random_edge_freq)
     return data
 
 def load_model(params, data):

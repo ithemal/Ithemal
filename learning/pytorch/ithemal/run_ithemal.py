@@ -99,12 +99,15 @@ def main():
     parser.add_argument('--predict-log', action='store_true', default=False, help='Predict the log of the time')
     parser.add_argument('--linear-embeddings', action='store_true', default=False, help='Use linear embeddings instead of LSTM')
 
-    edge_ablation_parser_group = parser.add_mutually_exclusive_group()
-    edge_ablation_parser_group.add_argument('--transitive-reduction', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_REDUCTION)
-    edge_ablation_parser_group.add_argument('--transitive-closure', action='store_const', dest='edge_ablation', const=EdgeAblationType.TRANSITIVE_CLOSURE)
-    edge_ablation_parser_group.add_argument('--add-linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.ADD_LINEAR_EDGES)
-    edge_ablation_parser_group.add_argument('--only-linear-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.ONLY_LINEAR_EDGES)
-    edge_ablation_parser_group.add_argument('--no-edges', action='store_const', dest='edge_ablation', const=EdgeAblationType.NO_EDGES)
+    def add_edge_ablation(ablation):
+        # type: (EdgeAblationType) -> None
+        parser.add_argument('--{}'.format(ablation.value), action='append_const', dest='edge_ablations', const=ablation)
+
+    add_edge_ablation(EdgeAblationType.TRANSITIVE_REDUCTION)
+    add_edge_ablation(EdgeAblationType.TRANSITIVE_CLOSURE)
+    add_edge_ablation(EdgeAblationType.ADD_LINEAR_EDGES)
+    add_edge_ablation(EdgeAblationType.ONLY_LINEAR_EDGES)
+    add_edge_ablation(EdgeAblationType.NO_EDGES)
 
     sp = parser.add_subparsers(dest='subparser')
 
@@ -158,7 +161,7 @@ def main():
         predict_log=args.predict_log,
         no_residual=args.no_residual,
         no_dag_rnn=args.no_dag_rnn,
-        edge_ablation_type=args.edge_ablation,
+        edge_ablation_types=args.edge_ablations or [],
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,
         linear_embeddings=args.linear_embeddings,
