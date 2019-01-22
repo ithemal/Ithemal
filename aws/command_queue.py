@@ -35,8 +35,8 @@ def queue_url_of_name(queue_name):
     output = json.load(proc.stdout)
     return output['QueueUrl']
 
-def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
-    # type: (str, str, str, int, bool) -> None
+def create_queue(identity, queue, instance_type, instance_count, ignore_exists, no_spot):
+    # type: (str, str, str, int, bool, bool) -> None
 
     queue_exists = queue_url_of_name(queue)
     if queue_exists and not ignore_exists:
@@ -62,11 +62,11 @@ def create_queue(identity, queue, instance_type, instance_count, ignore_exists):
         procs.append(subprocess.Popen(
             [
                 os.path.join(_DIRNAME, 'start_instance.py'),
-                identity, '-f', '--spot-preempt', '--no-connect',
+                identity, '-f', '--no-connect',
                 '-t', instance_type,
                 '--name', '{} Queue Processor'.format(queue),
                 '--queue', queue,
-            ],
+            ] + ([] if no_spot else ['--spot-preempt']),
             stdout=stdout,
             stderr=stderr,
         ))
@@ -309,6 +309,7 @@ def main():
     create_parser.add_argument('-c', '--count', help='Number of queue processors to create', default=4, type=int)
     create_parser.add_argument('-t', '--type', help='Instance type to start (default: t2.large)', default='t2.large')
     create_parser.add_argument('--ignore-exists', help='Fork instances regardless of if the queue exists or not', action='store_true', default=False)
+    create_parser.add_argument('--no-spot', help='Start on-demand instead of spot instances', action='store_true', default=False)
 
     send_parser = subparsers.add_parser('send', help='Send messages to AWS queues')
     add_queue_arg(send_parser)
@@ -334,7 +335,7 @@ def main():
         return
 
     if args.subparser == 'create':
-        create_queue(args.identity, args.queue_name, args.type, args.count, args.ignore_exists)
+        create_queue(args.identity, args.queue_name, args.type, args.count, args.ignore_exists, args.no_spot)
     elif args.subparser == 'send':
         send_messages(args.queue_name, args.com)
     elif args.subparser == 'kill':
