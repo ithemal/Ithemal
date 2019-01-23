@@ -273,7 +273,12 @@ class RNNs(AbstractGraphModule):
 
         tokens_hidden = self.init_hidden()
 
-        token_embeds = [] # type: List[torch.tensor]
+        idx = 0
+        if self.dense_hierarchical:
+            token_embeds = autograd.Variable(torch.zeros(sum(len(x) for x in item.x), self.embedding_size))
+        else:
+            token_embeds = autograd.Variable(torch.zeros(len(item.block.instrs), self.embedding_size))
+
         hn = torch.zeros(self.hidden_size)
 
         for i, instr in enumerate(item.block.instrs):
@@ -283,16 +288,18 @@ class RNNs(AbstractGraphModule):
                 output, (hn, cn) = self.lstm_token(tokens, tokens_hidden)
                 tokens_hidden = (hn, cn)
             else:
-                output, (hn, cn) = self.lstm_token(tokens)
+                output, (hn, cn) = self.lstm_token(tokens, self.init_hidden())
 
             if self.dense_hierarchical:
-                token_embeds.extend(output.squeeze(1))
+                for o in output.squeeze(1):
+                    token_embeds[idx] = o
+                    idx += 1
             else:
-                token_embeds.append(hn.squeeze())
+                token_embeds[idx] = hn.squeeze()
+                idx += 1
 
         if self.use_hierarchical:
-            states = torch.stack(token_embeds).unsqueeze(1)
-            _, (final_state, _) = self.lstm_ins(tokens, tokens_hidden)
+            _, (final_state, _) = self.lstm_ins(token_embeds.unsqueeze(1), self.init_hidden())
         else:
             final_state = hn
 
