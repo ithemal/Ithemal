@@ -29,8 +29,8 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _TRAIN = 'Train'
 _TEST = 'Test'
 
-def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers):
-    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool) -> None
+def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, save):
+    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool, Optional[str]) -> None
 
     def get_times_and_losses(measurement, blur):
         # type: (Union[TrainMeasurement, TestMeasurement], float) -> Tuple[np.array, np.array]
@@ -47,6 +47,7 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
     if plot_trainers:
         trainer_ax = loss_ax.twinx()
         trainer_ax.set_ylim([1, 6])
+        trainer_ax.set_ylabel('Number of running trainers')
     else:
         trainer_ax = None
 
@@ -75,7 +76,11 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
 
 
     loss_ax.legend()
-    plt.show()
+
+    if save:
+        plt.savefig(save)
+    else:
+        plt.show()
 
 def synchronize_experiment_files(experiment_name):
     # type: (str) -> Tuple[str, List[str], List[bool]]
@@ -203,11 +208,13 @@ def main():
     parser.add_argument('--test-blur', type=float, default=0.5)
     parser.add_argument('experiments', nargs='+')
     parser.add_argument('--trainers', default=False, action='store_true')
+    parser.add_argument('--save')
+
     args = parser.parse_args()
 
     train_measurements, test_measurements, has_finished = get_measurements(args.experiments)
 
-    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers)
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.save)
 
 if __name__ == '__main__':
     main()
