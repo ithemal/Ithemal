@@ -253,13 +253,14 @@ class GraphNN(AbstractGraphModule):
 
 class RNNs(AbstractGraphModule):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_hierarchical, connect_tokens, dense_hierarchical):
-        # type: (int, int, int, bool, bool, bool) -> None
+    def __init__(self, embedding_size, hidden_size, num_classes, use_hierarchical, connect_tokens, dense_hierarchical, multiscale):
+        # type: (int, int, int, bool, bool, bool, bool) -> None
         super(RNNs, self).__init__(embedding_size, hidden_size, num_classes)
 
         self.use_hierarchical = use_hierarchical
         self.connect_tokens = connect_tokens
         self.dense_hierarchical = dense_hierarchical
+        self.multiscale = multiscale
 
         #lstm - input size, hidden size, num layers
         self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
@@ -271,36 +272,26 @@ class RNNs(AbstractGraphModule):
     def forward(self, item):
         # type: (dt.DataItem) -> torch.tensor
 
-        tokens_hidden = self.init_hidden()
+        tokens_h_c = self.init_hidden()
+        instructions_h_c = self.init_hidden()
 
-        idx = 0
-        if self.dense_hierarchical:
-            token_embeds = autograd.Variable(torch.zeros(sum(len(x) for x in item.x), self.embedding_size))
-        else:
-            token_embeds = autograd.Variable(torch.zeros(len(item.block.instrs), self.embedding_size))
+        for token_idxs in item.x:
+            if not self.connect_tokens:
+                tokens_h_c = self.init_hidden()
 
-        hn = torch.zeros(self.hidden_size)
+            tokens = self.final_embeddings(torch.LongTensor(token_idxs)).unsqueeze(1)
+            (token_in_h, token_in_c) = tokens_h_c
+            if self.multiscale:
+                token_in_h = token_in_h + instructions_h_c[0]
+            output, tokens_h_c = self.lstm_token(tokens, (token_in_h, token_in_c))
 
-        for i, instr in enumerate(item.block.instrs):
-            tokens = self.final_embeddings(torch.LongTensor(item.x[i])).unsqueeze(1)
-
-            if self.connect_tokens:
-                output, (hn, cn) = self.lstm_token(tokens, tokens_hidden)
-                tokens_hidden = (hn, cn)
-            else:
-                output, (hn, cn) = self.lstm_token(tokens, self.init_hidden())
-
-            if self.dense_hierarchical:
-                for o in output.squeeze(1):
-                    token_embeds[idx] = o
-                    idx += 1
-            else:
-                token_embeds[idx] = hn.squeeze()
-                idx += 1
+            if self.use_hierarchical:
+                if self.dense_hierarchical:
+                    _, instructions_h_c = self.lstm_token(output, instructions_h_c)
+                else:
+                    _, instructions_h_c = self.lstm_token(tokens_h_c[0], instructions_h_c)
 
         if self.use_hierarchical:
-            _, (final_state, _) = self.lstm_ins(token_embeds.unsqueeze(1), self.init_hidden())
+            return self.linear(instructions_h_c[0].squeeze()).squeeze()
         else:
-            final_state = hn
-
-        return self.linear(final_state.squeeze()).squeeze()
+            return self.linear(tokens_h_c[0].squeeze()).squeeze()

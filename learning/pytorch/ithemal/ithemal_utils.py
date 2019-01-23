@@ -33,6 +33,7 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('rnn_hierarchical', bool),
     ('rnn_connect_tokens', bool),
     ('rnn_dense', bool),
+    ('rnn_multiscale', bool),
 ])
 
 TrainParameters = NamedTuple('TrainParameters', [
@@ -99,6 +100,7 @@ def load_model(params, data):
         model = md.RNNs(
             embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
             use_hierarchical=params.rnn_hierarchical, connect_tokens=params.rnn_connect_tokens, dense_hierarchical=params.rnn_dense,
+            multiscale=params.rnn_multiscale
         )
     else:
         model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,

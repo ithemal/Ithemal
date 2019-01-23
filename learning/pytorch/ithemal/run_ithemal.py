@@ -103,6 +103,7 @@ def main():
     parser.add_argument('--rnn-hierarchical', action='store_true', default=False)
     parser.add_argument('--rnn-connect-tokens', action='store_true', default=False)
     parser.add_argument('--rnn-dense', action='store_true', default=False)
+    parser.add_argument('--rnn-multiscale', action='store_true', default=False)
 
     def add_edge_ablation(ablation):
         # type: (EdgeAblationType) -> None
@@ -173,7 +174,8 @@ def main():
         use_rnn=args.use_rnn,
         rnn_hierarchical=args.rnn_hierarchical,
         rnn_connect_tokens=args.rnn_connect_tokens,
-        rnn_dense=args.rnn_dense
+        rnn_dense=args.rnn_dense,
+        rnn_multiscale=args.rnn_multiscale,
     )
 
     if args.subparser == 'train':
