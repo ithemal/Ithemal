@@ -194,7 +194,7 @@ def get_partitions(n_datapoints, train_params):
 # ---------------------------- TRAINER CONSTRUCTION -----------------------------
 
 def load_trainer(base_params, train_params, model, data):
-    # type: (BaseParameters, TrainParameters, md.GraphNN, dt.DataCost) -> tr.Train
+    # type: (BaseParameters, TrainParameters, md.AbstractGraphModule, dt.DataCost) -> tr.Train
 
     return tr.Train(
         model, data, tr.PredictionType.REGRESSION, ls.mse_loss, 1,

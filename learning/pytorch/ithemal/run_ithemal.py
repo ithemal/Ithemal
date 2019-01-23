@@ -99,6 +99,11 @@ def main():
     parser.add_argument('--predict-log', action='store_true', default=False, help='Predict the log of the time')
     parser.add_argument('--linear-embeddings', action='store_true', default=False, help='Use linear embeddings instead of LSTM')
 
+    parser.add_argument('--use-rnn', action='store_true', default=False)
+    parser.add_argument('--rnn-hierarchical', action='store_true', default=False)
+    parser.add_argument('--rnn-connect-tokens', action='store_true', default=False)
+    parser.add_argument('--rnn-dense', action='store_true', default=False)
+
     def add_edge_ablation(ablation):
         # type: (EdgeAblationType) -> None
         parser.add_argument('--{}'.format(ablation.value), action='append_const', dest='edge_ablations', const=ablation)
@@ -165,6 +170,10 @@ def main():
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,
         linear_embeddings=args.linear_embeddings,
+        use_rnn=args.use_rnn,
+        rnn_hierarchical=args.rnn_hierarchical,
+        rnn_connect_tokens=args.rnn_connect_tokens,
+        rnn_dense=args.rnn_dense
     )
 
     if args.subparser == 'train':

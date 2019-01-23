@@ -29,6 +29,10 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('embed_size', int),
     ('hidden_size', int),
     ('linear_embeddings', bool),
+    ('use_rnn', bool),
+    ('rnn_hierarchical', bool),
+    ('rnn_connect_tokens', bool),
+    ('rnn_dense', bool),
 ])
 
 TrainParameters = NamedTuple('TrainParameters', [
@@ -89,12 +93,19 @@ def load_data(params):
     return data
 
 def load_model(params, data):
-    # type: (BaseParameters, dt.DataCost) -> md.GraphNN
+    # type: (BaseParameters, dt.DataCost) -> md.AbstractGraphModule
 
-    model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
-                       use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
-                       use_dag_rnn=not params.no_dag_rnn,
-    )
+    if params.use_rnn:
+        model = md.RNNs(
+            embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
+            use_hierarchical=params.rnn_hierarchical, connect_tokens=params.rnn_connect_tokens, dense_hierarchical=params.rnn_dense,
+        )
+    else:
+        model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
+                           use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
+                           use_dag_rnn=not params.no_dag_rnn,
+        )
+
     model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
 
     return model

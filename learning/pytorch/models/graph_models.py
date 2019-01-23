@@ -11,48 +11,18 @@ import torch.autograd as autograd
 import torch.optim as optim
 import math
 import numpy as np
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from . import model_utils
 
-class GraphNN(nn.Module):
+class AbstractGraphModule(nn.Module):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True):
-        # type: (int, int, int, bool, bool, bool) -> None
+    def __init__(self, embedding_size, hidden_size, num_classes):
+        # type: (int, int, int) -> None
+        super(AbstractGraphModule, self).__init__()
 
-        super(GraphNN, self).__init__()
-
-        self.num_classes = num_classes
-
-        assert use_residual or use_dag_rnn, 'Must use some type of predictor'
-
-        self.hidden_size = hidden_size
-        self.use_residual = use_residual
-        self.linear_embed = linear_embed
-        self.use_dag_rnn = use_dag_rnn
-
-        #numpy array with batchsize, embedding_size
         self.embedding_size = embedding_size
-
-        #lstm - input size, hidden size, num layers
-        self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
-        self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
-
-        # linear weight for instruction embedding
-        self.opcode_lin = nn.Linear(self.embedding_size, self.hidden_size)
-        self.src_lin = nn.Linear(self.embedding_size, self.hidden_size)
-        self.dst_lin = nn.Linear(self.embedding_size, self.hidden_size)
-        # for sequential model
-        self.opcode_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
-        self.src_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
-        self.dst_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
-
-        #linear layer for final regression result
-        self.linear = nn.Linear(self.hidden_size,self.num_classes)
-
-        #lstm - for sequential model
-        self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
-        self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
-        self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
+        self.num_classes = num_classes
+        self.hidden_size = hidden_size
 
     def set_learnable_embedding(self, mode, dictsize, seed = None):
         # type: (str, int, Optional[int]) -> None
@@ -83,7 +53,7 @@ class GraphNN(nn.Module):
         return model_utils.dump_shared_params(self)
 
     def load_shared_params(self, params):
-    # type: (Dict[str, Any]) -> None
+        # type: (Dict[str, Any]) -> None
         model_utils.load_shared_params(self, params)
 
     def init_hidden(self):
@@ -91,6 +61,43 @@ class GraphNN(nn.Module):
 
         return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
                 autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
+
+    def remove_refs(self, item):
+        # type: (dt.DataItem) -> None
+        pass
+
+class GraphNN(AbstractGraphModule):
+
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True):
+        # type: (int, int, int, bool, bool, bool) -> None
+        super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
+
+        assert use_residual or use_dag_rnn, 'Must use some type of predictor'
+
+        self.use_residual = use_residual
+        self.linear_embed = linear_embed
+        self.use_dag_rnn = use_dag_rnn
+
+        #lstm - input size, hidden size, num layers
+        self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
+
+        # linear weight for instruction embedding
+        self.opcode_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        self.src_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        self.dst_lin = nn.Linear(self.embedding_size, self.hidden_size)
+        # for sequential model
+        self.opcode_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+        self.src_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+        self.dst_lin_seq = nn.Linear(self.embedding_size, self.hidden_size)
+
+        #linear layer for final regression result
+        self.linear = nn.Linear(self.hidden_size,self.num_classes)
+
+        #lstm - for sequential model
+        self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
+        self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
 
     def remove_refs(self, item):
         # type: (dt.DataItem) -> None
@@ -243,3 +250,50 @@ class GraphNN(nn.Module):
             final_pred += self.linear_seq(sequential).squeeze()
 
         return final_pred.squeeze()
+
+class RNNs(AbstractGraphModule):
+
+    def __init__(self, embedding_size, hidden_size, num_classes, use_hierarchical, connect_tokens, dense_hierarchical):
+        # type: (int, int, int, bool, bool, bool) -> None
+        super(RNNs, self).__init__(embedding_size, hidden_size, num_classes)
+
+        self.use_hierarchical = use_hierarchical
+        self.connect_tokens = connect_tokens
+        self.dense_hierarchical = dense_hierarchical
+
+        #lstm - input size, hidden size, num layers
+        self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
+
+        #linear layer for final regression result
+        self.linear = nn.Linear(self.hidden_size, self.num_classes)
+
+    def forward(self, item):
+        # type: (dt.DataItem) -> torch.tensor
+
+        tokens_hidden = self.init_hidden()
+
+        token_embeds = [] # type: List[torch.tensor]
+        hn = torch.zeros(self.hidden_size)
+
+        for i, instr in enumerate(item.block.instrs):
+            tokens = self.final_embeddings(torch.LongTensor(item.x[i])).unsqueeze(1)
+
+            if self.connect_tokens:
+                output, (hn, cn) = self.lstm_token(tokens, tokens_hidden)
+                tokens_hidden = (hn, cn)
+            else:
+                output, (hn, cn) = self.lstm_token(tokens)
+
+            if self.dense_hierarchical:
+                token_embeds.extend(output.squeeze(1))
+            else:
+                token_embeds.append(hn.squeeze())
+
+        if self.use_hierarchical:
+            states = torch.stack(token_embeds).unsqueeze(1)
+            _, (final_state, _) = self.lstm_ins(tokens, tokens_hidden)
+        else:
+            final_state = hn
+
+        return self.linear(final_state.squeeze()).squeeze()
