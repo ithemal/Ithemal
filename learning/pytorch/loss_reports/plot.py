@@ -29,7 +29,7 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _TRAIN = 'Train'
 _TEST = 'Test'
 
-def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, raw_x, save):
+def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, raw_x, save, names, norm_epoch, min_y, max_y):
     # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool, bool, Optional[str]) -> None
 
     def get_times_and_losses(measurement, blur):
@@ -54,28 +54,62 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
     else:
         trainer_ax = None
 
-    loss_ax.set_xlabel('Time in hours')
-    loss_ax.set_ylim([0, 0.4])
+
+    if norm_epoch:
+        loss_ax.set_xlabel('Epochs')
+    else:
+        loss_ax.set_xlabel('Time in hours')
+
+    loss_ax.set_ylim([min_y, max_y])
     loss_ax.set_ylabel('Loss (sqrt(MSE) / actual)')
 
     for idx, (train_measurement, test_measurement, finished) in enumerate(zip(train_measurements, test_measurements, has_finished)):
         color = 'C{}'.format(idx)
+        if names:
+            name = names[idx]
+        else:
+            name = test_measurement.experiment_name
         train_times, train_losses = get_times_and_losses(train_measurement, train_blur)
         test_times, test_losses = get_times_and_losses(test_measurement, test_blur)
-        loss_ax.plot(train_times, train_losses, label='{} train'.format(train_measurement.experiment_name), color=color)
-        loss_ax.plot(test_times, test_losses, linestyle='--', label='{} test'.format(test_measurement.experiment_name), color=color)
 
         ep_advance = np.where(np.diff(train_measurement.epochs))[0] + 1
-        for idx in ep_advance:
-            x = train_times[idx]
-            y = train_losses[idx]
-            loss_ax.plot([x,x], [y - 0.005, y + 0.005], color=color)
+
+        new_test_times = np.empty_like(test_times)
+
+        max_tr = train_times.max()
+
+        if norm_epoch:
+            prev = 0
+            prev_x = 0
+            for k, idx in enumerate(ep_advance):
+                x = train_times[idx]
+                idxs = (test_times >= prev_x) & (test_times < x)
+                old_tests = test_times[idxs]
+                new_test_times[idxs] = (old_tests - prev_x) / (x - prev_x) + k
+                train_times[prev:idx] = np.linspace(k, k+1, idx - prev)
+                prev = idx
+                prev_x = x
+
+            idxs = (test_times >= prev_x)
+            old_tests = test_times[idxs]
+            new_test_times[idxs] = (old_tests - prev_x) / (max_tr - prev_x) + len(ep_advance)
+            train_times[prev:] = np.linspace(len(ep_advance), len(ep_advance)+1, len(train_times) - prev)
+            test_times = new_test_times
+        else:
+            for idx in ep_advance:
+                x = train_times[idx]
+                y = train_losses[idx]
+                loss_ax.plot([x,x], [y - 0.005, y + 0.005], color=color)
+
+        loss_ax.plot(train_times, train_losses, label='{} train loss'.format(name), color=color)
+        loss_ax.plot(test_times, test_losses, linestyle='--', label='{} test loss'.format(name), color=color)
+
 
         if finished:
             loss_ax.scatter(train_times[-1:], train_losses[-1:], marker='x', color=color)
 
         if trainer_ax is not None:
-            trainer_ax.plot(train_times, train_measurement.trainers, label='{} trainers'.format(train_measurement.experiment_name), color=color)
+            trainer_ax.plot(train_times, train_measurement.trainers, label='{} trainers'.format(name), color=color)
 
 
     loss_ax.legend()
@@ -209,16 +243,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train-blur', type=float, default=25)
     parser.add_argument('--test-blur', type=float, default=0.5)
+    parser.add_argument('--min-y', type=float, default=0.0)
+    parser.add_argument('--max-y', type=float, default=0.4)
     parser.add_argument('experiments', nargs='+')
+    parser.add_argument('--names', nargs='+')
     parser.add_argument('--trainers', default=False, action='store_true')
     parser.add_argument('--raw-x', default=False, action='store_true')
+    parser.add_argument('--norm-epoch', default=False, action='store_true')
     parser.add_argument('--save')
 
     args = parser.parse_args()
 
     train_measurements, test_measurements, has_finished = get_measurements(args.experiments)
 
-    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save)
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, args.names, args.norm_epoch, args.min_y, args.max_y)
 
 if __name__ == '__main__':
     main()
