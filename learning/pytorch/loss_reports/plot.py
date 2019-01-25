@@ -45,7 +45,7 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
             return times, losses
 
     plt.title('Loss over time')
-    fig = plt.figure(1)
+    fig = plt.figure(1, figsize=(12.8, 9.6), dpi=100)
     loss_ax = fig.gca()
     if plot_trainers:
         trainer_ax = loss_ax.twinx()
@@ -61,7 +61,7 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
         loss_ax.set_xlabel('Time in hours')
 
     loss_ax.set_ylim([min_y, max_y])
-    loss_ax.set_ylabel('Loss (sqrt(MSE) / actual)')
+    loss_ax.set_ylabel('Loss')
 
     for idx, (train_measurement, test_measurement, finished) in enumerate(zip(train_measurements, test_measurements, has_finished)):
         color = 'C{}'.format(idx)
