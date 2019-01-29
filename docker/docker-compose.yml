@@ -19,6 +19,12 @@ services:
        - type: bind
          source: ..
          target: /home/ithemal/ithemal
+       - type: bind
+         source: /tmp/.X11-unix
+         target: /tmp/.X11-unix
+       - type: bind
+         source: "${HOME}/.aws"
+         target: /home/ithemal/.aws
      image: ithemal:latest
      tty: true
      environment:
@@ -26,6 +32,7 @@ services:
        MYSQL_TCP_PORT: 3306
        HISTFILE: /home/ithemal/ithemal/docker/.docker_bash_history
        ITHEMAL_HOME: /home/ithemal/ithemal
+       DISPLAY: ${HOSTNAME}:0
      ports:
        - "8888:8888"
 

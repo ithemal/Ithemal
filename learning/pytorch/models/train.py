@@ -1,8 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
+
 import torch
 import torch.nn as nn
-import sys
-sys.path.append('..')
+from enum import Enum
 import common_libs.utilities as ut
+import data.data_cost as dt
 import torch.autograd as autograd
 import torch.optim as optim
 import math
@@ -11,8 +15,17 @@ import os
 import gc
 import psutil
 from tqdm import tqdm
+import time
+import torch
+from torch import nn
+import utils.messages as messages
+import random
+from typing import Any, Callable, Dict, IO, List, Optional, Tuple
+
+from . import model_utils
 
 def memReport():
+    # type: () -> None
     num_obj = 0
     for obj in gc.get_objects():
         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
@@ -20,16 +33,23 @@ def memReport():
     print 'num_obj ' + str(num_obj)
 
 def cpuStats():
-        print(sys.version)
-        print(psutil.cpu_percent())
-        print(psutil.virtual_memory())  # physical memory usage
-        pid = os.getpid()
-        py = psutil.Process(pid)
-        memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB...I think
-        print('memory GB:', memoryUse)
+    # type: () -> None
+    print(sys.version)
+    print(psutil.cpu_percent())
+    print(psutil.virtual_memory())  # physical memory usage
+    pid = os.getpid()
+    py = psutil.Process(pid)
+    memoryUse = py.memory_info()[0] / 2. ** 30  # memory use in GB...I think
+    print('memory GB:', memoryUse)
 
+class PredictionType(Enum):
+    CLASSIFICATION = 1
+    REGRESSION = 2
 
-
+class OptimizerType(Enum):
+    ADAM_PRIVATE = 1
+    ADAM_SHARED = 2
+    SGD = 3
 
 class Train():
 
@@ -40,36 +60,43 @@ class Train():
     def __init__(self,
                  model,
                  data,
-                 epochs = 3,
+                 typ,
+                 loss_fn,
+                 num_losses,
                  batch_size = 1000,
-                 tolerance = 25,
-                 epoch_len_div = 1,
-                 saves_per_epoch = 5,
+                 tolerance = 25.,
                  lr = 0.001,
                  momentum = 0.9,
-                 clip = 2,
-                 opt = 'SGD'
+                 nesterov=False,
+                 clip = 2.,
+                 opt = OptimizerType.SGD,
+                 weight_decay = 0.,
+                 predict_log = False,
     ):
+        # type: (nn.Module, dt.Data, PredictionType, Callable[[torch.tensor, torch.tensor], torch.tensor], int, int, float, float, float, bool, Optional[float], OptimizerType, float, bool) -> None
 
         self.model = model
-        print self.model
+        self.typ = typ
         self.data = data
         self.lr = lr
-        self.momentum = momentum
         self.clip = clip
-        self.opt = opt
-        if opt == 'SGD':
-            self.optimizer = optim.SGD(self.model.parameters(), lr = lr, momentum = momentum)
-        elif opt == 'Adam':
-            self.optimizer = optim.Adam(self.model.parameters())
+        self.predict_log = predict_log
+        self.opt_type = opt
+
+        if opt == OptimizerType.SGD:
+            self.optimizer = optim.SGD(self.model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
+        elif opt == OptimizerType.ADAM_PRIVATE or opt == OptimizerType.ADAM_SHARED:
+            self.optimizer = optim.Adam(self.model.parameters(), weight_decay=weight_decay, lr=lr)
+            if opt == OptimizerType.ADAM_SHARED:
+                for param in self.optimizer.param_groups[0]['params']:
+                    param.share_memory_()
         else:
-            print 'unknown optimizer...'
-            exit(-1)
+            raise ValueError('unknown optimizer...')
 
         #training parameters
-        self.epochs = epochs
+        self.partition = (0, len(self.data.train))
+
         self.batch_size = batch_size
-        self.epoch_len_div = epoch_len_div
 
         #correctness
         self.tolerance = tolerance
@@ -78,24 +105,31 @@ class Train():
         self.correct = 0
 
         #functions
-        self.loss_fn = None
-        self.print_fn = None
-        self.correct_fn = None
-        self.num_losses = None
+        self.loss_fn = loss_fn
+        self.num_losses = num_losses
 
-        #for plotting
-        self.per_epoch_loss = []
-        self.loss = []
+        self.rank = 0
+        self.last_save_time = 0
 
-        #training checkpointing
-        self.saves_per_epoch = saves_per_epoch
+    def dump_shared_params(self):
+        # type: () -> Dict[str, object]
 
+        if self.opt_type == OptimizerType.ADAM_SHARED:
+            return model_utils.dump_shared_params(self.optimizer)
+        else:
+            return {}
+
+    def load_shared_params(self, params):
+        # type: (Dict[str, object]) -> None
+
+        if self.opt_type == OptimizerType.ADAM_SHARED:
+            model_utils.load_shared_params(self.optimizer, params)
 
     """
     Print routines for predicted and target values.
     """
     def print_final(self,f,x,y):
-
+        # type: (IO[str], np.array, np.array) -> None
         if x.shape != ():
             size = x.shape[0]
             for i in range(size):
@@ -105,7 +139,7 @@ class Train():
             f.write('%f,%f\n' % (x,y))
 
     def print_max(self,f,x,y):
-
+        # type: (IO[str], np.array, np.array) -> None
         x = torch.argmax(x)
         y = torch.argmax(y)
 
@@ -115,6 +149,7 @@ class Train():
     correct example counting functions
     """
     def correct_classification(self,x,y):
+        # type: (torch.tensor, torch.tensor) -> None
 
         x = torch.argmax(x) + 1
         y = torch.argmax(y) + 1
@@ -125,6 +160,7 @@ class Train():
             self.correct += 1
 
     def correct_regression(self,x,y):
+        # type: (torch.tensor, torch.tensor) -> None
 
         if x.shape != ():
             x = x[-1]
@@ -135,185 +171,160 @@ class Train():
         if percentage < self.tolerance:
             self.correct += 1
 
-    def save_checkpoint(self, epoch, batch_num, filename):
+    def save_checkpoint(self, epoch, batch_num, filename, **rest):
+        # type: (int, int, str, **Any) -> None
 
         state_dict = {
             'epoch': epoch,
             'batch_num': batch_num,
             'model': self.model.state_dict(),
-            'optimizer': self.optimizer.state_dict()
+            'optimizer': self.optimizer.state_dict(),
         }
+
+        for (k, v) in rest.items():
+            state_dict[k] = v
+
+        # ensure directory exists
+        try:
+            os.makedirs(os.path.dirname(filename))
+        except OSError:
+            pass
+
         torch.save(state_dict, filename)
 
     def load_checkpoint(self, filename):
+        # type: (str) -> Dict[str, Any]
 
         state_dict = torch.load(filename)
-        self.model.load_state_dict(state_dict['model'])
-        self.optimizer.load_state_dict(state_dict['optimizer'])
 
-        epoch = state_dict['epoch']
-        batch_num = state_dict['batch_num']
+        model_dict = self.model.state_dict()
+        new_model_dict = {k: v for (k, v) in state_dict['model'].items() if k in model_dict}
+        model_dict.update(new_model_dict)
+        self.model.load_state_dict(model_dict)
 
-        return (epoch, batch_num)
+        try:
+            self.optimizer.load_state_dict(state_dict['optimizer'])
+        except ValueError:
+            print('Couldnt load optimizer!')
+
+        return state_dict
+
+    def __call__(self, rank, partition, report_loss_fn=None):
+        # type: (int, Tuple[int, int], Optional[Callable[[messages.Message], None]]) -> None
+        self.rank = rank
+        self.partition = partition
+        self.train(report_loss_fn=report_loss_fn)
+
+    def get_target(self, datum):
+        # type: (dt.DataItem) -> torch.tensor
+        target = torch.FloatTensor([datum.y]).squeeze()
+        if self.predict_log:
+            target.log_()
+        return target
 
     """
     Training loop - to do make the average loss for general
     """
 
-    def train(self, savefile=None, loadfile=None):
+    def train(self, report_loss_fn=None):
+        # type: (Optional[Callable[[messages.Message], None]]) -> None
 
-        self.per_epoch_loss = []
-        self.loss = []
+        (partition_start, partition_end) = self.partition
 
-        epoch_len = (len(self.data.train) // self.batch_size)
-        epoch_len = epoch_len / self.epoch_len_div
+        def report_trainer_death(idx):
+            # type: (int) -> None
 
-        print 'start training...'
-        print 'epochs ' + str(self.epochs)
-        print 'epoch length ' + str(epoch_len)
-        print 'batch size (sampled) ' + str(self.batch_size)
+            if report_loss_fn is not None:
+                report_loss_fn(messages.TrainerDeathMessage(
+                    (idx + self.batch_size, partition_end),
+                ))
 
+        for idx in range(partition_start, partition_end, self.batch_size):
+            batch_loss_sum = np.zeros(self.num_losses)
+            self.correct = 0
 
-        restored_epoch = -1
-        restored_batch_num = -1
-        if loadfile != None:
-            (restored_epoch, restored_batch_num) = self.load_checkpoint(loadfile)
-            print 'starting from a checkpointed state... epoch %d batch_num %d' % (restored_epoch, restored_batch_num)
+            self.optimizer.zero_grad()
+            loss_tensor = torch.FloatTensor([0]).squeeze()
+            batch = self.data.train[idx:idx+self.batch_size]
 
+            if not batch:
+                continue
 
-        for i in range(self.epochs):
+            for datum in batch:
+                output = self.model(datum)
 
-            average_loss = [0] * self.num_losses
+                if torch.isnan(output).any():
+                    report_trainer_death(idx)
+                    return
 
-            for j in range(epoch_len):
+                #target as a tensor
+                target = self.get_target(datum)
 
-                if i <= restored_epoch and j <= restored_batch_num:
+                #get the loss value
+                if self.loss_fn:
+                    losses_opt = self.loss_fn(output, target)
+
+                if self.predict_log and self.loss_fn:
+                    losses_rep = self.loss_fn(output.exp(), target.exp())
+                else:
+                    losses_rep = losses_opt
+
+                #check how many are correct
+                if self.typ == PredictionType.CLASSIFICATION:
+                    self.correct_classification(output, target)
+                elif self.typ == PredictionType.REGRESSION:
+                    self.correct_regression(output, target)
+
+                #accumulate the losses
+                for class_idx, (loss_opt, loss_rep) in enumerate(zip(losses_opt, losses_rep)):
+                    loss_tensor += loss_opt
+                    l = loss_rep.item()
+                    batch_loss_sum[class_idx] += l
+
+            batch_loss_avg = batch_loss_sum / len(batch)
+
+            #propagate gradients
+            loss_tensor.backward()
+
+            #clip the gradients
+            if self.clip is not None:
+                torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
+
+            for param in self.model.parameters():
+                if param.grad is None:
                     continue
 
-                self.data.generate_batch(self.batch_size)
+                if torch.isnan(param.grad).any():
+                    report_trainer_death(idx)
+                    return
 
-                average_loss_per_batch = [0] * self.num_losses
-                self.correct = 0
+            #optimizer step to update parameters
+            self.optimizer.step()
 
-                #we use batches of size one for actual training
-                for batch_j, item in enumerate(self.data.batch):
+            # get those tensors out of here!
+            for datum in batch:
+                self.model.remove_refs(datum)
 
-                    #zero out grads
-                    self.optimizer.zero_grad()
+            if report_loss_fn is not None:
+                report_loss_fn(messages.LossReportMessage(
+                    self.rank,
+                    batch_loss_avg[0],
+                    len(batch),
+                ))
 
-                    #get predicted value
-                    output = self.model(item)
-
-                    #check if output is nan, if so return
-                    isnan = torch.isnan(output)
-
-                    if isnan.any():
-                        print 'output nan detected, quit learning, please use the saved model...'
-                        #also add the per epch loss to the main loss accumulation
-                        self.loss.append(self.per_epoch_loss)
-                        return
-
-
-                    #target as a tensor
-                    target = torch.FloatTensor([item.y]).squeeze()
-
-                    #get the loss value
-                    losses = self.loss_fn(output, target)
-
-                    if batch_j == self.batch_size / 2:
-                        self.print_fn(sys.stdout, output, target)
-
-                    #check how many are correct
-                    self.correct_fn(output, target)
-
-
-                    #accumulate the losses
-                    for c,l in enumerate(losses):
-                        item_num = j * self.batch_size + batch_j
-                        average_loss[c] = (average_loss[c] * item_num + l.item()) / (item_num + 1)
-                        average_loss_per_batch[c] = (average_loss_per_batch[c] * batch_j  + l.item()) / (batch_j + 1)
-
-                    loss = losses[0]
-                    for loss_num in range(1,len(losses)):
-                        loss += losses[loss_num]
-
-
-                    #propagate gradients
-                    loss.backward()
-
-                    #clip the gradients
-                    if self.clip != None:
-                        torch.nn.utils.clip_grad_norm(self.model.parameters(), self.clip)
-
-                    for param in self.model.parameters():
-                        isnan = torch.isnan(param.grad)
-                        if isnan.any():
-                            print 'gradient values are nan...'
-                            #append the loss before returning
-                            self.loss.append(self.per_epoch_loss)
-                            return
-
-                    #optimizer step to update parameters
-                    self.optimizer.step()
-
-                    #remove refs; so the gc remove unwanted tensors
-                    self.model.remove_refs(item)
-
-
-                if savefile != None:
-                    self.save_checkpoint(i,j,savefile)
-
-
-                #per batch training messages
-                p_str = str(i) + ' ' + str(j) + ' '
-                for av in average_loss:
-                    p_str += str(av) + ' '
-                for av in average_loss_per_batch:
-                    p_str += str(av) + ' '
-                p_str += str(self.correct) + ' ' + str(self.batch_size)
-                print p_str
-
-                #losses accumulation to visualize learning
-                losses = []
-                for av in average_loss:
-                    losses.append(av)
-                self.per_epoch_loss.append(losses)
-
-                #change learning rates
-                if self.correct_fn == self.correct_regression and self.opt != 'Adam':
-                    if average_loss_per_batch[0] < 0.10 and self.lr > 0.00001:
-                        print 'reducing learning rate....'
-                        self.lr = self.lr * 0.1
-                        print 'learning rate changed ' + str(self.lr)
-                        for param_group in self.optimizer.param_groups:
-                            param_group['lr'] = self.lr
-
-            print i
-
-            #loss accumulation
-            self.loss.append(self.per_epoch_loss)
-            self.per_epoch_loss = []
-
-            #learning rate changes
-            self.lr = self.lr * 0.1
-            print 'learning rate changed ' + str(self.lr)
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.lr
-
-
-        if savefile != None:
-            print 'final model saved...'
-            self.save_checkpoint(self.epochs - 1,epoch_len - 1,savefile)
-
+    def set_lr(self, lr):
+        # type: (float) -> None
+        self.lr = lr
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.lr
 
     """
     Validation with a test set
     """
 
     def validate(self, resultfile, loadfile=None):
-
-
-        if loadfile != None:
+        # type: (str, Optional[str]) -> Tuple[List[List[float]], List[List[float]]]
+        if loadfile is not None:
             print 'loaded from checkpoint for validation...'
             self.load_checkpoint(loadfile)
 
@@ -328,19 +339,26 @@ class Train():
 
             #print len(item.x)
             output = self.model(item)
-            target = torch.FloatTensor([item.y]).squeeze()
+            target = self.get_target(item)
+
+            if self.predict_log:
+                output.exp_()
+                target.exp_()
 
             #get the target and predicted values into a list
-            if self.correct_fn == self.correct_classification:
+            if self.typ == PredictionType.CLASSIFICATION:
                 actual.append((torch.argmax(target) + 1).data.numpy().tolist())
                 predicted.append((torch.argmax(output) + 1).data.numpy().tolist())
             else:
                 actual.append(target.data.numpy().tolist())
                 predicted.append(output.data.numpy().tolist())
 
-            self.print_fn(f, output, target)
+            self.print_final(f, output, target)
             losses = self.loss_fn(output, target)
-            self.correct_fn(output, target)
+            if self.typ == PredictionType.CLASSIFICATION:
+                self.correct_classification(output, target)
+            else:
+                self.correct_regression(output, target)
 
             #accumulate the losses
             loss = torch.zeros(1)
@@ -366,11 +384,3 @@ class Train():
         f.close()
 
         return (actual, predicted)
-
-
-
-
-
-
-
-
