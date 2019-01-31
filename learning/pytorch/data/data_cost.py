@@ -6,9 +6,10 @@ import torch.autograd as autograd
 import torch.optim as optim
 import torch
 from tqdm import tqdm
-from data import Data
+from .data import Data
 import matplotlib.pyplot as plt
 import statistics
+import pandas as pd
 
 import sys
 sys.path.append('..')
@@ -192,28 +193,22 @@ class DataCost(Data):
 
         data = []
 
+        sql = 'SELECT code_id, AVG(time) as time FROM times WHERE arch={} AND kind="actual" GROUP BY code_id'.format(arch)
+        times = pd.read_sql(sql, cnx).set_index('code_id')
+
         #assumes code_token and code_id
         for row in tqdm(self.raw_data):
 
             if len(row[0]) == 0:
                 continue
 
-            code_id = row[1]
-
-            sql = 'SELECT kind, time from times where code_id=' + str(code_id) + ' and arch=' + str(arch)
-
-            values = []
-            times = ut.execute_query(cnx,sql, True)
-            for time in times:
-                if time[0] == 'actual':
-                    values.append(time[1])
-
-            if len(values) == 0:
+            try:
+                avg_time = times.loc[row[1]]['time']
+            except KeyError:
                 continue
 
-            final_value = statistics.mean(values)
+            data.append((row[0],avg_time,row[2],row[1]))
 
-            data.append((row[0],final_value,row[2],row[1]))
 
 
         self.raw_data = data
@@ -258,8 +253,6 @@ class DataTokenEmbedding(DataCost):
         print len(self.raw_data), len(self.data)
 
 
-
-
 class DataInstructionEmbedding(DataCost):
 
     def __init__(self, data=None):
@@ -293,6 +286,8 @@ class DataInstructionEmbedding(DataCost):
 
                 block = ut.create_basicblock(row[0])
                 block.create_dependencies()
+                for (instr, intel) in zip(block.instrs, row[2].split('\n')):
+                    instr.intel = intel
 
 
                 if mode in times:
@@ -309,3 +304,24 @@ class DataInstructionEmbedding(DataCost):
 
         self.max_time = max(times)
         print len(self.raw_data), len(self.data)
+
+
+def load_dataset(embed_file, data_savefile=None, arch=None, format='text'):
+    data = DataInstructionEmbedding()
+
+    if data_savefile is None:
+        if arch is None:
+            raise ValueError('Must provide one of data_savefile or arch')
+
+        cnx = ut.create_connection()
+        data.extract_data(cnx, format, ['code_id','code_intel'])
+        data.get_timing_data(cnx, arch)
+    else:
+        data.raw_data = torch.load(data_savefile)
+
+    data.set_embedding(embed_file)
+    data.read_meta_data()
+    data.prepare_data()
+    data.generate_datasets()
+
+    return data

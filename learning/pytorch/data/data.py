@@ -97,7 +97,7 @@ class Data(object):
             self.costs[i] = np.random.randint(1,maxnum)
 
     def prepare_data(self):
-        Pass
+        pass
 
     def generate_datasets(self):
         size = len(self.data)
@@ -107,9 +107,15 @@ class Data(object):
         print 'train ' + str(len(self.train)) + ' test ' + str(len(self.test))
 
 
-    def generate_batch(self, batch_size):
-        population = range(len(self.train))
+    def generate_batch(self, batch_size, partition=None):
+        if partition is None:
+            partition = (0, len(self.train))
+
+        # TODO: this seems like it would be expensive for a large data set
+        (start, end) = partition
+        population = range(start, end)
         selected = random.sample(population,batch_size)
+
         self.batch = []
         for index in selected:
             self.batch.append(self.train[index])
@@ -122,5 +128,3 @@ class Data(object):
 
         plt.hist(ys, min(max(ys), 1000))
         plt.show()
-
-

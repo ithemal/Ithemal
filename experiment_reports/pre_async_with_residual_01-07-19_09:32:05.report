@@ -1,0 +1,4 @@
+python ithemal/run_ithemal.py --mode train --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 1 --savefile saved/pre_async_with_residual_01-07-19_09:32:05.mdl
+
+Test Loss: 0.13605835278460637
+Test Acc: 146379/174519 = 0.839

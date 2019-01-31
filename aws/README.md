@@ -4,7 +4,7 @@ Implement a CLI for starting Ithemal on an AWS EC2 instance.
 
 First, you must have the underlying [AWS CLI](https://aws.amazon.com/cli/) installed. You also must have an IAM access key from [here](https://console.aws.amazon.com/iam/home), saved into `~/.ssh/USER.pem` (mine is `renda.pem`, so replace `renda` with whatever your username is for the rest of this)
 
-Next, make sure that the AWS Docker image is up-to-date with `docker/docker_build_aws.sh` (if you're experimenting with changes to the Dockerfile, use a tag other than `latest` both in that file and in `aws/remote_setup.sh`).
+Next, make sure that the AWS Docker image is up-to-date with `docker/docker_build_aws.sh` (if you're experimenting with changes to the Dockerfile, use a tag other than `latest` both in that file and in `aws/aws_utils/remote_setup.sh`).
 
 Now, to start a new Ithemal instance, run `aws/start_instance.py renda`. (check out `aws/start_instance.py --help` for the full set of flags). This script takes a while to run, as it spins up a new EC2 instance, installs and starts Docker, copies over all *git-tracked* files from your repo, and then connects you to a tmux shell inside of the remote Docker instance (so that you can persist your shell if you disconnect)
 

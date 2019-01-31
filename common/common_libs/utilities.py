@@ -1,10 +1,13 @@
+import collections
 import mysql.connector
 import struct
 import sys
 from mysql.connector import errorcode
+import random
 import re
 import os
-
+import tempfile
+from typing import Dict, FrozenSet, Optional, Tuple, Union
 
 #mysql specific functions
 def create_connection(database=None, user=None, password=None, port=None):
@@ -70,7 +73,7 @@ def execute_query(cnx, sql, fetch, multi=False):
         return None
 
 #data reading function
-def get_data(cnx, format, cols):
+def get_data(cnx, format, cols, limit=None):
     try:
         cur = cnx.cursor(buffered=True)
 
@@ -81,6 +84,9 @@ def get_data(cnx, format, cols):
         columns += ''
 
         sql = 'SELECT ' + columns + ' FROM code'
+        if limit is not None:
+            sql += ' LIMIT {}'.format(limit)
+
         print sql
         data = list()
         cur.execute(sql)
@@ -147,6 +153,7 @@ def read_offsets():
     return offsets
 
 def get_sym_dict():
+    # type: Tuple[Dict[int, str], int]
 
     offsets = read_offsets()
     sym_dict = get_opcode_opnd_dict(opcode_start = offsets[0],opnd_start = offsets[1])
@@ -156,6 +163,33 @@ def get_sym_dict():
 
     return sym_dict, offsets[4]
 
+_REGISTER_CLASSES = tuple(map(frozenset, (
+    {'REG_RAX', 'REG_RCX', 'REG_RDX', 'REG_RBX', 'REG_RSP', 'REG_RBP', 'REG_RSI',
+     'REG_RDI', 'REG_R8', 'REG_R9', 'REG_R10', 'REG_R11', 'REG_R12', 'REG_R13',
+     'REG_R14', 'REG_R15'},
+    {'REG_EAX', 'REG_ECX', 'REG_EDX', 'REG_EBX', 'REG_ESP', 'REG_EBP', 'REG_ESI',
+     'REG_EDI', 'REG_R8D', 'REG_R9D', 'REG_R10D', 'REG_R11D', 'REG_R12D', 'REG_R13D',
+     'REG_R14D', 'REG_R15D'},
+    {'REG_AX', 'REG_CX', 'REG_DX', 'REG_BX', 'REG_SP', 'REG_BP', 'REG_SI',
+     'REG_DI', 'REG_R8W', 'REG_R9W', 'REG_R10W', 'REG_R11W', 'REG_R12W', 'REG_R13W',
+     'REG_R14W', 'REG_R15W'},
+    {'REG_AL', 'REG_CL', 'REG_DL', 'REG_BL', 'REG_AH', 'REG_CH', 'REG_DH',
+     'REG_BH', 'REG_R8L', 'REG_R9L', 'REG_R10L', 'REG_R11L', 'REG_R12L', 'REG_R13L',
+     'REG_R14L', 'REG_R15L'},
+)))
+
+def get_register_class(reg):
+    # type: Union[str, int] -> Optional[FrozenSet[str]]
+
+    if isinstance(reg, int):
+        reg = _global_sym_dict.get(reg)
+
+    for cls in _REGISTER_CLASSES:
+        if reg in cls:
+            return cls
+
+    return None
+
 def get_name(val,sym_dict,mem_offset):
     if val >= mem_offset:
         return 'mem_' + str(val - mem_offset)
@@ -163,7 +197,6 @@ def get_name(val,sym_dict,mem_offset):
         return 'delim'
     else:
         return sym_dict[val]
-
 
 def get_percentage_error(predicted, actual):
 
@@ -180,6 +213,8 @@ def get_percentage_error(predicted, actual):
 
     return errors
 
+_global_sym_dict, _global_mem_start = get_sym_dict()
+_global_sym_dict_rev = {v:k for (k, v) in _global_sym_dict.items()}
 
 #calculating static properties of instructions and basic blocks
 class Instruction:
@@ -197,12 +232,102 @@ class Instruction:
         self.hidden = None
         self.tokens = None
 
+    def clone(self):
+        return Instruction(self.opcode, self.srcs[:], self.dsts[:], self.num)
 
     def print_instr(self):
         print self.num, self.opcode, self.srcs, self.dsts
         num_parents = [parent.num for parent in self.parents]
         num_children = [child.num for child in self.children]
         print num_parents, num_children
+
+    def __str__(self):
+        return self.intel
+
+    def has_mem(self):
+        return any(operand >= _global_mem_start for operand in self.srcs + self.dsts)
+
+    def is_idempotent(self):
+        return len(set(self.srcs) & set(self.dsts)) == 0
+
+class InstructionReplacer(object):
+    def __init__(self, regexp_intel, replacement_intel,
+                 replacement_srcs, replacement_dsts):
+        self.regexp_intel = re.compile(regexp_intel)
+        self.replacement_intel = replacement_intel
+        self.replacement_srcs = replacement_srcs
+        self.replacement_dsts = replacement_dsts
+
+    def replace(self, instr, unused_registers):
+        if instr.has_mem():
+            return None
+
+        match = self.regexp_intel.match(instr.intel)
+        if match is None:
+            return None
+
+        unused_set = None
+        for operand in instr.dsts:
+            op_cls = get_register_class(operand)
+            if op_cls is None:
+                continue
+
+            m_unused_set = op_cls & unused_registers
+            if unused_set is not None:
+                assert unused_set == m_unused_set, 'Did not expect mix of operand types'
+
+            unused_set = m_unused_set
+
+        if not unused_set:
+            return None
+
+        unused = list(unused_set)
+        unused_intel = list(map(lambda x: x[x.rindex('_')+1:].lower(), unused))
+        unused_token = list(map(_global_sym_dict_rev.get, unused))
+
+        new_instr = instr.clone()
+        new_instr.intel = self.replacement_intel.format(
+            unused=unused_intel,
+            **match.groupdict()
+        )
+
+        new_instr.srcs = list(map(int, map(lambda x: x.format(
+            srcs=instr.srcs,
+            dsts=instr.dsts,
+            unused=unused_token,
+        ), self.replacement_srcs)))
+
+        new_instr.dsts = list(map(int, map(lambda x: x.format(
+            srcs=instr.srcs,
+            dsts=instr.dsts,
+            unused=unused_token,
+        ), self.replacement_dsts)))
+
+        return new_instr
+
+def _two_way_replacer(opcode):
+    return InstructionReplacer(
+        r'{}\s+(?P<op1>\w+),\s+(?P<op2>\w+)'.format(opcode),
+        r'{} {{unused[0]}}, {{op2}}'.format(opcode),
+        ['{srcs[0]}', '{unused[0]}'],
+        ['{unused[0]}'],
+    )
+
+def _three_way_replacer(opcode):
+    return InstructionReplacer(
+        r'{}\s+(?P<op1>\w+),\s+(?P<op2>\w+),\s+(?P<op3>\w+)'.format(opcode),
+        r'{} {{unused[0]}}, {{op2}}, {{op3}}'.format(opcode),
+        ['{srcs[0]}', '{srcs[1]}'],
+        ['{unused[0]}'],
+    )
+
+replacers = (
+    _two_way_replacer('add'), _two_way_replacer('sub'), _two_way_replacer('and'),
+    _two_way_replacer('or'), _two_way_replacer('xor'), _two_way_replacer('shl'),
+    _two_way_replacer('shr'), _two_way_replacer('sar'),
+    _three_way_replacer('imul'),
+)
+
 
 class BasicBlock:
 
@@ -295,14 +420,193 @@ class BasicBlock:
             self.find_defs(n)
             self.find_uses(n)
 
+    def get_dfs(self):
+        dfs = collections.defaultdict(set)
+
+        for instr in self.instrs[::-1]:
+            frontier = {instr}
+            while frontier:
+                n = frontier.pop()
+                if n in dfs:
+                    dfs[instr] |= dfs[n]
+                    continue
+
+                for c in n.children:
+                    if c in dfs[instr] or c in frontier:
+                        continue
+                    frontier.add(c)
+                dfs[instr].add(n)
+
+        return dfs
+
+    def transitive_closure(self):
+        dfs = self.get_dfs()
+        for instr in self.instrs:
+            transitive_children = set(n for c in instr.children for n in dfs[c])
+            instr.children = list(transitive_children)
+            for child in instr.children:
+                if instr not in child.parents:
+                    child.parents.append(instr)
+
+    def transitive_reduction(self):
+        dfs = self.get_dfs()
+        for instr in self.instrs:
+
+            transitively_reachable_children = set()
+            for child in instr.children:
+                transitively_reachable_children |= dfs[child] - {child}
+
+            for child in transitively_reachable_children:
+                if child in instr.children:
+                    instr.children.remove(child)
+                    child.parents.remove(instr)
+
+    def random_forward_edges(self, frequency):
+        '''Add forward-facing edges at random to the instruction graph.
+
+        There are n^2/2 -1 considered edges (where n is the number of
+        instructions), so to add 5 edges in expectation, one would
+        provide frequency=5/(n^2/2-1)
+
+        '''
+        n_edges_added = 0
+        for head_idx, head_instr in enumerate(self.instrs[:-1]):
+            for tail_instr in self.instrs[head_idx+1:]:
+                if random.random() < frequency:
+                    if tail_instr not in head_instr.children:
+                        head_instr.children.append(tail_instr)
+                        tail_instr.parents.append(head_instr)
+                        n_edges_added += 1
+
+        return n_edges_added
+
+    def remove_edges(self):
+        for instr in self.instrs:
+            instr.parents = []
+            instr.children = []
+
+    def linearize_edges(self):
+        for fst, snd in zip(self.instrs, self.instrs[1:]):
+            if snd not in fst.children:
+                fst.children.append(snd)
+            if fst not in snd.parents:
+                snd.parents.append(fst)
+
+    def find_leafs(self):
+        leafs = []
+        for instr in self.instrs:
+            if len(instr.parents) == 0:
+                leafs.append(instr)
+        return leafs
 
     def find_roots(self):
+
         roots = []
         for instr in self.instrs:
             if len(instr.children) == 0:
                 roots.append(instr)
 
         return roots
+
+    def gen_reorderings(self, single_perm=False):
+        self.create_dependencies()
+
+        def _gen_reorderings(prefix, schedulable_instructions, mem_q):
+            mem_q = mem_q[:]
+            has_pending_mem = any(instr.has_mem() for instr in schedulable_instructions)
+            has_activated_mem = mem_q and all(parent in prefix for parent in mem_q[0].parents)
+
+            if has_activated_mem and not has_pending_mem:
+                schedulable_instructions.append(mem_q.pop(0))
+
+            if len(schedulable_instructions) == 0:
+                return [prefix]
+
+            reorderings = []
+            def process_index(i):
+                instr = schedulable_instructions[i]
+                # pop this instruction
+                rest_scheduleable_instructions = schedulable_instructions[:i] + schedulable_instructions[i+1:]
+                rest_prefix = prefix + [instr]
+
+                # add all activated children
+                for child in instr.children:
+                    if all(parent in rest_prefix for parent in child.parents):
+                        if not child.has_mem():
+                            rest_scheduleable_instructions.append(child)
+
+                reorderings.extend(_gen_reorderings(rest_prefix, rest_scheduleable_instructions, mem_q))
+
+            if single_perm:
+                process_index(random.randrange(len(schedulable_instructions)))
+            else:
+                for i in range(len(schedulable_instructions)):
+                    process_index(i)
+
+            return reorderings
+
+        return _gen_reorderings(
+            [],
+            [i for i in self.find_leafs() if not i.has_mem()],
+            [i for i in self.instrs if i.has_mem()],
+        )
+
+    def draw(self, to_file=False, file_name=None, view=True):
+        if to_file and not file_name:
+            file_name = tempfile.NamedTemporaryFile(suffix='.gv').name
+
+        from graphviz import Digraph
+
+        dot = Digraph()
+        for instr in self.instrs:
+            dot.node(str(id(instr)), str(instr))
+            for child in instr.children:
+                dot.edge(str(id(instr)), str(id(child)))
+
+        if to_file:
+            dot.render(file_name, view=view)
+            return dot, file_name
+        else:
+            return dot
+
+def generate_duplicates(instrs, max_n_dups):
+    for idx in range(len(instrs) - 1, -1, -1):
+        instr = instrs[idx]
+        unused_regs = unused_registers_at_point(instrs, idx)
+        for replacer in replacers:
+            res = replacer.replace(instr, unused_regs)
+            if res is None:
+                continue
+
+            augmentations = []
+            new_instrs = instrs[:]
+            for i in range(max_n_dups):
+                unused_regs = unused_registers_at_point(new_instrs, idx)
+                aug_instr = replacer.replace(instr, unused_regs)
+                if not aug_instr:
+                    break
+                new_instrs.insert(idx, aug_instr)
+                augmentations.append(new_instrs[:])
+
+            return augmentations
+
+    return []
+
+
+def unused_registers_at_point(instrs, idx):
+    if idx < 0 or idx > len(instrs):
+        raise ValueError('{} is not a valid index'.format(idx))
+
+    unused_regs = set()
+    for cls in _REGISTER_CLASSES:
+        unused_regs |= cls
+    for instr in instrs[idx:]:
+        for src in instr.srcs:
+            unused_regs -= {_global_sym_dict.get(src)}
+        for dst in instr.dsts:
+            unused_regs -= {_global_sym_dict.get(dst)}
+
+    return unused_regs
 
 
 def create_basicblock(tokens):

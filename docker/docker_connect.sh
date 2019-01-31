@@ -32,9 +32,28 @@ if [[ -z "${CONTAINER}" ]]; then
 	exit 1
     fi
 
+    # try to start the local X server if possible
+    if [ ! -d "/tmp/.X11-unix" ]; then
+	open -a XQuartz || :
+    fi
+
+    # allow local connections to X server (i.e. from Docker)
+    xhost + "${HOSTNAME}" || :
+
+    FAKE_X_SERVER=
+    if [ ! -d "/tmp/.X11-unix" ]; then
+	FAKE_X_SERVER="yep"
+	mkdir /tmp/.X11-unix
+    fi
+
     docker_compose up -d --force-recreate
 
     CONTAINER="$(container_id)"
+
+    if [[ "${FAKE_X_SERVER}" == "yep" ]]; then
+	# hide the evidence
+	rmdir /tmp/.X11-unix
+    fi
 
     sudo docker exec -u ithemal "${CONTAINER}" bash -lc 'ithemal/build_all.sh'
 fi
