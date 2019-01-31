@@ -175,6 +175,9 @@ if __name__ == '__main__':
     not_finished = 0
 
 
+    total_time = 0.0
+    total_bbs = 0
+
     for row in rows:
 
         if row[0] == None:
@@ -201,8 +204,9 @@ if __name__ == '__main__':
             with open('out.nasm','w+') as f:
                 f.writelines(write_lines)
             proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            start_time = time.time()
             result = wait_timeout(proc, 10)
-
+            end_time = time.time()
 
             if result != None:
 
@@ -238,6 +242,10 @@ if __name__ == '__main__':
                             if mode != None:
                                 if not args.tp:
                                     insert_time_value(cnx, row[1], mode, args.arch, args.ttable)
+                                else:
+                                    total_time += end_time - start_time
+                                    total_bbs += 1
+                                    print float(total_bbs)/total_time
                                 success += 1
                     else:
                         for line in final_bb:
