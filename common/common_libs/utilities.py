@@ -569,6 +569,9 @@ class BasicBlock:
         else:
             return dot
 
+    def has_mem(self):
+        return any(map(Instruction.has_mem, self.instrs))
+
 def generate_duplicates(instrs, max_n_dups):
     for idx in range(len(instrs) - 1, -1, -1):
         instr = instrs[idx]
