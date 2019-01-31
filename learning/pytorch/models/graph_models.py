@@ -2,6 +2,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
+from enum import Enum
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,7 +12,7 @@ import torch.autograd as autograd
 import torch.optim as optim
 import math
 import numpy as np
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Union, Tuple
 from . import model_utils
 
 class AbstractGraphModule(nn.Module):
@@ -57,10 +58,12 @@ class AbstractGraphModule(nn.Module):
         model_utils.load_shared_params(self, params)
 
     def init_hidden(self):
-        # type: () -> Tuple[autograd.Variable, autograd.Variable]
+        # type: () -> Tuple[nn.Parameter, nn.Parameter]
 
-        return (autograd.Variable(torch.zeros(1, 1, self.hidden_size)),
-                autograd.Variable(torch.zeros(1, 1, self.hidden_size)))
+        return (
+            nn.Parameter(torch.zeros(1, 1, self.hidden_size, requires_grad=True)),
+            nn.Parameter(torch.zeros(1, 1, self.hidden_size, requires_grad=True)),
+        )
 
     def remove_refs(self, item):
         # type: (dt.DataItem) -> None
@@ -251,47 +254,128 @@ class GraphNN(AbstractGraphModule):
 
         return final_pred.squeeze()
 
-class RNNs(AbstractGraphModule):
+class RnnHierarchyType(Enum):
+    NONE = 0
+    DENSE =  1
+    MULTISCALE = 2
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_hierarchical, connect_tokens, dense_hierarchical, multiscale):
-        # type: (int, int, int, bool, bool, bool, bool) -> None
-        super(RNNs, self).__init__(embedding_size, hidden_size, num_classes)
+class RnnType(Enum):
+    RNN = 0
+    LSTM = 1
+    GRU = 2
 
-        self.use_hierarchical = use_hierarchical
-        self.connect_tokens = connect_tokens
-        self.dense_hierarchical = dense_hierarchical
-        self.multiscale = multiscale
+RnnParameters = NamedTuple('RnnParameters', [
+    ('embedding_size', int),
+    ('hidden_size', int),
+    ('num_classes', int),
+    ('connect_tokens', bool),
+    ('skip_connections', bool),
+    ('learn_init', bool),
+    ('hierarchy_type', RnnHierarchyType),
+    ('rnn_type', RnnType),
+])
 
-        #lstm - input size, hidden size, num layers
-        self.lstm_token = nn.LSTM(self.embedding_size, self.hidden_size)
-        self.lstm_ins = nn.LSTM(self.hidden_size, self.hidden_size)
 
-        #linear layer for final regression result
+class RNN(AbstractGraphModule):
+
+    def __init__(self, params):
+        # type: (RnnParameters) -> None
+        super(RNN, self).__init__(params.embedding_size, params.hidden_size, params.num_classes)
+
+        self.params = params
+
+        if params.rnn_type == RnnType.RNN:
+            self.token_rnn = nn.RNN(self.embedding_size, self.hidden_size)
+            self.instr_rnn = nn.RNN(self.hidden_size, self.hidden_size)
+        elif params.rnn_type == RnnType.LSTM:
+            self.token_rnn = nn.LSTM(self.embedding_size, self.hidden_size)
+            self.instr_rnn = nn.LSTM(self.hidden_size, self.hidden_size)
+        elif params.rnn_type == RnnType.GRU:
+            self.token_rnn = nn.GRU(self.embedding_size, self.hidden_size)
+            self.instr_rnn = nn.GRU(self.hidden_size, self.hidden_size)
+        else:
+            raise ValueError('Unknown RNN type {}'.format(params.rnn_type))
+
+        self._token_init = self.rnn_init_hidden()
+        self._instr_init = self.rnn_init_hidden()
+
         self.linear = nn.Linear(self.hidden_size, self.num_classes)
+
+    def rnn_init_hidden(self):
+        # type: () -> Union[Tuple[nn.Parameter, nn.Parameter], nn.Parameter]
+
+        hidden = self.init_hidden()
+        for h in hidden:
+            torch.nn.init.kaiming_uniform_(h)
+
+        if self.params.rnn_type == RnnType.LSTM:
+            return hidden
+        else:
+            return hidden[0]
+
+    def get_token_init(self):
+        # type: () -> torch.tensor
+        if self.params.learn_init:
+            return self._token_init
+        else:
+            return self.rnn_init_hidden()
+
+    def get_instr_init(self):
+        # type: () -> torch.tensor
+        if self.params.learn_init:
+            return self._instr_init
+        else:
+            return self.rnn_init_hidden()
 
     def forward(self, item):
         # type: (dt.DataItem) -> torch.tensor
 
-        tokens_h_c = self.init_hidden()
-        instructions_h_c = self.init_hidden()
+        token_state = self.get_token_init()
 
-        for token_idxs in item.x:
-            if not self.connect_tokens:
-                tokens_h_c = self.init_hidden()
+        token_output_map = {} # type: Dict[ut.Instruction, torch.tensor]
+        token_state_map = {} # type: Dict[ut.Instruction, torch.tensor]
 
-            tokens = self.final_embeddings(torch.LongTensor(token_idxs)).unsqueeze(1)
-            (token_in_h, token_in_c) = tokens_h_c
-            if self.multiscale:
-                token_in_h = token_in_h + instructions_h_c[0]
-            output, tokens_h_c = self.lstm_token(tokens, (token_in_h, token_in_c))
+        for instr, token_inputs in zip(item.block.instrs, item.x):
+            if not self.params.connect_tokens:
+                token_state = self.get_token_init()
 
-            if self.use_hierarchical:
-                if self.dense_hierarchical:
-                    _, instructions_h_c = self.lstm_token(output, instructions_h_c)
-                else:
-                    _, instructions_h_c = self.lstm_token(tokens_h_c[0], instructions_h_c)
+            if self.params.skip_connections and self.params.hierarchy_type == RnnHierarchyType.NONE:
+                for parent in instr.parents:
+                    parent_state = token_state_map[parent]
 
-        if self.use_hierarchical:
-            return self.linear(instructions_h_c[0].squeeze()).squeeze()
+                    if self.params.rnn_type == RnnType.LSTM:
+                        token_state = (
+                            token_state[0] + parent_state[0],
+                            token_state[1] + parent_state[1],
+                        )
+                    else:
+                        token_state = token_state + parent_state
+
+            tokens = self.final_embeddings(torch.LongTensor(token_inputs)).unsqueeze(1)
+            output, state = self.token_rnn(tokens, token_state)
+            token_output_map[instr] = output
+            token_state_map[instr] = state
+
+        if self.params.hierarchy_type == RnnHierarchyType.NONE:
+            final_state_packed = token_state_map[item.block.instrs[-1]]
+
+            if self.params.rnn_type == RnnType.LSTM:
+                final_state = final_state_packed[0]
+            else:
+                final_state = final_state_packed
+            return self.linear(final_state.squeeze()).squeeze()
+
+        if self.params.hierarchy_type == RnnHierarchyType.DENSE:
+            instr_chain = torch.stack([state for instr in item.block.instrs for state in token_output_map[instr]])
+        elif self.params.hierarchy_type == RnnHierarchyType.MULTISCALE:
+            instr_chain = torch.stack([token_output_map[instr][-1] for instr in item.block.instrs])
         else:
-            return self.linear(tokens_h_c[0].squeeze()).squeeze()
+            raise ValueError('Unknown hierarchy type {}'.format(self.params.hierarchy_type))
+
+        _, final_state_packed = self.instr_rnn(instr_chain, self.get_instr_init())
+        if self.params.rnn_type == RnnType.LSTM:
+            final_state = final_state_packed[0]
+        else:
+            final_state = final_state_packed
+
+        return self.linear(final_state.squeeze()).squeeze()
