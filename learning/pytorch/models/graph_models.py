@@ -258,6 +258,8 @@ class RnnHierarchyType(Enum):
     NONE = 0
     DENSE =  1
     MULTISCALE = 2
+    LINEAR_MODEL = 3
+    MOP_MODEL = 4
 
 class RnnType(Enum):
     RNN = 0
@@ -327,6 +329,17 @@ class RNN(AbstractGraphModule):
         else:
             return self.rnn_init_hidden()
 
+    def pred_of_instr_chain(self, instr_chain):
+        # type: (torch.tensor) -> torch.tensor
+        _, final_state_packed = self.instr_rnn(instr_chain, self.get_instr_init())
+        if self.params.rnn_type == RnnType.LSTM:
+            final_state = final_state_packed[0]
+        else:
+            final_state = final_state_packed
+
+        return self.linear(final_state.squeeze()).squeeze()
+
+
     def forward(self, item):
         # type: (dt.DataItem) -> torch.tensor
 
@@ -365,17 +378,20 @@ class RNN(AbstractGraphModule):
                 final_state = final_state_packed
             return self.linear(final_state.squeeze()).squeeze()
 
+        instr_chain = torch.stack([token_output_map[instr][-1] for instr in item.block.instrs])
+
         if self.params.hierarchy_type == RnnHierarchyType.DENSE:
             instr_chain = torch.stack([state for instr in item.block.instrs for state in token_output_map[instr]])
-        elif self.params.hierarchy_type == RnnHierarchyType.MULTISCALE:
-            instr_chain = torch.stack([token_output_map[instr][-1] for instr in item.block.instrs])
-        else:
-            raise ValueError('Unknown hierarchy type {}'.format(self.params.hierarchy_type))
+        elif self.params.hierarchy_type == RnnHierarchyType.LINEAR_MODEL:
+            return sum(
+                self.linear(st).squeeze()
+                for st in instr_chain
+            )
+        elif self.params.hierarchy_type == RnnHierarchyType.MOP_MODEL:
+            preds = sum(
+                self.pred_of_instr_chain(torch.stack([token_output_map[instr][-1] for instr in instrs]))
+                for instrs in item.block.paths_of_block()
+            )
+            return torch.max(preds)[0]
 
-        _, final_state_packed = self.instr_rnn(instr_chain, self.get_instr_init())
-        if self.params.rnn_type == RnnType.LSTM:
-            final_state = final_state_packed[0]
-        else:
-            final_state = final_state_packed
-
-        return self.linear(final_state.squeeze()).squeeze()
+        return self.pred_of_instr_chain(instr_chain)

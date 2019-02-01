@@ -111,6 +111,8 @@ def main():
     rnn_hierarchy_type_group.add_argument('--rnn-token', action='store_const', const=md.RnnHierarchyType.NONE, dest='rnn_hierarchy_type')
     rnn_hierarchy_type_group.add_argument('--rnn-dense', action='store_const', const=md.RnnHierarchyType.DENSE, dest='rnn_hierarchy_type')
     rnn_hierarchy_type_group.add_argument('--rnn-multiscale', action='store_const', const=md.RnnHierarchyType.MULTISCALE, dest='rnn_hierarchy_type')
+    rnn_hierarchy_type_group.add_argument('--rnn-linear-model', action='store_const', const=md.RnnHierarchyType.LINEAR_MODEL, dest='rnn_hierarchy_type')
+    rnn_hierarchy_type_group.add_argument('--rnn-mop', action='store_const', const=md.RnnHierarchyType.MOP_MODEL, dest='rnn_hierarchy_type')
     parser.set_defaults(rnn_hierarchy_type=md.RnnHierarchyType.MULTISCALE)
 
     parser.add_argument('--rnn-skip-connections', action='store_true', default=False)
