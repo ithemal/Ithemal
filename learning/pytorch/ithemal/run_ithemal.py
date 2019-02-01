@@ -91,6 +91,7 @@ def main():
                         default=os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch', 'inputs', 'embeddings', 'code_delim.emb'))
     parser.add_argument('--embed-size', help='The size of embedding to use (default: 256)', default=256, type=int)
     parser.add_argument('--hidden-size', help='The size of hidden layer to use (default: 256)', default=256, type=int)
+    parser.add_argument('--no-mem', help='Remove all instructions with memory', default=False, action='store_true')
 
     # edge/misc arguments
     parser.add_argument('--random-edge-freq', type=float, default=0.0, help='The fraction of instructions to add an additional random forward edge to (can be >1)')
@@ -100,10 +101,21 @@ def main():
     parser.add_argument('--linear-embeddings', action='store_true', default=False, help='Use linear embeddings instead of LSTM')
 
     parser.add_argument('--use-rnn', action='store_true', default=False)
-    parser.add_argument('--rnn-hierarchical', action='store_true', default=False)
+    rnn_type_group = parser.add_mutually_exclusive_group()
+    rnn_type_group.add_argument('--rnn-normal', action='store_const', const=md.RnnType.RNN, dest='rnn_type')
+    rnn_type_group.add_argument('--rnn-lstm', action='store_const', const=md.RnnType.LSTM, dest='rnn_type')
+    rnn_type_group.add_argument('--rnn-gru', action='store_const', const=md.RnnType.GRU, dest='rnn_type')
+    parser.set_defaults(rnn_type=md.RnnType.LSTM)
+
+    rnn_hierarchy_type_group = parser.add_mutually_exclusive_group()
+    rnn_hierarchy_type_group.add_argument('--rnn-token', action='store_const', const=md.RnnHierarchyType.NONE, dest='rnn_hierarchy_type')
+    rnn_hierarchy_type_group.add_argument('--rnn-dense', action='store_const', const=md.RnnHierarchyType.DENSE, dest='rnn_hierarchy_type')
+    rnn_hierarchy_type_group.add_argument('--rnn-multiscale', action='store_const', const=md.RnnHierarchyType.MULTISCALE, dest='rnn_hierarchy_type')
+    parser.set_defaults(rnn_hierarchy_type=md.RnnHierarchyType.MULTISCALE)
+
+    parser.add_argument('--rnn-skip-connections', action='store_true', default=False)
+    parser.add_argument('--rnn-learn-init', action='store_true', default=False)
     parser.add_argument('--rnn-connect-tokens', action='store_true', default=False)
-    parser.add_argument('--rnn-dense', action='store_true', default=False)
-    parser.add_argument('--rnn-multiscale', action='store_true', default=False)
 
     def add_edge_ablation(ablation):
         # type: (EdgeAblationType) -> None
@@ -172,10 +184,12 @@ def main():
         hidden_size=args.hidden_size,
         linear_embeddings=args.linear_embeddings,
         use_rnn=args.use_rnn,
-        rnn_hierarchical=args.rnn_hierarchical,
+        rnn_type=args.rnn_type,
+        rnn_hierarchy_type=args.rnn_hierarchy_type,
         rnn_connect_tokens=args.rnn_connect_tokens,
-        rnn_dense=args.rnn_dense,
-        rnn_multiscale=args.rnn_multiscale,
+        rnn_skip_connections=args.rnn_skip_connections,
+        rnn_learn_init=args.rnn_learn_init,
+        no_mem=args.no_mem,
     )
 
     if args.subparser == 'train':

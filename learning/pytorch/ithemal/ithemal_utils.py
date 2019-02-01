@@ -30,10 +30,12 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('hidden_size', int),
     ('linear_embeddings', bool),
     ('use_rnn', bool),
-    ('rnn_hierarchical', bool),
+    ('rnn_type', md.RnnType),
+    ('rnn_hierarchy_type', md.RnnHierarchyType),
     ('rnn_connect_tokens', bool),
-    ('rnn_dense', bool),
-    ('rnn_multiscale', bool),
+    ('rnn_skip_connections', bool),
+    ('rnn_learn_init', bool),
+    ('no_mem', bool),
 ])
 
 TrainParameters = NamedTuple('TrainParameters', [
@@ -90,6 +92,11 @@ def ablate_data(data, edge_ablation_types, random_edge_freq):
 def load_data(params):
     # type: (BaseParameters) -> dt.DataCost
     data = dt.load_dataset(params.embed_file, data_savefile=params.data)
+    if params.no_mem:
+        data.data = [d for d in data.data if not d.block.has_mem()]
+        data.train = [d for d in data.train if not d.block.has_mem()]
+        data.test = [d for d in data.test if not d.block.has_mem()]
+
     ablate_data(data, params.edge_ablation_types, params.random_edge_freq)
     return data
 
@@ -97,11 +104,17 @@ def load_model(params, data):
     # type: (BaseParameters, dt.DataCost) -> md.AbstractGraphModule
 
     if params.use_rnn:
-        model = md.RNNs(
-            embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
-            use_hierarchical=params.rnn_hierarchical, connect_tokens=params.rnn_connect_tokens, dense_hierarchical=params.rnn_dense,
-            multiscale=params.rnn_multiscale
+        rnn_params = md.RnnParameters(
+            embedding_size=params.embed_size,
+            hidden_size=params.hidden_size,
+            num_classes=1,
+            connect_tokens=params.rnn_connect_tokens,
+            skip_connections=params.rnn_skip_connections,
+            hierarchy_type=params.rnn_hierarchy_type,
+            rnn_type=params.rnn_type,
+            learn_init=params.rnn_learn_init,
         )
+        model = md.RNN(rnn_params)
     else:
         model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
                            use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
