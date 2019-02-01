@@ -198,7 +198,10 @@ endfunction (add_sample_standalone)
 configure_DynamoRIO_global(OFF ON)
 
 include_directories(common)
+
 add_sample_client(static  "static/static.c;static/static_dump.c;static/static_logic.c;common/dr_utility.c;common/code_embedding.c" "drcontainers")
+
+add_sample_standalone(disassembler "disassembler/disassemble.c")
 
 #include_directories(timing)
 #add_sample_client(timing  "timing/timing.c;timing/timing_logic.c;timing/timing_dump.c;common/dr_utility.c;common/sqlite3_impl.c;common/code_embedding.c" "")
