@@ -388,10 +388,10 @@ class RNN(AbstractGraphModule):
                 for st in instr_chain
             )
         elif self.params.hierarchy_type == RnnHierarchyType.MOP_MODEL:
-            preds = sum(
+            preds = torch.stack([
                 self.pred_of_instr_chain(torch.stack([token_output_map[instr][-1] for instr in instrs]))
                 for instrs in item.block.paths_of_block()
-            )
-            return torch.max(preds)[0]
+            ])
+            return torch.max(preds)
 
         return self.pred_of_instr_chain(instr_chain)
