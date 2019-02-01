@@ -551,6 +551,18 @@ class BasicBlock:
             [i for i in self.instrs if i.has_mem()],
         )
 
+    def paths_of_block(self):
+        # type: () -> List[List[ut.Instruction]]
+        def paths_of_instr(i, parents):
+            # type: (ut.Instruction, List[ut.Instruction]) -> List[List[ut.Instruction]]
+            new_parents = parents + [i]
+            if i.children:
+                return sum((paths_of_instr(c, new_parents) for c in i.children), [])
+            else:
+                return [new_parents]
+
+        return sum((paths_of_instr(i, []) for i in self.find_leafs()), [])
+
     def draw(self, to_file=False, file_name=None, view=True):
         if to_file and not file_name:
             file_name = tempfile.NamedTemporaryFile(suffix='.gv').name
