@@ -139,11 +139,10 @@ class GraphNN(AbstractGraphModule):
             hidden = self.create_graphlstm_rec(leaf)
             leaf_hidden.append(hidden[0].squeeze())
 
-        final_hidden = torch.zeros(self.hidden_size)
-        if len(leaf_hidden) > 0:
-            final_hidden = leaf_hidden[0]
-        for hidden in leaf_hidden:
-            final_hidden = self.reduction(final_hidden,hidden)
+        final_hidden = leaf_hidden[0]
+
+        for hidden in leaf_hidden[1:]:
+            final_hidden = self.reduction(final_hidden, hidden)
 
         return final_hidden
 
