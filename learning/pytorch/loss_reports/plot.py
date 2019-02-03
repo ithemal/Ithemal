@@ -248,7 +248,9 @@ def main():
     parser.add_argument('experiments', nargs='+')
     parser.add_argument('--names', nargs='+')
     parser.add_argument('--trainers', default=False, action='store_true')
+    parser.add_argument('--no-test', default=False, action='store_true')
     parser.add_argument('--raw-x', default=False, action='store_true')
+    parser.add_argument('--sort', default=False, action='store_true')
     parser.add_argument('--norm-epoch', default=False, action='store_true')
     parser.add_argument('--save')
 
@@ -256,7 +258,19 @@ def main():
 
     train_measurements, test_measurements, has_finished = get_measurements(args.experiments)
 
-    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, args.names, args.norm_epoch, args.min_y, args.max_y)
+    if args.no_test:
+        test_measurements = list(TestMeasurement(m.experiment_name, [], []) for m in test_measurements)
+
+    names = args.names
+
+    if args.sort:
+        idxs = np.argsort([-np.mean(m.losses) for m in train_measurements])
+        train_measurements = [train_measurements[i] for i in idxs]
+        test_measurements = [test_measurements[i] for i in idxs]
+        has_finished = [has_finished[i] for i in idxs]
+        names = [names[i] for i in idxs]
+
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, names, args.norm_epoch, args.min_y, args.max_y)
 
 if __name__ == '__main__':
     main()
