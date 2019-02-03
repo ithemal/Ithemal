@@ -196,19 +196,12 @@ class GraphNN(AbstractGraphModule):
         if instr.hidden != None:
             return instr.hidden
 
-        parent_hidden = []
-        for parent in instr.parents:
-            hidden = self.create_graphlstm_rec(parent)
-            parent_hidden.append(hidden)
+        parent_hidden = [self.create_graphlstm_rec(parent) for parent in instr.parents]
+        (h, c) = parent_hidden[0]
+        for hidden in parent_hidden[1:]:
+            h = self.reduction(h, hidden[0])
+            c = self.reduction(c, hidden[1])
 
-        in_hidden_ins = self.init_hidden()
-        if len(parent_hidden) > 0:
-            in_hidden_ins = parent_hidden[0]
-        h = in_hidden_ins[0]
-        c = in_hidden_ins[1]
-        for hidden in parent_hidden:
-            h = self.reduction(h,hidden[0])
-            c = self.reduction(c,hidden[1])
         in_hidden_ins = (h,c)
 
         ins_embed = self.get_instruction_embedding(instr, False)
