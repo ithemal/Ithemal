@@ -132,17 +132,17 @@ class GraphNN(AbstractGraphModule):
     def create_graphlstm(self, block):
         # type: (ut.BasicBlock) -> torch.tensor
 
-        roots = block.find_roots()
+        leaves = block.find_leaves()
 
-        root_hidden = []
-        for root in roots:
-            hidden = self.create_graphlstm_rec(root)
-            root_hidden.append(hidden[0].squeeze())
+        leaf_hidden = []
+        for leaf in leaves:
+            hidden = self.create_graphlstm_rec(leaf)
+            leaf_hidden.append(hidden[0].squeeze())
 
         final_hidden = torch.zeros(self.hidden_size)
-        if len(root_hidden) > 0:
-            final_hidden = root_hidden[0]
-        for hidden in root_hidden:
+        if len(leaf_hidden) > 0:
+            final_hidden = leaf_hidden[0]
+        for hidden in leaf_hidden:
             final_hidden = self.reduction(final_hidden,hidden)
 
         return final_hidden

@@ -492,21 +492,20 @@ class BasicBlock:
             if fst not in snd.parents:
                 snd.parents.append(fst)
 
-    def find_leafs(self):
-        leafs = []
-        for instr in self.instrs:
-            if len(instr.parents) == 0:
-                leafs.append(instr)
-        return leafs
-
     def find_roots(self):
-
         roots = []
         for instr in self.instrs:
-            if len(instr.children) == 0:
+            if len(instr.parents) == 0:
                 roots.append(instr)
-
         return roots
+
+    def find_leaves(self):
+        leaves = []
+        for instr in self.instrs:
+            if len(instr.children) == 0:
+                leaves.append(instr)
+
+        return leaves
 
     def gen_reorderings(self, single_perm=False):
         self.create_dependencies()
@@ -547,7 +546,7 @@ class BasicBlock:
 
         return _gen_reorderings(
             [],
-            [i for i in self.find_leafs() if not i.has_mem()],
+            [i for i in self.find_roots() if not i.has_mem()],
             [i for i in self.instrs if i.has_mem()],
         )
 
@@ -561,7 +560,7 @@ class BasicBlock:
             else:
                 return [new_parents]
 
-        return sum((paths_of_instr(i, []) for i in self.find_leafs()), [])
+        return sum((paths_of_instr(i, []) for i in self.find_roots()), [])
 
     def draw(self, to_file=False, file_name=None, view=True):
         if to_file and not file_name:
