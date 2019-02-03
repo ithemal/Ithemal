@@ -25,6 +25,7 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('predict_log', bool),
     ('no_residual', bool),
     ('no_dag_rnn', bool),
+    ('dag_reduction', Callable[[torch.tensor, torch.tensor], torch.tensor]),
     ('edge_ablation_types', List[EdgeAblationType]),
     ('embed_size', int),
     ('hidden_size', int),
@@ -118,7 +119,7 @@ def load_model(params, data):
     else:
         model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
                            use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
-                           use_dag_rnn=not params.no_dag_rnn,
+                           use_dag_rnn=not params.no_dag_rnn, reduction=params.dag_reduction,
         )
 
     model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)

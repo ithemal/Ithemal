@@ -119,6 +119,11 @@ def main():
     parser.add_argument('--rnn-learn-init', action='store_true', default=False)
     parser.add_argument('--rnn-connect-tokens', action='store_true', default=False)
 
+    dag_reduction_group = parser.add_mutually_exclusive_group()
+    dag_reduction_group.add_argument('--dag-add-reduction', action='store_const', const=torch.add, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-max-reduction', action='store_const', const=torch.max, dest='dag_reduction')
+    parser.set_defaults(dag_reduction=torch.max)
+
     def add_edge_ablation(ablation):
         # type: (EdgeAblationType) -> None
         parser.add_argument('--{}'.format(ablation.value), action='append_const', dest='edge_ablations', const=ablation)
@@ -181,6 +186,7 @@ def main():
         predict_log=args.predict_log,
         no_residual=args.no_residual,
         no_dag_rnn=args.no_dag_rnn,
+        dag_reduction=args.dag_reduction,
         edge_ablation_types=args.edge_ablations or [],
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,

@@ -12,7 +12,7 @@ import torch.autograd as autograd
 import torch.optim as optim
 import math
 import numpy as np
-from typing import Any, Dict, List, NamedTuple, Optional, Union, Tuple
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union, Tuple
 from . import model_utils
 
 class AbstractGraphModule(nn.Module):
@@ -71,8 +71,8 @@ class AbstractGraphModule(nn.Module):
 
 class GraphNN(AbstractGraphModule):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True):
-        # type: (int, int, int, bool, bool, bool) -> None
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True, reduction=torch.max):
+        # type: (int, int, int, bool, bool, bool, Callable[[torch.tensor, torch.tensor], torch.tensor]) -> None
         super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
 
         assert use_residual or use_dag_rnn, 'Must use some type of predictor'
@@ -102,6 +102,8 @@ class GraphNN(AbstractGraphModule):
         self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
         self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
 
+        self.reduction = reduction
+
     def remove_refs(self, item):
         # type: (dt.DataItem) -> None
 
@@ -124,10 +126,6 @@ class GraphNN(AbstractGraphModule):
                 instr.tokens = [self.final_embeddings[token] for token in tokens]
             else:
                 instr.tokens = self.final_embeddings(torch.LongTensor(tokens))
-
-    def reduction(self, v1, v2):
-        # type: (torch.tensor, torch.tensor) -> torch.tensor
-        return torch.max(v1,v2)
 
     def create_graphlstm(self, block):
         # type: (ut.BasicBlock) -> torch.tensor
