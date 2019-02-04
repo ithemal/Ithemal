@@ -583,6 +583,19 @@ class BasicBlock:
     def has_mem(self):
         return any(map(Instruction.has_mem, self.instrs))
 
+    def has_no_dependencies(self):
+        return all(len(i.parents) == 0 and len(i.children) == 0 for i in self.instrs)
+
+    def has_linear_dependencies(self):
+        if len(self.instrs) <= 1:
+            return True
+
+        return (
+            len(self.instrs[0].children) == 1 and
+            all(len(i.parents) == 1 and len(i.children) == 1 for i in self.instrs[1:-1]) and
+            len(self.instrs[-1].parents) == 1
+        )
+
 def generate_duplicates(instrs, max_n_dups):
     for idx in range(len(instrs) - 1, -1, -1):
         instr = instrs[idx]

@@ -25,7 +25,7 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('predict_log', bool),
     ('no_residual', bool),
     ('no_dag_rnn', bool),
-    ('dag_reduction', Callable[[torch.tensor, torch.tensor], torch.tensor]),
+    ('dag_reduction', md.ReductionType),
     ('edge_ablation_types', List[EdgeAblationType]),
     ('embed_size', int),
     ('hidden_size', int),
@@ -37,6 +37,9 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('rnn_skip_connections', bool),
     ('rnn_learn_init', bool),
     ('no_mem', bool),
+    ('linear_dependencies', bool),
+    ('flat_dependencies', bool),
+    ('dag_nonlinear', bool),
 ])
 
 TrainParameters = NamedTuple('TrainParameters', [
@@ -56,6 +59,7 @@ TrainParameters = NamedTuple('TrainParameters', [
     ('momentum', float),
     ('nesterov', bool),
     ('weird_lr', bool),
+    ('lr_decay_rate', float),
 ])
 
 BenchmarkParameters = NamedTuple('BenchmarkParameters', [
@@ -93,12 +97,24 @@ def ablate_data(data, edge_ablation_types, random_edge_freq):
 def load_data(params):
     # type: (BaseParameters) -> dt.DataCost
     data = dt.load_dataset(params.embed_file, data_savefile=params.data)
+
+    def filter_data(filt):
+        # type: (Callable[[dt.DataItem], bool]) -> None
+        data.data = [d for d in data.data if filt(d)]
+        data.train = [d for d in data.train if filt(d)]
+        data.test = [d for d in data.test if filt(d)]
+
     if params.no_mem:
-        data.data = [d for d in data.data if not d.block.has_mem()]
-        data.train = [d for d in data.train if not d.block.has_mem()]
-        data.test = [d for d in data.test if not d.block.has_mem()]
+        filter_data(lambda d: not d.block.has_mem())
 
     ablate_data(data, params.edge_ablation_types, params.random_edge_freq)
+
+    if params.linear_dependencies:
+        filter_data(lambda d: d.block.has_linear_dependencies())
+
+    if params.flat_dependencies:
+        filter_data(lambda d: d.block.has_no_dependencies())
+
     return data
 
 def load_model(params, data):
@@ -120,6 +136,7 @@ def load_model(params, data):
         model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
                            use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
                            use_dag_rnn=not params.no_dag_rnn, reduction=params.dag_reduction,
+                           nonlinear=params.dag_nonlinear,
         )
 
     model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
