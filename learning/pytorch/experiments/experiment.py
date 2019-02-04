@@ -69,6 +69,15 @@ class Experiment(object):
         return Experiment.make_experiment_from_config_file(local_config_file_url, experiment_time=experiment_time)
 
     @staticmethod
+    def make_experiment_from_name(experiment_name):
+        # type: (str) -> Experiment
+        experiment_time = datetime.datetime.fromtimestamp(time.time()).isoformat()
+        remote_config_file_url = get_s3_url(EXPERIMENT_BUCKET, os.path.join(experiment_name, 'config.json'))
+        local_config_file_url = os.path.join(PYTORCH_HOME, 'saved', experiment_name, experiment_time, 'config.json')
+        subprocess.check_call(['aws', 's3', 'cp', remote_config_file_url, local_config_file_url])
+        return Experiment.make_experiment_from_config_file(local_config_file_url, experiment_time=experiment_time)
+
+    @staticmethod
     def make_experiment_from_config_file(config_file, experiment_time=None):
         # type: (str, Optional[str]) -> Experiment
 
@@ -234,10 +243,13 @@ class Experiment(object):
 def main():
     # type: () -> None
     parser = argparse.ArgumentParser(description='Run experiments, syncing with AWS')
-    parser.add_argument('experiment', help='Experiment file to run')
+    parser.add_argument('experiment', help='Experiment name or file to run')
     args = parser.parse_args()
 
-    experiment = Experiment.make_experiment_from_config_file(args.experiment)
+    if os.path.exists(args.experiment):
+        experiment = Experiment.make_experiment_from_config_file(args.experiment)
+    else:
+        experiment = Experiment.make_experiment_from_name(args.experiment)
 
     try:
         success = experiment.run_and_sync()
