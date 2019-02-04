@@ -69,10 +69,14 @@ class AbstractGraphModule(nn.Module):
         # type: (dt.DataItem) -> None
         pass
 
+class ReductionType(Enum):
+    MAX = 0
+    ADD = 1
+
 class GraphNN(AbstractGraphModule):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True, reduction=torch.max):
-        # type: (int, int, int, bool, bool, bool, Callable[[torch.tensor, torch.tensor], torch.tensor]) -> None
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True, reduction=ReductionType.MAX, nonlinear=False):
+        # type: (int, int, int, bool, bool, bool, ReductionType, bool) -> None
         super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
 
         assert use_residual or use_dag_rnn, 'Must use some type of predictor'
@@ -97,12 +101,22 @@ class GraphNN(AbstractGraphModule):
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
 
+        self.nonlinear_1 = nn.Linear(self.hidden_size, self.hidden_size // 2)
+        self.nonlinear_2 = nn.Linear(self.hidden_size // 2, self.num_classes)
+        self.nonlinear = nonlinear
+
         #lstm - for sequential model
         self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
         self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
         self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
 
-        self.reduction = reduction
+        self.nonlinear_seq_1 = nn.Linear(self.hidden_size, self.hidden_size // 2)
+        self.nonlinear_seq_2 = nn.Linear(self.hidden_size // 2, self.num_classes)
+
+        if reduction == ReductionType.MAX:
+            self.reduction = torch.max
+        elif reduction == ReductionType.ADD:
+            self.reduction = torch.add
 
     def remove_refs(self, item):
         # type: (dt.DataItem) -> None
@@ -197,12 +211,15 @@ class GraphNN(AbstractGraphModule):
             return instr.hidden
 
         parent_hidden = [self.create_graphlstm_rec(parent) for parent in instr.parents]
-        (h, c) = parent_hidden[0]
-        for hidden in parent_hidden[1:]:
-            h = self.reduction(h, hidden[0])
-            c = self.reduction(c, hidden[1])
+        if parent_hidden:
+            (h, c) = parent_hidden[0]
+            for hidden in parent_hidden[1:]:
+                h = self.reduction(h, hidden[0])
+                c = self.reduction(c, hidden[1])
 
-        in_hidden_ins = (h,c)
+            in_hidden_ins = (h,c)
+        else:
+            in_hidden_ins = self.init_hidden()
 
         ins_embed = self.get_instruction_embedding(instr, False)
 
@@ -226,7 +243,6 @@ class GraphNN(AbstractGraphModule):
 
         return seq_ret
 
-
     def forward(self, item):
         # type: (dt.DataItem) -> torch.tensor
 
@@ -236,11 +252,17 @@ class GraphNN(AbstractGraphModule):
 
         if self.use_dag_rnn:
             graph = self.create_graphlstm(item.block)
-            final_pred += self.linear(graph).squeeze()
+            if self.nonlinear:
+                final_pred += self.nonlinear_2(F.relu(self.nonlinear_1(graph))).squeeze()
+            else:
+                final_pred += self.linear(graph).squeeze()
 
         if self.use_residual:
             sequential = self.create_residual_lstm(item.block)
-            final_pred += self.linear_seq(sequential).squeeze()
+            if self.nonlinear:
+                final_pred += self.nonlinear_seq_2(F.relu(self.nonlinear_seq_1(sequential))).squeeze()
+            else:
+                final_pred += self.linear(sequential).squeeze()
 
         return final_pred.squeeze()
 
