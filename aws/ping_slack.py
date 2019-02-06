@@ -16,6 +16,7 @@ SLACK_ICON = 'https://raw.githubusercontent.com/quintessence/slack-icons/e9e141f
 USER_MAP = {
     'renda': 'UCJ98TMB8',
     'charithm': 'UB59J5BHR',
+    'charithm-mac': 'UB59J5BHR',
     'mcarbin': 'U7QK3FX88',
 }
 
