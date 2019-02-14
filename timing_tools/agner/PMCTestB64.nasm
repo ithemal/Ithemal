@@ -159,6 +159,8 @@ ALIGN   CACHELINESIZE, DB 0
 ; Put any data definitions your test code needs here
 
 UserData           times 100000H  DB 0
+OrigRsp          DB    0
+OrigRbp          DB    0
 
 
 ;------------------------------------------------------------------------------
@@ -169,13 +171,13 @@ UserData           times 100000H  DB 0
 
 %macro SERIALIZE 0             ; serialize CPU
        ; my additions - have values for all registers
-       mov rsi, 0x50
-       mov rdi, 0x100
-       mov r8, 0x60
-       mov r9, 0x70
-       mov r10, 0x80
-       mov r11, 0x90
-       mov r12, 0x100
+       ;mov rsi, 0x50
+       ;mov rdi, 0x100
+       ;mov r8, 0x60
+       ;mov r9, 0x70
+       ;mov r10, 0x80
+       ;mov r11, 0x90
+       ;mov r12, 0x100
        ; end my additions
        xor     eax, eax
        cpuid
@@ -283,6 +285,23 @@ Warmuploop:
         add rsi, rax
         lea rdi, [rsi+120h]
         xor ebp, ebp
+
+        ;;;;;; zero everything ;;;;;;;;;;;
+        xor rax, rax
+        xor rbx, rbx
+        xor rcx, rcx
+        xor rdx, rdx
+        xor rsi, rsi
+        xor rdi, rdi
+        ;xor rbp, rbp
+        ;xor rsp, rsp
+        xor r8, r8
+        xor r9, r9
+        xor r10, r10
+        xor r11, r11
+        xor r12, r12
+        xor r14, r14
+        xor r15, r15
         
 
 ;##############################################################################
@@ -379,6 +398,24 @@ TEST_LOOP_2:
 %assign i  i+1
 %endrep
 
+        ;;;;;;;;;;;;; INITIALIZE ;;;;;;;;;;;;;
+        ; SAVE RSP
+        mov [OrigRsp], rsp
+        mov [OrigRbp], rbp
+
+        ; point stack/frame pointers to middle of UserData
+        lea rsp, [UserData + 131072]
+        lea rbp, [UserData + 131072]
+        xor rsi, rsi
+        xor rdi, rdi
+        ; these gets overwritten by CPUID, so we initialize between
+        ; SERIALIZE and the actual test code
+        ; xor rax, rax
+        ; xor rbx, rbx
+        ; xor rcx, rcx
+        ; xor rdx, rdx
+        ;;;;;;;;;;;;; END INIT ;;;;;;;;;;;;;
+
         SERIALIZE
 
         ; read time stamp counter
@@ -402,10 +439,11 @@ TEST_LOOP_2:
 align 16
 LL:
 
-     mov rax, 0x10     	      
-     mov rbx, 0x20
-     mov rcx, 0x30
-     mov rdx, 0x40
+;;;; zero regs overwritten by CPUID
+xor rax, rax
+xor rbx, rbx
+xor rcx, rcx
+xor rdx, rdx
 
 %REP 100
 %ENDREP
@@ -423,8 +461,14 @@ LL:
 
         SERIALIZE
 
+        ;;;;;;;;;;;;;;;;;;
+
         ; read time stamp counter
         rdtsc
+        ;;;;;;; RESTORER STACK PTR ;;;;;;;;;;
+        mov rsp, [OrigRsp]
+        mov rbp, [OrigRbp]
+        ;;;;;;; END RESTORE ;;;;;;;;;;;;;;;;
         sub     [r13 + (CountTemp-ThreadData)], eax        ; CountTemp[0]
 
         SERIALIZE

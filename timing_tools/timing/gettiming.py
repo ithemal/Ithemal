@@ -38,7 +38,9 @@ def remove_unrecog_words(line):
 
 def add_memory_prefix(line):
     mem = re.search('.*\[(.*)\].*', line)
-    if mem != None and 'rsp' not in line:
+    if (mem != None and
+        re.match('.*(rsp|rbp|esp|ebp)', mem.group(1)) is None and
+        not line.strip().startswith('lea')):
         index = mem.span(1)[0]
         line = line[:index] + 'UserData + ' + line[index:]
     return line
