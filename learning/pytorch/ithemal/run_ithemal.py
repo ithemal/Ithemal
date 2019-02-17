@@ -111,11 +111,24 @@ def main():
     rnn_hierarchy_type_group.add_argument('--rnn-token', action='store_const', const=md.RnnHierarchyType.NONE, dest='rnn_hierarchy_type')
     rnn_hierarchy_type_group.add_argument('--rnn-dense', action='store_const', const=md.RnnHierarchyType.DENSE, dest='rnn_hierarchy_type')
     rnn_hierarchy_type_group.add_argument('--rnn-multiscale', action='store_const', const=md.RnnHierarchyType.MULTISCALE, dest='rnn_hierarchy_type')
+    rnn_hierarchy_type_group.add_argument('--rnn-linear-model', action='store_const', const=md.RnnHierarchyType.LINEAR_MODEL, dest='rnn_hierarchy_type')
+    rnn_hierarchy_type_group.add_argument('--rnn-mop', action='store_const', const=md.RnnHierarchyType.MOP_MODEL, dest='rnn_hierarchy_type')
     parser.set_defaults(rnn_hierarchy_type=md.RnnHierarchyType.MULTISCALE)
 
     parser.add_argument('--rnn-skip-connections', action='store_true', default=False)
     parser.add_argument('--rnn-learn-init', action='store_true', default=False)
     parser.add_argument('--rnn-connect-tokens', action='store_true', default=False)
+
+    parser.add_argument('--dag-nonlinear', action='store_true', default=False)
+
+    data_dependency_group = parser.add_mutually_exclusive_group()
+    data_dependency_group.add_argument('--linear-dependencies', action='store_true', default=False)
+    data_dependency_group.add_argument('--flat-dependencies', action='store_true', default=False)
+
+    dag_reduction_group = parser.add_mutually_exclusive_group()
+    dag_reduction_group.add_argument('--dag-add-reduction', action='store_const', const=md.ReductionType.ADD, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-max-reduction', action='store_const', const=md.ReductionType.MAX, dest='dag_reduction')
+    parser.set_defaults(dag_reduction=md.ReductionType.MAX)
 
     def add_edge_ablation(ablation):
         # type: (EdgeAblationType) -> None
@@ -145,6 +158,7 @@ def main():
     train.add_argument('--momentum', type=float, default=0.9, help='Momentum parameter for SGD')
     train.add_argument('--nesterov', action='store_true', default=False, help='Use Nesterov momentum')
     train.add_argument('--weird-lr', action='store_true', default=False, help='Use unusual LR schedule')
+    train.add_argument('--lr-decay-rate', default=10.0, help='LR division rate', type=float)
 
     split_group = train.add_mutually_exclusive_group()
     split_group.add_argument(
@@ -179,6 +193,7 @@ def main():
         predict_log=args.predict_log,
         no_residual=args.no_residual,
         no_dag_rnn=args.no_dag_rnn,
+        dag_reduction=args.dag_reduction,
         edge_ablation_types=args.edge_ablations or [],
         embed_size=args.embed_size,
         hidden_size=args.hidden_size,
@@ -190,6 +205,9 @@ def main():
         rnn_skip_connections=args.rnn_skip_connections,
         rnn_learn_init=args.rnn_learn_init,
         no_mem=args.no_mem,
+        linear_dependencies=args.linear_dependencies,
+        flat_dependencies=args.flat_dependencies,
+        dag_nonlinear=args.dag_nonlinear,
     )
 
     if args.subparser == 'train':
@@ -215,6 +233,7 @@ def main():
             momentum=args.momentum,
             nesterov=args.nesterov,
             weird_lr=args.weird_lr,
+            lr_decay_rate=args.lr_decay_rate,
         )
         training.run_training_coordinator(base_params, train_params)
 

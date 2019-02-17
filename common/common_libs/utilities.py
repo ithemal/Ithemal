@@ -492,21 +492,20 @@ class BasicBlock:
             if fst not in snd.parents:
                 snd.parents.append(fst)
 
-    def find_leafs(self):
-        leafs = []
-        for instr in self.instrs:
-            if len(instr.parents) == 0:
-                leafs.append(instr)
-        return leafs
-
     def find_roots(self):
-
         roots = []
         for instr in self.instrs:
-            if len(instr.children) == 0:
+            if len(instr.parents) == 0:
                 roots.append(instr)
-
         return roots
+
+    def find_leaves(self):
+        leaves = []
+        for instr in self.instrs:
+            if len(instr.children) == 0:
+                leaves.append(instr)
+
+        return leaves
 
     def gen_reorderings(self, single_perm=False):
         self.create_dependencies()
@@ -547,9 +546,21 @@ class BasicBlock:
 
         return _gen_reorderings(
             [],
-            [i for i in self.find_leafs() if not i.has_mem()],
+            [i for i in self.find_roots() if not i.has_mem()],
             [i for i in self.instrs if i.has_mem()],
         )
+
+    def paths_of_block(self):
+        # type: () -> List[List[ut.Instruction]]
+        def paths_of_instr(i, parents):
+            # type: (ut.Instruction, List[ut.Instruction]) -> List[List[ut.Instruction]]
+            new_parents = parents + [i]
+            if i.children:
+                return sum((paths_of_instr(c, new_parents) for c in i.children), [])
+            else:
+                return [new_parents]
+
+        return sum((paths_of_instr(i, []) for i in self.find_roots()), [])
 
     def draw(self, to_file=False, file_name=None, view=True):
         if to_file and not file_name:
@@ -571,6 +582,19 @@ class BasicBlock:
 
     def has_mem(self):
         return any(map(Instruction.has_mem, self.instrs))
+
+    def has_no_dependencies(self):
+        return all(len(i.parents) == 0 and len(i.children) == 0 for i in self.instrs)
+
+    def has_linear_dependencies(self):
+        if len(self.instrs) <= 1:
+            return True
+
+        return (
+            len(self.instrs[0].children) == 1 and
+            all(len(i.parents) == 1 and len(i.children) == 1 for i in self.instrs[1:-1]) and
+            len(self.instrs[-1].parents) == 1
+        )
 
 def generate_duplicates(instrs, max_n_dups):
     for idx in range(len(instrs) - 1, -1, -1):

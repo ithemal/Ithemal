@@ -356,7 +356,7 @@ def run_training_coordinator(base_params, train_params):
 
         # decay LR if necessary
         if train_params.decay_lr or (train_params.weird_lr and epoch_no > 0):
-            current_lr /= 10
+            current_lr /= train_params.lr_decay_rate
 
     loss_reporter.finish()
 
