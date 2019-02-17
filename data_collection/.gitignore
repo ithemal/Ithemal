@@ -83,3 +83,4 @@ build/
 names.txt
 out.txt
 old/
+*.o
