@@ -445,8 +445,10 @@ xor rbx, rbx
 xor rcx, rcx
 xor rdx, rdx
 
+test_begin:
 %REP 100
 %ENDREP
+test_end:
 
 
 ;dec dword [UserData]

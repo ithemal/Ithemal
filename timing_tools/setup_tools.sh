@@ -14,6 +14,7 @@ cd $cur
 cd agner
 #copy files
 cp a64-out.sh testp/PMCTest
+cp dump_accesses.py testp/PMCTest
 cp PMCTestB64.nasm testp/PMCTest
 cd $cur
 

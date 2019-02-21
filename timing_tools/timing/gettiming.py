@@ -45,6 +45,31 @@ def add_memory_prefix(line):
         line = line[:index] + 'UserData + ' + line[index:]
     return line
 
+DEVNULL = open(os.devnull, 'wb')
+
+def get_mem_accesses():
+    gdb = subprocess.Popen(
+        ['gdb', '-batch', '-x', 'dump_accesses.py', 'x'],
+        stderr=DEVNULL,
+        stdout=DEVNULL)
+    result = wait_timeout(gdb, 10)
+    if result is None:
+      return None
+
+    accesses = []
+    with open('accesses.txt') as f:
+        for row in f:
+            offset, size = row.strip().split(',')
+            accesses.append((int(offset), int(size)))
+    return accesses
+
+# TODO: implement and use this
+def accesses_hit_cache(accesses):
+  '''
+  check whether accesses hit the cache (enough)?
+  '''
+  return True
+
 
 def insert_time_value(cnx,code_id, time, arch, ttable):
 
