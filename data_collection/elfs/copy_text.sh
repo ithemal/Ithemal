@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-find /bin -print0 | while IFS= read -r -d '' filename
+find $1 -print0 | while IFS= read -r -d '' filename
 do 
     if file $filename | grep -q -i 'elf 64'; then
 	output=$(echo $filename | sed -e 's/.*\/\(.*\)$/\1/')
