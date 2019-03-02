@@ -84,3 +84,4 @@ names.txt
 out.txt
 old/
 *.o
+elfs/
