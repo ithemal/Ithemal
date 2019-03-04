@@ -28,6 +28,13 @@ def wait_timeout(proc, seconds):
             return None
         time.sleep(interval)
 
+def fix_reg_names(line):
+    # nasm recognizes, for instance, r14d rather than r14l
+    regs = [('r%dl'%x, 'r%dd'%x) for x in range(8, 16)]
+    for old, new in regs:
+        line = line.replace(old, new)
+    return line
+
 def remove_unrecog_words(line):
 
     words = ['ptr', '<rel>']
@@ -155,20 +162,8 @@ if __name__ == '__main__':
     rows = ut.execute_query(cnx, sql, True)
     print len(rows)
 
-    agner_home = os.environ['ITHEMAL_HOME'] + '/timing_tools/agner/testp/PMCTest'
-    os.chdir(agner_home)
-
-    lines = []
-    start_line = -1
-    with open('PMCTestB64.nasm','r') as f:
-        lines = f.readlines()
-        for i, line in enumerate(lines):
-            rep = re.search('.*%REP.*', line)
-            if rep != None:
-                start_line = i
-                break
-
-    print start_line
+    harness_dir = os.environ['ITHEMAL_HOME'] + '/timing_tools/harness'
+    os.chdir(harness_dir)
 
     total = 0
     errors = 0
@@ -180,31 +175,50 @@ if __name__ == '__main__':
     total_time = 0.0
     total_bbs = 0
 
+    # do a dry run to figure out measurement overhead
+    with open('bb.nasm', 'w') as f:
+      f.close()
+    proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = wait_timeout(proc, 10)
+    startHeading = False
+    startTimes = False
+    counters = None
+    for i, line in enumerate(iter(proc.stdout.readline, '')):
+        if 'Clock' in line and startTimes == False and startHeading == False: #still didn't start collecting the actual timing data
+            startHeading = True
+        if startHeading == True:
+            counters = PMCCounters(line)
+            startTimes = True
+            startHeading = False
+        elif startTimes == True:
+            counters.add_to_counters(line)
+    assert counters is not None
+    counters.set_modes()
+    overhead = counters.get_value('Core_cyc')
+    print 'OVERHEAD =', overhead
+
     for row in rows:
 
         if row[0] == None:
             continue
 
         splitted = row[0].split('\n')
-        write_lines = [line for line in lines]
 
         written = 0
         final_bb = []
         for i, line in enumerate(splitted):
             if line != '':
                 line = remove_unrecog_words(line + '\n')
-                line = add_memory_prefix(line)
+                line = fix_reg_names(line)
                 final_bb.append(line)
-                write_lines.insert(start_line + 1 + i, line)
                 written += 1
 
 
 
-        #written = 1
         if written > 0:
             total += 1
-            with open('out.nasm','w+') as f:
-                f.writelines(write_lines)
+            with open('bb.nasm','w+') as f:
+                f.writelines(final_bb)
             proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             start_time = time.time()
             result = wait_timeout(proc, 10)
@@ -242,6 +256,7 @@ if __name__ == '__main__':
                             mode = counters.get_value('Core_cyc')
                             print ' time ' + str(mode)
                             if mode != None:
+                                mode -= overhead
                                 if not args.tp:
                                     insert_time_value(cnx, row[1], mode, args.arch, args.ttable)
                                 else:
