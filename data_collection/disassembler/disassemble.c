@@ -18,6 +18,18 @@ typedef struct _bbs{
 
 client_arg_t client_args;
 
+void dump_sql(bbs_t * bbs, char * sql_filename){
+
+  FILE * sqlfile = fopen(sql_filename, "w");
+
+  //create the dump related data structures
+  query_t query[MAX_QUERY_SIZE];
+  code_info_t cinfo;
+
+  
+
+}
+
 void debug_print(void * drcontext, bbs_t * bbs){
 
   int i = 0;
