@@ -1,3 +1,5 @@
+#ifndef COMMON_CLIENT
+#define COMMON_CLIENT
 
 //dump modes are defined here - bit mask
 #define DUMP_INTEL  0x1 //dumps intel
@@ -10,11 +12,10 @@
 
 //client arguments
 typedef struct {
-  char compiler[MAX_STRING_SIZE];
-  char flags[MAX_STRING_SIZE];
   char data_folder[MAX_STRING_SIZE];
-  uint32_t mode;
-  uint32_t code_format;
+  uint32_t op_mode;
   uint32_t dump_mode;
   uint32_t insert_or_update;
 } client_arg_t;
+
+#endif

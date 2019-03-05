@@ -17,6 +17,7 @@ typedef struct _bbs{
 } bbs_t; 
 
 client_arg_t client_args;
+config_t config;
 
 void dump_sql(bbs_t * bbs, char * sql_filename){
 
@@ -137,12 +138,12 @@ main(int argc, char *argv[])
     return 1;
   }
 
-  client_args.mode = RAW_SQL;
-  client_args.dump_mode = TEXT;
+  client_args.op_mode = RAW_SQL;
+  client_args.dump_mode = DUMP_INTEL | DUMP_ATT | DUMP_TOKEN;
   client_args.insert_or_update = INSERT_CODE;
 
-  strncpy(client_args.compiler,"unknown", MAX_STRING_SIZE);
-  strncpy(client_args.flags,"unknown", MAX_STRING_SIZE);
+  strncpy(config.compiler,"unknown", MAX_STRING_SIZE);
+  strncpy(config.flags,"unknown", MAX_STRING_SIZE);
   strncpy(client_args.data_folder,argv[3], MAX_STRING_SIZE);
 
   elf = dr_open_file(argv[1], DR_FILE_READ | DR_FILE_ALLOW_LARGE);

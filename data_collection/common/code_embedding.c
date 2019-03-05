@@ -4,6 +4,14 @@
 
 #define DELIMITER -1
 
+//tokenizing code
+#define REG_START 0
+#define INT_IMMED REG_START + DR_REG_YMM15 + 1
+#define FLOAT_IMMED INT_IMMED + 1
+#define OPCODE_START FLOAT_IMMED + 1
+#define MEMORY_START OPCODE_START + OP_LAST + 1
+
+
 //operand types
 #define MEM_TYPE 1
 #define IMM_TYPE 2
@@ -12,6 +20,7 @@
 #define MNEMONIC_SIZE 64
 #define NUM_OPS 8
 #define BUFFER_SIZE 1024
+
 
 typedef struct {
   uint32_t type;
