@@ -2,9 +2,9 @@
 #define COMMON_CLIENT
 
 //dump modes are defined here - bit mask
-#define DUMP_INTEL  0x1 //dumps intel
-#define DUMP_ATT    0x2 //dumps att
-#define DUMP_TOKEN  0x4 //dumps token output
+#define DUMP_INTEL  (1 << CODE_INTEL) //dumps intel
+#define DUMP_ATT    (1 << CODE_ATT) //dumps att
+#define DUMP_TOKEN  (1 << CODE_TOKEN) //dumps token output
 
 //whether we generate SQL statements for updating or inserting code
 #define INSERT_CODE 1

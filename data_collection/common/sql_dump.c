@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "sql_dump.h"
 
+
 const char * code_types[3] = {"code_intel", "code_att", "code_token"};
 
 
@@ -26,7 +27,7 @@ int insert_code(query_t * query, code_info_t * cinfo, uint32_t mode){
     pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, %s) VALUES ((SELECT config_id from _config),'%s',%d,'", code_types[cinfo->code_type], cinfo->module, cinfo->rel_addr);
   }
   else{
-    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, %s) VALUES (@config_id,'%s',%d,'", cinfo->code_type, cinfo->module, cinfo->rel_addr);
+    pos = sprintf(query, "INSERT INTO code (config_id, program,rel_addr, %s) VALUES (@config_id,'%s',%d,'", code_types[cinfo->code_type], cinfo->module, cinfo->rel_addr);
   }
   
   int i = 0;

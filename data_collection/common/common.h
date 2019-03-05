@@ -11,7 +11,7 @@
 
 //global character count constants
 #define MAX_STRING_SIZE 128   //this is for generic strings
-#define MAX_MODULE_SIZE 128
+#define MAX_MODULE_SIZE 1024
 #define MAX_CODE_SIZE 20480
 #define MAX_QUERY_SIZE 20480
 
@@ -35,13 +35,13 @@ typedef struct{
   uint32_t span;
 } code_info_t;
 
+
+typedef char query_t;
+
 //code types array
 #define CODE_INTEL 0
 #define CODE_ATT   1
 #define CODE_TOKEN 2
-
-typedef char query_t;
-
 
 
 #endif
