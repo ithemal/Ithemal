@@ -24,7 +24,11 @@
 
 #define SHM_FD 42
 
+#define CTX_SWTCH_FD 100
+
 #define ITERS 16
+
+#define OFFSET_TO_COUNTERS 32
 
 #ifndef NDEBUG
 #define LOG(args...) printf(args)
@@ -39,7 +43,65 @@ extern void run_test_nop();
 // just need the address
 extern void map_and_restart();
 
+// addresses of the `mov rcx, *` instructions
+// before we run rdpmc. we modify these instructions
+// once we've setup the programmable pmcs
+extern char l1_read_misses_a[];
+extern char l1_read_misses_b[];
+extern char l1_write_misses_a[];
+extern char l1_write_misses_b[];
+extern char icache_misses_a[];
+extern char icache_misses_b[];
+
+// boundary of the actual test harness
+extern char code_begin[];
+extern char code_end[];
+
+struct perf_event_attr l1_read_attr = {
+  .type = PERF_TYPE_HW_CACHE,
+  .config =
+    ((PERF_COUNT_HW_CACHE_L1D) |
+     (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+     (PERF_COUNT_HW_CACHE_RESULT_MISS << 16)),
+  .size = PERF_ATTR_SIZE_VER0,
+  .sample_type = PERF_SAMPLE_READ,
+  .exclude_kernel = 1
+};
+struct perf_event_attr l1_write_attr = {
+  .type = PERF_TYPE_HW_CACHE,
+  .config =
+    ((PERF_COUNT_HW_CACHE_L1D) |
+     (PERF_COUNT_HW_CACHE_OP_WRITE << 8) |
+     (PERF_COUNT_HW_CACHE_RESULT_MISS << 16)),
+  .size = PERF_ATTR_SIZE_VER0,
+  .sample_type = PERF_SAMPLE_READ,
+  .exclude_kernel = 1
+};
+struct perf_event_attr icache_attr = {
+  .type = PERF_TYPE_HW_CACHE,
+  .config =
+    ((PERF_COUNT_HW_CACHE_L1I) |
+     (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+     (PERF_COUNT_HW_CACHE_RESULT_MISS << 16)),
+  .size = PERF_ATTR_SIZE_VER0,
+  .sample_type = PERF_SAMPLE_READ,
+  .exclude_kernel = 1
+};
+struct perf_event_attr ctx_swtch_attr = {
+  .type = PERF_TYPE_SOFTWARE,
+  .config = PERF_COUNT_SW_CONTEXT_SWITCHES,
+};
+
 char x;
+
+// round addr to beginning of the page it's in
+char *round_to_page_start(char *addr) {
+  return (char *)(((uint64_t)addr >> 12) << 12);
+}
+
+char *round_to_next_page(char *addr) {
+  return (char *)((((uint64_t)addr + 4096) >> 12) << 12);
+}
 
 void attach_to_child(pid_t pid, int wr_fd) {
   ptrace(PTRACE_SEIZE, pid, NULL, NULL);
@@ -78,34 +140,66 @@ void restart_child(pid_t pid, void *restart_addr, void *fault_addr, int shm_fd) 
   perror("cont");
 }
 
+// emit inst to do `mov rcx, val'
+void emit_mov_rcx(char *inst, int val) {
+  if (val < 0)
+    return;
+
+  inst[0] = 0xb9;
+  inst[1] = val;
+  inst[2] = 0;
+  inst[3] = 0;
+  inst[4] = 0;
+}
+
+int is_event_supported(struct perf_event_attr *attr) {
+  struct rdpmc_ctx ctx;
+  int ok = !rdpmc_open_attr(attr, &ctx, 0);
+  rdpmc_close(&ctx);
+  return ok;
+}
+
 // handling up to these many faults from child process
 #define MAX_FAULTS 10240
 
 struct pmc_counters {
-  unsigned long clock, core_cyc, l1_read_misses;
+  uint64_t clock;
+  uint64_t core_cyc;
+  uint64_t l1_read_misses;
+  uint64_t l1_write_misses;
+  uint64_t icache_misses;
+  uint64_t context_switches;
 };
 
 // return counters
-struct pmc_counters *measure() {
-  // allocate 2 pages, the first one for testing
-  // the second one for writing down result
-  int shm_fd = create_shm_fd("shm-path", 4096 * 2);
+struct pmc_counters *measure(
+    int *l1_read_supported,
+    int *l1_write_supported,
+    int *icache_supported) {
+  // allocate 3 pages, the first one for testing
+  // the rest for writing down result
+  int shm_fd = create_shm_fd("shm-path", 4096 * 3);
 
   int fds[2];
   pipe(fds);
+
+  char *aux_mem = mmap(NULL, 4096 * 2, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 4096);
+  perror("mmap aux mem");
+    bzero(aux_mem, 4096);
 
   pid_t pid = fork();
   if (pid) { // parent process
     close(fds[0]);
 
     char *child_mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    char *aux_mem = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 4096);
-    perror("mmap aux mem");
-    bzero(aux_mem, 4096);
-    // the test harness uses the first 8 bytes to count test iterations
-    struct pmc_counters *counters = (struct pmc_counters *)(aux_mem + 8);
+    struct pmc_counters *counters = (struct pmc_counters *)(aux_mem + OFFSET_TO_COUNTERS);
 
     attach_to_child(pid, fds[1]);
+
+    // find out which PMCs are supported
+    *l1_read_supported = is_event_supported(&l1_read_attr);
+    *l1_write_supported = is_event_supported(&l1_write_attr);
+    *icache_supported = is_event_supported(&icache_attr);
 
     // TODO: kill the child
     int i;
@@ -149,20 +243,47 @@ struct pmc_counters *measure() {
     return NULL;
 
   } else { // child process
-    // setup counter for L1 cache miss
+    // setup PMCs
     struct rdpmc_ctx ctx;
-    struct perf_event_attr l1_read_attr = {
-      .type = PERF_TYPE_HW_CACHE,
-      .config =
-        ((PERF_COUNT_HW_CACHE_L1D) |
-         (PERF_COUNT_HW_CACHE_OP_READ << ITERS) |
-         (PERF_COUNT_HW_CACHE_RESULT_MISS << 16)),
-      .size = PERF_ATTR_SIZE_VER0,
-      .sample_type = PERF_SAMPLE_READ,
-      .exclude_kernel = 1
-    };
     rdpmc_open_attr(&l1_read_attr, &ctx, 0);
-    LOG("PMC IDX = %d\n", ctx.buf->index);
+    int l1_read_misses_idx = ctx.buf->index - 1;
+    LOG("L1 READ IDX = %d\n", ctx.buf->index);
+
+    rdpmc_open_attr(&l1_write_attr, &ctx, 0);
+    int l1_write_misses_idx = ctx.buf->index - 1;
+    LOG("L1 WRITE IDX = %d\n", ctx.buf->index);
+
+    rdpmc_open_attr(&icache_attr, &ctx, 0);
+    int icache_misses_idx = ctx.buf->index - 1;
+    LOG("ICACHE IDX = %d\n", ctx.buf->index);
+
+    int ret = rdpmc_open_attr(&ctx_swtch_attr, &ctx, 0);
+    if (ret != 0) {
+      LOG("unable to count context switches\n");
+      abort();
+    }
+    dup2(ctx.fd, CTX_SWTCH_FD);
+
+    errno = 0;
+
+    // unprotect the test harness 
+    // so that we can emit instructions to use
+    // the proper pmc index
+    char *begin = round_to_page_start(code_begin);
+    char *end = round_to_next_page(code_end);
+    mprotect(begin, end-begin, PROT_EXEC|PROT_READ|PROT_WRITE);
+    perror("mprotect");
+
+    emit_mov_rcx(l1_read_misses_a, l1_read_misses_idx);
+    emit_mov_rcx(l1_read_misses_b, l1_read_misses_idx);
+    emit_mov_rcx(l1_write_misses_a, l1_write_misses_idx);
+    emit_mov_rcx(l1_write_misses_b, l1_write_misses_idx);
+    emit_mov_rcx(icache_misses_a, icache_misses_idx);
+    emit_mov_rcx(icache_misses_b, icache_misses_idx);
+
+    // re-protect the harness
+    mprotect(begin, end-begin, PROT_EXEC);
+    perror("mprotect");
 
     // setup counter for core cycle
     rdpmc_open(PERF_COUNT_HW_CPU_CYCLES, &ctx);
@@ -213,20 +334,25 @@ compute_overhead(struct pmc_counters *counters,
 
 int main() {
   // `measure` writes the result here
-  struct pmc_counters *counters = measure();
+  int l1_read_supported, l1_write_supported, icache_supported;
+  struct pmc_counters *counters = measure(&l1_read_supported, &l1_write_supported, &icache_supported);
+
 
   if (!counters) {
     fprintf(stderr, "failed to run test\n");
     return 1;
   }
 
-  printf("Clock\tCore_cyc\tL1_read_misses\n");
+  printf("Clock\tCore_cyc\tL1_read_misses\tL1_write_misses\tiCache_misses\tContext_switches\n");
   int i;
   for (i = 0; i < ITERS; i++) {
-    printf("%ld\t%ld\t%ld\n",
+    printf("%ld\t%ld\t%ld\t%ld\t%ld\t%ld\n",
         counters[i].clock, 
         counters[i].core_cyc,
-        counters[i].l1_read_misses);
+        l1_read_supported ? counters[i].l1_read_misses : -1,
+        l1_write_supported ? counters[i].l1_write_misses : -1,
+        icache_supported ? counters[i].icache_misses : -1,
+        counters[i].context_switches);
   }
 
 }
