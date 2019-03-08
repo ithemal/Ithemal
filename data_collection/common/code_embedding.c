@@ -211,7 +211,7 @@ void tokenize_operand(void * drcontext, uint16_t * cpos, opnd_t op, uint32_t * m
 }
 
 
-void token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+bool token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   instr_t * instr;
   int pos = 0;
   int i = 0;
@@ -243,7 +243,7 @@ void token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   }
 
   cinfo->code_size = sizeof(uint16_t) * pos;
-  
+  return true;
 }
 
 
@@ -316,7 +316,7 @@ bool filter_instr(instr_t * instr){
 }
 
 
-void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+bool token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   instr_t * instr;
   int pos = 0;
   int i = 0;
@@ -332,40 +332,41 @@ void token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
 
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), DELIMITER);
     if(ret != -1) pos += ret;
-    else { cinfo->code_size = -1; return; }
+    else { cinfo->code_size = -1; return false; }
   
     opnd_t op;
     for(i = 0; i < instr_num_srcs(instr); i++){
       op = instr_get_src(instr,i);
       ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
       if(ret != -1) pos += ret;
-      else { cinfo->code_size = -1; return; }
+      else { cinfo->code_size = -1; return false; }
     }
 
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DELIMITER);
     if(ret != -1) pos += ret;
-    else { cinfo->code_size = -1; return; }
+    else { cinfo->code_size = -1; return false; }
    
     for(i = 0; i < instr_num_dsts(instr); i++){
       op = instr_get_dst(instr,i);
       ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
       if(ret != -1) pos += ret;
-      else { cinfo->code_size = -1; return; }
+      else { cinfo->code_size = -1; return false; }
     }
 
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DELIMITER);
     if(ret != -1) pos += ret;
-    else { cinfo->code_size = -1; return; }
+    else { cinfo->code_size = -1; return false; }
     
   }
 
   cinfo->code_size = pos;
+  return true;
   
 }
 
 
 
-void textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+bool textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
   instr_t * instr;
   int pos = 0;
@@ -378,13 +379,13 @@ void textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
     if(pos > MAX_CODE_SIZE){
       cinfo->code[MAX_CODE_SIZE - 1] = '\0';
-      dr_printf("%s:\n", cinfo->code);
+      dr_printf("max code size reached %s:\n", cinfo->code);
     }
 
-    DR_ASSERT(pos <= MAX_CODE_SIZE);
   }
 
   cinfo->code_size = pos;
+  return true;
 
 }
 
@@ -731,10 +732,10 @@ void change_opcodes(ins_t * ins,  instr_t * instr){
   }
 
   case OP_vcvtsi2sd:
-  case OP_vcvtsi2ss:
-  case OP_cvtsi2sd:
-  case OP_cvtsi2ss:{
+  case OP_vcvtsi2ss:{
    
+    DR_ASSERT(instr_num_srcs(instr) == 2);
+
     int size = opnd_size_in_bytes(opnd_get_size(instr_get_src(instr,1)));
     char suffix = get_size_prefix(size);
     if(suffix == 'e') return;
@@ -742,6 +743,20 @@ void change_opcodes(ins_t * ins,  instr_t * instr){
     break;
 
   }
+
+  case OP_cvtsi2sd:
+  case OP_cvtsi2ss:{
+
+    DR_ASSERT(instr_num_srcs(instr) == 1);
+
+    int size = opnd_size_in_bytes(opnd_get_size(instr_get_src(instr,0)));
+    char suffix = get_size_prefix(size);
+    if(suffix == 'e') return;
+    else ins->name[8] = suffix;
+    break;
+
+  }
+
   }
 
 }
@@ -867,7 +882,7 @@ bool add_operand_size(ins_t * ins, instr_t * instr){
 
 
 
-void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+bool textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
   instr_t * instr;
   int pos = 0;
@@ -885,8 +900,8 @@ void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
     //dr_printf("raw:%s:\n",disasm);
     remove_data(disasm, length);
     if(!parse_instr_att(disasm, length, &ins)){
-      dr_printf("%s:\n",disasm);
-      continue;
+      dr_printf("parse error %s:\n",disasm);
+      return false;
     }
     //dr_printf("before:");
     //print_instr(&ins);
@@ -922,16 +937,18 @@ void textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
 
     if(pos > MAX_CODE_SIZE){
       cinfo->code[MAX_CODE_SIZE - 1] = '\0';
-      dr_printf("%s:\n",cinfo->code);
+      dr_printf("max size reached %s:\n",cinfo->code);
     }
 
-    DR_ASSERT(pos <= MAX_CODE_SIZE); 
-    
+    DR_ASSERT(pos <= MAX_CODE_SIZE);
+
 
   }
 
 
   cinfo->code_size = pos;
+  return true;
+  
  
 
 }

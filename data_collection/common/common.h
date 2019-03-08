@@ -12,8 +12,8 @@
 //global character count constants
 #define MAX_STRING_SIZE 128   //this is for generic strings
 #define MAX_MODULE_SIZE 1024
-#define MAX_CODE_SIZE 20480
-#define MAX_QUERY_SIZE 20480
+#define MAX_CODE_SIZE 100000
+#define MAX_QUERY_SIZE 102000
 
 typedef struct{
   char compiler[MAX_STRING_SIZE];
