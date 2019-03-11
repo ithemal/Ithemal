@@ -108,12 +108,12 @@ void debug_print(void * drcontext, instrlist_t * bb){
   instr_t * instr;
   disassemble_set_syntax(DR_DISASM_INTEL);
 
-  printf("------------\n");
-  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+  dr_printf("------------\n");
+  for(instr = instrlist_first(bb); instr != NULL; instr = instr_get_next(instr)){
     instr_disassemble(drcontext, instr, STDOUT);
     dr_printf("\n");
   }
-  printf("-------------\n");
+  dr_printf("-------------\n");
 
 }
 
@@ -151,6 +151,8 @@ void parse_elf_binary(void * drcontext, unsigned char * buf, char * metafilename
     unsigned char * end_pc = start_pc + func_bd.size;
     instrlist_t * current_list = instrlist_create(drcontext);
     unsigned char * start_bb = start_pc;
+
+    
 
  
     while(start_pc < end_pc){
