@@ -59,6 +59,27 @@ def insert_time_value(cnx,code_id, time, arch, ttable):
     ut.execute_query(cnx, sql, False)
     cnx.commit()
 
+def insert_col_values(cnx, cols, values, code_id, arch, ttable):
+
+    for i in range(len(values[0])):
+        
+        colstr = ''
+        valuestr = ''
+
+        for j, col in enumerate(cols): 
+            if j != len(cols) - 1:
+                colstr += col + ', '
+                valuestr += str(values[j][i]) + ', '
+            else:
+                colstr += col
+                valuestr += str(values[j][i])
+                
+
+        sql = 'INSERT INTO ' + ttable + ' (code_id, arch, kind,' + colstr + ')  VALUES(' + str(code_id) + ',' + str(arch) + ',\'actual\',' + valuestr + ')'
+        print sql
+        ut.execute_query(cnx, sql, False)
+        cnx.commit()
+
 
 class PMCValue:
 
@@ -71,13 +92,17 @@ class PMC:
     def __init__(self, name):
         self.name = name
         self.values = []
+
+        self.mod_values = []
         self.mode = None
-        self.percentage = 10
+        self.percentage = 5
 
     def add_value(self, nvalue):
 
+        self.values.append(nvalue)
+
         added = False
-        for val in self.values:
+        for val in self.mod_values:
             if val.value == 0:
                 val.value = 1e-3
             if (abs(val.value - nvalue) * 100.0 / val.value)  < self.percentage:
@@ -88,13 +113,13 @@ class PMC:
 
         if not added:
             val = PMCValue(nvalue)
-            self.values.append(val)
-
+            self.mod_values.append(val)
+        
     def set_mode(self):
 
         max_count = 0
 
-        for val in self.values:
+        for val in self.mod_values:
             if val.count > max_count:
                 self.mode = val.value
                 max_count = val.count
@@ -127,16 +152,25 @@ class PMCCounters:
 
         for counter in self.counters:
             if name == counter.name:
+                return counter.values
+        return None
+
+    def get_mode(self, name):
+
+        for counter in self.counters:
+            if name == counter.name:
                 return counter.mode
         return None
 
 def check_error(line):
 
     errors = ['error','fault']
+    warnings = ['warning']
 
     for error in errors:
-        if error in line:
-            return True
+        for warning in warnings:
+            if error in line and not warning in line:
+                return True
     return False
 
 if __name__ == '__main__':
@@ -152,7 +186,7 @@ if __name__ == '__main__':
     parser.add_argument('--port',action='store', type=int, required=True)
     parser.add_argument('--ctable',action='store',type=str, required=True)
     parser.add_argument('--ttable',action='store',type=str, required=True)
-
+    parser.add_argument('--limit',action='store',type=int, default=None)
     parser.add_argument('--tp',action='store',type=bool,default=False)
 
     args = parser.parse_args(sys.argv[1:])
@@ -194,7 +228,7 @@ if __name__ == '__main__':
             counters.add_to_counters(line)
     assert counters is not None
     counters.set_modes()
-    overhead = counters.get_value('Core_cyc')
+    overhead = counters.get_mode('Core_cyc')
     print 'OVERHEAD =', overhead
 
     for row in rows:
@@ -231,8 +265,8 @@ if __name__ == '__main__':
                 try:
                     error_lines = False
                     for line in iter(proc.stderr.readline, ''):
-                        print line
                         if check_error(line):
+                            print 'error ' + line
                             error_lines = True
                             break
 
@@ -241,6 +275,7 @@ if __name__ == '__main__':
                         startTimes = False
                         counters = None
                         for i, line in enumerate(iter(proc.stdout.readline, '')):
+                            print line
                             if 'Clock' in line and startTimes == False and startHeading == False: #still didn't start collecting the actual timing data
                                 startHeading = True
                             if startHeading == True:
@@ -252,18 +287,30 @@ if __name__ == '__main__':
                                 #print 'values ' + line
                                 counters.add_to_counters(line)
                         if counters != None:
-                            counters.set_modes()
-                            mode = counters.get_value('Core_cyc')
-                            print ' time ' + str(mode)
-                            if mode != None:
-                                mode -= overhead
-                                if not args.tp:
-                                    insert_time_value(cnx, row[1], mode, args.arch, args.ttable)
-                                else:
-                                    total_time += end_time - start_time
-                                    total_bbs += 1
-                                    print float(total_bbs)/total_time
-                                success += 1
+
+                            names = ['Core_cyc', 'L1_read_misses']
+                            columns = ['time', 'l1misses']
+
+                            values = []
+                            aval_cols = []
+
+                            for i, name in enumerate(names):
+                                vs = counters.get_value(name)
+                                if vs != None:
+                                    values.append(vs)
+                                    aval_cols.append(columns[i])
+                                    if name == 'Core_cyc':
+                                        for j, v in enumerate(values[:-1]):
+                                            values[-1][j] -= overhead
+                            print aval_cols, values
+
+                            if not args.tp:
+                                insert_col_values(cnx, aval_cols, values, row[1], args.arch, args.ttable)
+                                    
+                            total_time += end_time - start_time
+                            total_bbs += 1
+                            print float(total_bbs)/total_time
+                            success += 1
                     else:
                         for line in final_bb:
                             print line[:-1]
@@ -277,6 +324,12 @@ if __name__ == '__main__':
                 print 'error not completed'
                 not_finished += 1
 
+        if args.limit != None:
+            if success == args.limit:
+                break
+
         print total, success, errors, not_finished, except_errors
 
+
+    print overhead
     cnx.close()
