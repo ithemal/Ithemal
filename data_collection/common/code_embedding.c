@@ -3,6 +3,8 @@
 #include <string.h>
 
 #define DELIMITER -1
+#define MEM_TAG   -2
+
 
 //tokenizing code
 #define REG_START 0
@@ -247,39 +249,83 @@ bool token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 }
 
 
-int tokenize_text_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, uint32_t * mem){
+int tokenize_text_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, instr_t * instr){
   
-  uint16_t value = 0;
+#define MAX_TOKENS 10
+
+  int tokens[MAX_TOKENS];
+  uint32_t num_tokens = 0;
 
   //registers
   if(opnd_is_reg(op)){
-    value = REG_START + opnd_get_reg(op);
+    tokens[num_tokens++] = REG_START + opnd_get_reg(op);
   }
   //immediates
   else if(opnd_is_immed_int(op) || opnd_is_immed_int64(op)){
-    value = INT_IMMED;
-  }
-  else if(opnd_is_rel_addr(op)){ 
-    value = INT_IMMED;
+    tokens[num_tokens++] = INT_IMMED;
   }
   else if(opnd_is_immed_float(op)){
-    value = FLOAT_IMMED;
+    tokens[num_tokens++] = FLOAT_IMMED;
   }
   //memory :(
   else if(opnd_is_memory_reference(op)){
-    value = MEMORY_START + *mem;
-    (*mem)++;
+
+    tokens[num_tokens++] = MEM_TAG;
+    if(opnd_is_base_disp(op)){ 
+      
+      reg_id_t base = opnd_get_base(op);
+      reg_id_t index = opnd_get_index(op);
+      int disp = opnd_get_disp(op);
+
+      if(base != REG_NULL)
+	tokens[num_tokens++] = REG_START + opnd_get_base(op);
+      if(index != REG_NULL)
+	tokens[num_tokens++] = REG_START + opnd_get_index(op);
+      if(disp != 0)
+	tokens[num_tokens++] = INT_IMMED;
+    }
+    else if(opnd_is_abs_addr(op)){ 
+      tokens[num_tokens++] = INT_IMMED;
+    }
+    else if(opnd_is_rel_addr(op)){
+      tokens[num_tokens++] = INT_IMMED;
+    }
+    else{
+      instr_disassemble(drcontext, instr, STDOUT);
+      opnd_disassemble(drcontext, op, STDOUT);
+      exit(-1);
+    }
+    tokens[num_tokens++] = MEM_TAG;
+
   }
   else{
-    opnd_disassemble(drcontext,op,STDOUT);
-    dr_printf("\n");
+    instr_disassemble(drcontext, instr, STDOUT);
+    opnd_disassemble(drcontext, op, STDOUT);
+    exit(-1);
   }
 
-  
-  DR_ASSERT(value); //should have a non-zero value
+  DR_ASSERT(num_tokens > 0); //should have at least one token
   DR_ASSERT(!opnd_is_pc(op)); //we do not consider branch instructions
   
-  return dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,", value);   
+  int i;
+  int written = 0;
+  int ret = 0;
+
+  for(i = 0; i < num_tokens - 1; i++){
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", tokens[i]);
+    if(ret != -1){
+      written += ret; pos += ret;
+    }
+    else return ret;
+  }
+
+  ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d", tokens[num_tokens - 1]);
+  if(ret != -1){
+    written += ret; pos += ret;
+  }
+  else return ret;
+
+  return written;
 
 }
 
@@ -337,7 +383,7 @@ bool token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
     opnd_t op;
     for(i = 0; i < instr_num_srcs(instr); i++){
       op = instr_get_src(instr,i);
-      ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
+      ret = tokenize_text_operand(drcontext, cpos, pos, op, instr);
       if(ret != -1) pos += ret;
       else { cinfo->code_size = -1; return false; }
     }
@@ -348,7 +394,7 @@ bool token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * b
    
     for(i = 0; i < instr_num_dsts(instr); i++){
       op = instr_get_dst(instr,i);
-      ret = tokenize_text_operand(drcontext, cpos, pos, op, &mem);
+      ret = tokenize_text_operand(drcontext, cpos, pos, op, instr);
       if(ret != -1) pos += ret;
       else { cinfo->code_size = -1; return false; }
     }
@@ -681,11 +727,8 @@ void change_operands(ins_t * ins, instr_t * instr){
 	back--;
       }
     }
-
-
   }
     
-
   }
 
 
@@ -900,7 +943,7 @@ bool textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlis
     //dr_printf("raw:%s:\n",disasm);
     remove_data(disasm, length);
     if(!parse_instr_att(disasm, length, &ins)){
-      dr_printf("parse error %s:\n",disasm);
+      //dr_printf("parse error %s:\n",disasm);
       return false;
     }
     //dr_printf("before:");
