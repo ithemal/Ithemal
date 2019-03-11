@@ -85,13 +85,13 @@ int rdpmc_open_attr(struct perf_event_attr *attr, struct rdpmc_ctx *ctx,
 	ctx->fd = perf_event_open(attr, 0, -1,
 			  leader_ctx ? leader_ctx->fd : -1, 0);
 	if (ctx->fd < 0) {
-		perror("perf_event_open");
+		//perror("perf_event_open");
 		return -1;
 	}
 	ctx->buf = mmap(NULL, sysconf(_SC_PAGESIZE), PROT_READ, MAP_SHARED, ctx->fd, 0);
 	if (ctx->buf == MAP_FAILED) {
 		close(ctx->fd);
-		perror("mmap on perf fd");
+		//perror("mmap on perf fd");
 		return -1;
 	}
 	return 0;
