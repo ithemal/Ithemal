@@ -21,7 +21,8 @@ memory will be listed as follows.
 
 * base-displacement addressing: `base,index,INT_IMMED` each component is optional, but there should be at least one of base, index or
 INT_IMMED. e.g., `[eax]` will be tokenized to `<M>,eax,<M>`, where as `[eax + 4 * ebx + 0x55]` will be tokenized to `<M>,eax,ebx,INT_IMMED,<M>`.
-
+* rip-relative: `<M>,INT_IMMED,<M>`
+* absolute addressing: `<M>,INT_IMMED,<M>`
 
 ### Flags register
 
