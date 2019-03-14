@@ -1,10 +1,10 @@
 # x86 tokenization
 
-### instruction tokenization
+### Instruction tokenization
 
-opcode,<D>,src1,src2,...,<D>,dst1,dst2,...,<D>
+`opcode,<D>,src1,src2,...,<D>,dst1,dst2,...,<D>`
 
-### memory operands 
+### Memory operands 
 
 There are different types of memory operands. At a high-level there are mainly three types of addressing modes.
 
@@ -23,6 +23,6 @@ memory will be listed as follows.
 INT_IMMED. e.g., `[eax]` will be tokenized to `<M>,eax,<M>`, where as `[eax + 4 * ebx + 0x55]` will be tokenized to `<M>,eax,ebx,INT_IMMED,<M>`.
 
 
-## flags register
+### Flags register
 
 We will detect whether an instruction reads/writes to flag registers and emit it as a source/destination operand respectively.
