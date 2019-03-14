@@ -288,8 +288,8 @@ if __name__ == '__main__':
                                 counters.add_to_counters(line)
                         if counters != None:
 
-                            names = ['Core_cyc', 'L1_read_misses']
-                            columns = ['time', 'l1misses']
+                            names = ['Core_cyc', 'L1_read_misses', 'L1_write_misses', 'iCache_misses', 'Context_switches']
+                            columns = ['time', 'l1drmisses', 'l1dwmisses', 'l1imisses', 'conswitch']
 
                             values = []
                             aval_cols = []
