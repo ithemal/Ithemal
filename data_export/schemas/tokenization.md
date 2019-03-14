@@ -16,7 +16,7 @@ are integer immediates.
 Apart from these there are near and far addressing modes, addressing using segment registers etc. which I will not go into detail
 and will be ignored for the purposes of tokenization.
 
-Any memory operand will be enclosed inside <M> tags. <M> tag is a special token. Within these tags the operands used to calculate
+Any memory operand will be enclosed inside `<M>` tags. `<M>` tag is a special token. Within these tags the operands used to calculate
 memory will be listed as follows.
 
 * base-displacement addressing: `base,index,INT_IMMED` each component is optional, but there should be at least one of base, index or
