@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "dr_api.h"
+#include "mmap.h"
 #include <stdint.h>
 
 int get_perthread_filename(void * drcontext, char * filename, size_t max_size);

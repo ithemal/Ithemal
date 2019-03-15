@@ -3,45 +3,25 @@
 #include <string.h> /* may be for memset */
 #include <stdlib.h>
 
-#include "dr_api.h"
-#include "static_mmap.h"
-#include "static_dump.h"
-#include "static_logic.h"
-#include "code_embedding.h"
 #include "common.h"
-
-//dump modes are defined here - bit mask
-#define DUMP_INTEL  0x1 //dumps intel
-#define DUMP_ATT    0x2 //dumps att
-#define DUMP_TOKEN  0x4 //dumps token output
-
-//whether we generate SQL statements for updating or inserting code
-#define INSERT_CODE 1
-#define UPDATE_CODE 2
-
-//client arguments
-typedef struct {
-  char compiler[MAX_STRING_SIZE];
-  char flags[MAX_STRING_SIZE];
-  char data_folder[MAX_STRING_SIZE];
-  uint32_t mode;
-  uint32_t code_format;
-  uint32_t dump_mode;
-  uint32_t insert_or_update;
-} client_arg_t;
+#include "code_embedding.h"
+#include "sql_dump.h"
+#include "client.h"
+#include "mmap.h"
 
 client_arg_t client_args;
+config_t config;
 mmap_file_t filenames_file;
 uint32_t num_threads = 0; //sqlite can handle only one thread
 void * mutex;
 
 #define BEGIN_CONTROL(C,ST,EN)						   \
-  if(client_args.mode == SNOOP){					   \
+  if(client_args.op_mode == SNOOP){					   \
     while(!__sync_bool_compare_and_swap(&C,ST,EN));			   \
   }									   \
  
 #define END_CONTROL(C,ST,EN)						\
-  if(client_args.mode == SNOOP){					\
+  if(client_args.op_mode == SNOOP){					\
     DR_ASSERT(__sync_bool_compare_and_swap(&C,ST,EN));			\
     while(C != IDLE);							\
   }									\
@@ -59,7 +39,7 @@ thread_init(void * drcontext){
   get_perthread_filename(drcontext,data->filename,MAX_MODULE_SIZE);
   data->offs = data->filled = 0;
   
-  if(client_args.mode == SNOOP){ //create filenames file for snooping process to know where we are dumping data
+  if(client_args.op_mode == SNOOP){ //create filenames file for snooping process to know where we are dumping data
     dr_mutex_lock(mutex);
     volatile thread_files_t * files = filenames_file.data;
     DR_ASSERT(files); //should be memory mapped 
@@ -78,7 +58,7 @@ thread_init(void * drcontext){
   memset(data->data,0,TOTAL_SIZE);
 
   //if mode is raw sql dumping 
-  if(client_args.mode == RAW_SQL){
+  if(client_args.op_mode == RAW_SQL){
 
     //processor model information
     bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
@@ -88,7 +68,7 @@ thread_init(void * drcontext){
   
     //insert the config string (query)
     query_t * query = (query_t *)(data->data + START_QUERY);
-    int sz = insert_config(query, client_args.compiler, client_args.flags, client_args.mode, proc_get_model());
+    int sz = insert_config(query, &config, client_args.op_mode);
     DR_ASSERT(sz <= MAX_QUERY_SIZE - 2);
     sz = complete_query(query,sz);
     write_to_file(bk->static_file,query,sz);
@@ -97,7 +77,7 @@ thread_init(void * drcontext){
 
 }
 
-bool dump_bb(void * drcontext, code_embedding_t embedding_func, code_info_t * cinfo, instrlist_t * bb, bool insert, const char * type, bookkeep_t * bk, query_t * query){
+bool dump_bb(void * drcontext, code_embedding_t embedding_func, code_info_t * cinfo, instrlist_t * bb, bool insert, bookkeep_t * bk, query_t * query){
 
   int sz = -1;
 
@@ -108,12 +88,12 @@ bool dump_bb(void * drcontext, code_embedding_t embedding_func, code_info_t * ci
     return false;
   }
 
-  if(client_args.mode != SNOOP){
+  if(client_args.op_mode != SNOOP){
 
     if(insert)
-      sz = insert_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size, type);
+      sz = insert_code(query, cinfo, client_args.op_mode);
     else
-      sz = update_code(query,cinfo->module,cinfo->rel_addr,cinfo->code, client_args.mode, cinfo->code_size, type);
+      sz = update_code(query, cinfo, client_args.op_mode);
 
     if(sz == -1){
       return false;
@@ -147,14 +127,16 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
   if( (client_args.dump_mode & DUMP_TOKEN) == DUMP_TOKEN ){
 
+    cinfo->code_type = CODE_TOKEN;
+
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
-      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, true, "code_token", bk, query)){
+      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, true, bk, query)){
 	return false;
       }
       inserted = true;
     }
     else{
-      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, false, "code_token", bk, query)){
+      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, false, bk, query)){
 	return false;
       }
     }
@@ -163,15 +145,17 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
   if( (client_args.dump_mode & DUMP_INTEL) == DUMP_INTEL ){
 
+    cinfo->code_type = CODE_INTEL;
+
     disassemble_set_syntax(DR_DISASM_INTEL);
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
-      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, true, "code_intel", bk, query)){
+      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, true, bk, query)){
 	return false;
       }
       inserted = true;
     }
     else{
-      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, false, "code_intel", bk, query)){
+      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, false, bk, query)){
 	return false;
       }
     }
@@ -181,15 +165,17 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
   if( (client_args.dump_mode & DUMP_ATT) == DUMP_ATT ){
     
+    cinfo->code_type = CODE_ATT;
+
     disassemble_set_syntax(DR_DISASM_ATT);
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
-      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, true, "code_att", bk, query)){
+      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, true, bk, query)){
 	return false;
       }
       inserted = true;
     }
     else{
-      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, false, "code_att", bk, query)){
+      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, false, bk, query)){
 	return false;
       }
     }
@@ -244,7 +230,7 @@ thread_exit(void * drcontext){
   mmap_file_t * file = dr_get_tls_field(drcontext);
   volatile bookkeep_t * bk = (bookkeep_t *)(file->data + START_BK_DATA);
     
-  if(client_args.mode == RAW_SQL){
+  if(client_args.op_mode == RAW_SQL){
     close_raw_file(bk->static_file);
   }
   close_memory_map_file(file,TOTAL_SIZE);
@@ -256,7 +242,7 @@ event_exit(void)
 {
   dr_mutex_destroy(mutex);
     
-  if(client_args.mode == SNOOP){
+  if(client_args.op_mode == SNOOP){
     volatile thread_files_t * files = filenames_file.data;
     files->control = EXIT;
     while(files->control != IDLE);
@@ -279,21 +265,22 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     dr_register_exit_event(event_exit);
     
     DR_ASSERT(argc == 7);
-    client_args.mode = atoi(argv[1]);
+    client_args.op_mode = atoi(argv[1]);
     client_args.dump_mode = atoi(argv[2]);
     client_args.insert_or_update = atoi(argv[3]);
-    strncpy(client_args.compiler,argv[4], MAX_STRING_SIZE);
-    strncpy(client_args.flags,argv[5], MAX_STRING_SIZE);
+    strncpy(config.compiler,argv[4], MAX_STRING_SIZE);
+    strncpy(config.flags,argv[5], MAX_STRING_SIZE);
     strncpy(client_args.data_folder,argv[6], MAX_STRING_SIZE);
+    config.arch = proc_get_model();
 
-    DR_ASSERT(client_args.mode != SQLITE);
+    DR_ASSERT(client_args.op_mode != SQLITE);
 
     mutex = dr_mutex_create();
     num_threads = 0;
 
     //dr_printf("mode - %d\n",client_args.mode);
     
-    if(client_args.mode == SNOOP){
+    if(client_args.op_mode == SNOOP){
       strcpy(filenames_file.filename,FILENAMES_FILE);
       filenames_file.filled = 0;
       filenames_file.offs = 0;
