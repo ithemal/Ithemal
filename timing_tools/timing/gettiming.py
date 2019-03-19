@@ -300,7 +300,7 @@ if __name__ == '__main__':
                                     values.append(vs)
                                     aval_cols.append(columns[i])
                                     if name == 'Core_cyc':
-                                        for j, v in enumerate(values[:-1]):
+                                        for j, v in enumerate(values[-1]):
                                             values[-1][j] -= overhead
                             print aval_cols, values
 
