@@ -118,11 +118,13 @@ def connect_to_instance_id_or_index(aws_instances, id_or_index):
     except ValueError:
         pass
 
-    try:
-        instance = next(instance for instance in instances if instance['InstanceId'] == id_or_index)
-        aws_instances.connect_to_instance(instance)
-    except StopIteration:
+    possible_instances = [instance for instance in instances if instance['InstanceId'].startswith(id_or_index)]
+    if len(possible_instances) == 0:
         raise ValueError('{} is not a valid instance ID or index'.format(id_or_index))
+    elif len(possible_instances) == 1:
+        aws_instances.connect_to_instance(instance)
+    else:
+        raise ValueError('Multiple instances have ambiguous identifier prefix {}'.format(id_or_index))
 
 def main():
     # type: () -> None
