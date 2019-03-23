@@ -19,12 +19,14 @@ function template_tail() {
 EOF
 }
 
-if [ "$#" == "0" ]; then
-    echo "Usage: $0 code_id"
+if [ "$#" != "2" ]; then
+    echo "Usage: $0 arch code_id"
     exit 1
 fi
 
+arch=$1; shift
 code_id=$1; shift
+
 code=$(echo "SELECT code_att FROM code WHERE code_id=${code_id}" | mysql -N | sed 's/0xf[a-fA-F0-9]+\?\([a-fA-F0-9]\{6\}\)/0xf\1/g')
 if [ -z "$code" ]; then
     exit 1
@@ -32,5 +34,5 @@ fi
 
 tmpfile=$(mktemp)
 (template_head; echo -e $code; template_tail) | as --64 -o $tmpfile -
-speed=$(iaca -reduceout $tmpfile | grep 'Block Throughput:' | awk '{print 100 * $3}')
+speed=$(iaca -arch $arch -reduceout $tmpfile | grep 'Block Throughput:' | awk '{print 100 * $3}')
 echo $code_id $speed
