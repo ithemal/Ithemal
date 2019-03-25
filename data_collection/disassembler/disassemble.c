@@ -23,7 +23,7 @@ bool populate_code(void * drcontext, instrlist_t * bb, code_info_t * cinfo, uint
   
   if(dump_mode == DUMP_INTEL){
     disassemble_set_syntax(DR_DISASM_INTEL);
-    if(textual_embedding(drcontext, cinfo, bb)){
+    if(text_token(drcontext, cinfo, bb)){
       cinfo->code_type = CODE_INTEL;
       return true;
     }
@@ -33,7 +33,7 @@ bool populate_code(void * drcontext, instrlist_t * bb, code_info_t * cinfo, uint
   }
   else if(dump_mode == DUMP_ATT){
     disassemble_set_syntax(DR_DISASM_ATT);
-    if(textual_embedding_with_size(drcontext, cinfo, bb)){
+    if(text_att(drcontext, cinfo, bb)){
       cinfo->code_type = CODE_ATT;
       return true;
     }
@@ -42,7 +42,7 @@ bool populate_code(void * drcontext, instrlist_t * bb, code_info_t * cinfo, uint
     }
   }
   else if(dump_mode == DUMP_TOKEN){
-    if(token_text_embedding(drcontext, cinfo, bb)){
+    if(text_intel(drcontext, cinfo, bb)){
       cinfo->code_type = CODE_TOKEN;
       return true;
     }

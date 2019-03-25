@@ -8,6 +8,7 @@
 #include "sql_dump.h"
 #include "client.h"
 #include "mmap.h"
+#include "dr_utility.h"
 
 client_arg_t client_args;
 config_t config;
@@ -130,13 +131,13 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
     cinfo->code_type = CODE_TOKEN;
 
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
-      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, true, bk, query)){
+      if(!dump_bb(drcontext, text_token, cinfo, bb, true, bk, query)){
 	return false;
       }
       inserted = true;
     }
     else{
-      if(!dump_bb(drcontext, token_text_embedding, cinfo, bb, false, bk, query)){
+      if(!dump_bb(drcontext, text_token, cinfo, bb, false, bk, query)){
 	return false;
       }
     }
@@ -149,13 +150,13 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
     disassemble_set_syntax(DR_DISASM_INTEL);
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
-      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, true, bk, query)){
+      if(!dump_bb(drcontext, text_intel, cinfo, bb, true, bk, query)){
 	return false;
       }
       inserted = true;
     }
     else{
-      if(!dump_bb(drcontext, textual_embedding, cinfo, bb, false, bk, query)){
+      if(!dump_bb(drcontext, text_intel, cinfo, bb, false, bk, query)){
 	return false;
       }
     }
@@ -169,13 +170,13 @@ bool populate_bb_info(void * drcontext, volatile code_info_t * cinfo, instrlist_
 
     disassemble_set_syntax(DR_DISASM_ATT);
     if(client_args.insert_or_update == INSERT_CODE && !inserted){
-      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, true, bk, query)){
+      if(!dump_bb(drcontext, text_att, cinfo, bb, true, bk, query)){
 	return false;
       }
       inserted = true;
     }
     else{
-      if(!dump_bb(drcontext, textual_embedding_with_size, cinfo, bb, false, bk, query)){
+      if(!dump_bb(drcontext, text_att, cinfo, bb, false, bk, query)){
 	return false;
       }
     }
