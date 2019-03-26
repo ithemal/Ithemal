@@ -33,8 +33,6 @@ CREATE TABLE config (
 CREATE TABLE code (
   code_id int(32) NOT NULL AUTO_INCREMENT,
   code_raw TEXT, -- raw bytes stored as ascii strings 
-  code_intel TEXT,
-  code_att TEXT,
   PRIMARY KEY (code_id)
 );
 
@@ -49,6 +47,8 @@ CREATE TABLE code_metadata (
   module varchar(255) NOT NULL,
   rel_addr int(32) NOT NULL,
   function TEXT,
+  code_att TEXT,
+  code_intel TEXT,
   PRIMARY KEY (metadata_id),
   UNIQUE KEY (code_id),
   CONSTRAINT code_id_mapping_code FOREIGN KEY (code_id) REFERENCES code(code_id),
