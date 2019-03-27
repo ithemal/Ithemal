@@ -34,5 +34,10 @@ typedef struct{
 
 typedef unsigned char query_t;
 
+//code type
+#define CODE_TOKEN 0
+#define CODE_INTEL 1
+#define CODE_ATT   2
+
 
 #endif

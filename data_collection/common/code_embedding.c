@@ -69,10 +69,19 @@ bool filter_instr(instr_t * instr){
 
 bool raw_bits(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
-  byte * pc = instrlist_encode(drcontext, bb, cinfo->code, true);
-  if(pc == NULL)
-    return false;
+  instr_t * instr;
+  byte * pc = cinfo->code;
+  int i = 0;
 
+  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+    if(instr_is_app(instr) && !filter_instr(instr)){
+      int length = instr_length(drcontext, instr);
+      for(i = 0; i < length; i++){
+	*pc = instr_get_raw_byte(instr, i);
+	pc++;
+      }
+    }
+  }
   cinfo->code_size = pc - (byte *)cinfo->code;
   return true;
 

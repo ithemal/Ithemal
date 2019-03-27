@@ -7,6 +7,9 @@
 // if you use DR to collect executed BBs, rather than as a decoding library
 // it will not work since MYSQL library requires pthread support.
 
+char * code_types[3] = {"code_token", "code_intel", "code_att"};
+
+
 int insert_architecture(query_t * query, config_t * config){
   
   int pos = 0;
@@ -30,12 +33,27 @@ int insert_code(query_t * query, code_info_t * cinfo){
   
   int i = 0;
   for(i = 0; i < cinfo->code_size; i++){
-    pos += sprintf(query + pos, "%x", cinfo->code[i]);
+    pos += sprintf(query + pos, "%02x", cinfo->code[i], i);
   } 
+  //pos += sprintf(query + pos, "-%d", cinfo->code_size);
 
   pos += sprintf(query + pos, ");\n");
   return pos;
 
+}
+
+
+int insert_disassembly(query_t * query, code_info_t * cinfo, uint32_t type){
+  int pos = 0;
+  pos += sprintf(query, "UPDATE code_metadata SET %s='",code_types[type]);
+  int i = 0;
+  for(i = 0; i < cinfo->code_size; i++){
+    query[pos + i] = cinfo->code[i];
+  }
+  pos += cinfo->code_size;
+  pos += sprintf(query + pos, "' WHERE metadata_id=LAST_INSERT_ID();\n");
+  return pos;
+  
 }
 
 
