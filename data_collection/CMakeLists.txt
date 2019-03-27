@@ -199,10 +199,8 @@ configure_DynamoRIO_global(OFF ON)
 
 include_directories(common)
 
-add_sample_client(static  "static/static.c;common/sql_dump_v2.c;common/dr_utility.c;common/code_embedding.c;common/disasm_corrector.c"  "drcontainers")
-
-add_sample_standalone(disassembler "disassembler/disassemble.c;common/sql_dump_v2.c;common/dr_utility.c;common/code_embedding.c;common/disasm_corrector.c")
-
+add_sample_client(dynamic  "dynamic/dynamic.c;common/sql_dump_v2.c;common/dr_utility.c;common/code_embedding.c;common/disasm_corrector.c"  "drcontainers")
+add_sample_standalone(static "static/static.c;common/sql_dump_v2.c;common/dr_utility.c;common/code_embedding.c;common/disasm_corrector.c")
 add_sample_standalone(tokenizer "tokenizer/tokenizer.c;common/code_embedding.c;common/disasm_corrector.c")
 
 #include_directories(timing)
