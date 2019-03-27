@@ -203,5 +203,7 @@ add_sample_client(static  "static/static.c;common/sql_dump_v2.c;common/dr_utilit
 
 add_sample_standalone(disassembler "disassembler/disassemble.c;common/sql_dump.c;common/dr_utility.c;common/code_embedding.c;common/disasm_corrector.c")
 
+add_sample_standalone(tokenizer "tokenizer/tokenizer.c;common/code_embedding.c;common/disasm_corrector.c")
+
 #include_directories(timing)
 #add_sample_client(timing  "timing/timing.c;timing/timing_logic.c;timing/timing_dump.c;common/dr_utility.c;common/sqlite3_impl.c;common/code_embedding.c" "")

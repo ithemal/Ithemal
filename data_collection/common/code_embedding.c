@@ -222,19 +222,13 @@ int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, i
   int written = 0;
   int ret = 0;
 
-  for(i = 0; i < num_tokens - 1; i++){
+  for(i = 0; i < num_tokens; i++){
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", tokens[i]);
     if(ret != -1){
       written += ret; pos += ret;
     }
     else return ret;
   }
-
-  ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d", tokens[num_tokens - 1]);
-  if(ret != -1){
-    written += ret; pos += ret;
-  }
-  else return ret;
 
   return written;
 
