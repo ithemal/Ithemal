@@ -10,7 +10,7 @@
 #include "common.h"
 #include "client.h"
 #include "code_embedding.h"
-#include "sql_dump.h"
+#include "sql_dump_v2.h"
 
 #define FILENAME_SIZE 1000
 
@@ -19,59 +19,40 @@ client_arg_t client_args;
 config_t config;
 
 
-bool populate_code(void * drcontext, instrlist_t * bb, code_info_t * cinfo, uint32_t dump_mode){
-  
-  if(dump_mode == DUMP_INTEL){
-    disassemble_set_syntax(DR_DISASM_INTEL);
-    if(text_token(drcontext, cinfo, bb)){
-      cinfo->code_type = CODE_INTEL;
-      return true;
-    }
-    else{
-      return false;
-    }
-  }
-  else if(dump_mode == DUMP_ATT){
-    disassemble_set_syntax(DR_DISASM_ATT);
-    if(text_att(drcontext, cinfo, bb)){
-      cinfo->code_type = CODE_ATT;
-      return true;
-    }
-    else{
-      return false;
-    }
-  }
-  else if(dump_mode == DUMP_TOKEN){
-    if(text_intel(drcontext, cinfo, bb)){
-      cinfo->code_type = CODE_TOKEN;
-      return true;
-    }
-    else{
-      return false;
-    }
-  }
-  else{
+
+bool write_code(void * drcontext, FILE * sqlfile, query_t * query, code_info_t * cinfo, instrlist_t * bb){
+
+  int sz = -1;
+
+  raw_bits(drcontext,  cinfo, bb);
+  if(cinfo->code_size == -1)
     return false;
-  }
 
-} 
+  sz = insert_code(query, cinfo);
+  if(sz == -1)
+    return false;
+  DR_ASSERT(sz <= MAX_QUERY_SIZE);
+  fprintf(sqlfile,"%s",query);
 
-int fill_sql(FILE * file, query_t * query, code_info_t * cinfo, uint32_t insert){
+  sz = insert_code_metadata(query, cinfo);
+  if(sz == -1)
+    return false;  
+  DR_ASSERT(sz <= MAX_QUERY_SIZE);
+  fprintf(sqlfile,"%s",query);
 
-  int sz = 0;
-  if(insert)
-    sz = insert_code(query, cinfo, client_args.op_mode);
-  else
-    sz = update_code(query, cinfo, client_args.op_mode);
-  
-  if(sz == -1){
-    return sz;
-  }
-  
-  DR_ASSERT(sz <= MAX_QUERY_SIZE - 3);
-  sz = complete_query(query,sz);
-  query[sz++] = '\0'; 
-  return sz;
+  disassemble_set_syntax(DR_DISASM_INTEL);
+
+  text_intel(drcontext, cinfo, bb);
+  if(cinfo->code_size == -1)
+    return false;
+
+  sz = insert_disassembly(query, cinfo, CODE_INTEL);
+  if(sz == -1)
+    return false;  
+  DR_ASSERT(sz <= MAX_QUERY_SIZE);
+  fprintf(sqlfile,"%s",query);
+
+  return true;
   
 }
 
@@ -82,23 +63,10 @@ void dump_sql(void * drcontext, const char * elfname,  instrlist_t * bb, uint32_
   query_t query[MAX_QUERY_SIZE];
   code_info_t cinfo;
 
-#define NUM_DUMP_MODES 3
-  uint32_t dump_modes[NUM_DUMP_MODES] = {DUMP_INTEL, DUMP_ATT, DUMP_TOKEN};
-  int i,j;
-
   cinfo.rel_addr = rel_addr;
   strncpy(cinfo.module, elfname, MAX_MODULE_SIZE);
+  write_code(drcontext, sqlfile, query, &cinfo, bb);
 
-  bool insert = client_args.insert_or_update;
-
-  for(j = 0; j < NUM_DUMP_MODES; j++){
-    if(populate_code(drcontext, bb,  &cinfo, client_args.dump_mode & dump_modes[j]))
-      if(fill_sql(sqlfile, query, &cinfo, insert) != -1){
-	fprintf(sqlfile, "%s\n", query);
-	insert = false;
-      }
-  }
-  
 
 }
 
@@ -136,11 +104,14 @@ void parse_elf_binary(void * drcontext, unsigned char * buf, char * metafilename
 
   //configuration dumping
   query_t query[MAX_QUERY_SIZE];
-  int sz = insert_config(query, &config, client_args.dump_mode);
-  DR_ASSERT(sz <= MAX_QUERY_SIZE - 3);
-  sz = complete_query(query,sz);
-  query[sz++] = '\0'; 
-  fprintf(sql, "%s\n", query);
+
+  int sz = insert_architecture(query, &config);
+  DR_ASSERT(sz <= MAX_QUERY_SIZE);
+  fprintf(sql, "%s", query);
+
+  sz = insert_config(query, &config);
+  DR_ASSERT(sz <= MAX_QUERY_SIZE);
+  fprintf(sql, "%s", query);
 
 
   while(fscanf(meta, "%s\t%u\t%u\n", func_bd.fname, &func_bd.offset, &func_bd.size) != EOF){
@@ -152,9 +123,6 @@ void parse_elf_binary(void * drcontext, unsigned char * buf, char * metafilename
     instrlist_t * current_list = instrlist_create(drcontext);
     unsigned char * start_bb = start_pc;
 
-    
-
- 
     while(start_pc < end_pc){
       instr_t * instr = instr_create(drcontext);
       start_pc = decode(drcontext, start_pc, instr);
@@ -185,13 +153,9 @@ main(int argc, char *argv[])
   file_t elf;
   void *drcontext = dr_standalone_init();
   if (argc != 5) {
-    dr_fprintf(STDERR, "Usage: %s <binary> <elf_binary> <metadata_file> <sql_file>\n", argv[0]);
+    dr_fprintf(STDERR, "Usage: %s <binary_name> <elf_binary> <metadata_file> <sql_file>\n", argv[0]);
     return 1;
   }
-
-  client_args.op_mode = RAW_SQL;
-  client_args.dump_mode = DUMP_INTEL | DUMP_ATT | DUMP_TOKEN;
-  client_args.insert_or_update = INSERT_CODE;
 
   char binaryname[FILENAME_SIZE];
   char elfpath[FILENAME_SIZE];
@@ -205,6 +169,9 @@ main(int argc, char *argv[])
 
   strncpy(config.compiler,"unknown", MAX_STRING_SIZE);
   strncpy(config.flags,"unknown", MAX_STRING_SIZE);
+  strncpy(config.name,"unknown", MAX_STRING_SIZE);
+  strncpy(config.vendor,"unknown", MAX_STRING_SIZE);
+
 
   elf = dr_open_file(elfpath, DR_FILE_READ | DR_FILE_ALLOW_LARGE);
   if (elf == INVALID_FILE) {
@@ -224,8 +191,6 @@ main(int argc, char *argv[])
     exit(-1);
   }
     
-  //int numCPU = sysconf(_SC_NPROCESSORS_ONLN);
-  //dr_printf("num-threads-%d\n",numCPU);
 
   buf = malloc(filesize);
   read_bytes = dr_read_file(elf, buf, filesize);
