@@ -54,17 +54,7 @@ bool filter_instr(instr_t * instr){
     return true;
   }
 
-  uint32_t tainted[12] = {DR_REG_R13, DR_REG_R13D, DR_REG_R13W, DR_REG_R13L,
-			  DR_REG_R14, DR_REG_R14D, DR_REG_R14W, DR_REG_R14L,
-			  DR_REG_R15, DR_REG_R15D, DR_REG_R15W, DR_REG_R15L};
-  uint32_t i = 0;
-
-  for(i = 0; i < 12; i++){
-    if(instr_reg_in_dst(instr, tainted[i])){
-      return true;
-    } 
-  }
-
+  int i;
   uint32_t omitted[10] = {OP_rep_ins, OP_rep_outs, OP_rep_movs, OP_rep_stos, OP_rep_lods, OP_rep_cmps, OP_rep_scas, OP_repne_cmps, OP_repne_scas, OP_xbegin};
 
   for(i = 0; i <10; i++){
@@ -76,6 +66,27 @@ bool filter_instr(instr_t * instr){
   return false;
 
 }
+
+bool raw_bits(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+
+  instr_t * instr;
+  byte * pc = cinfo->code;
+  int i = 0;
+
+  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
+    if(instr_is_app(instr) && !filter_instr(instr)){
+      int length = instr_length(drcontext, instr);
+      for(i = 0; i < length; i++){
+	*pc = instr_get_raw_byte(instr, i);
+	pc++;
+      }
+    }
+  }
+  cinfo->code_size = pc - (byte *)cinfo->code;
+  return true;
+
+}
+
 
 
 void raw_token_operand(void * drcontext, uint16_t * cpos, opnd_t op, uint32_t * mem){
@@ -211,19 +222,13 @@ int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, i
   int written = 0;
   int ret = 0;
 
-  for(i = 0; i < num_tokens - 1; i++){
+  for(i = 0; i < num_tokens; i++){
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", tokens[i]);
     if(ret != -1){
       written += ret; pos += ret;
     }
     else return ret;
   }
-
-  ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d", tokens[num_tokens - 1]);
-  if(ret != -1){
-    written += ret; pos += ret;
-  }
-  else return ret;
 
   return written;
 
