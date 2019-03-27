@@ -21,8 +21,8 @@ int insert_architecture(query_t * query, config_t * config){
 
 int insert_config(query_t * query, config_t * config){
   int pos = 0;
-  pos += sprintf(query, "INSERT INTO config (compiler, flags, arch) VALUES ('%s','%s', @arch_id);\n", config->compiler, config->flags);
-  pos += sprintf(query + pos,"SET @config_id = (SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s' AND arch = @arch_id);\n", config->compiler, config->flags);
+  pos += sprintf(query, "INSERT INTO config (compiler, flags, arch_id) VALUES ('%s','%s', @arch_id);\n", config->compiler, config->flags);
+  pos += sprintf(query + pos,"SET @config_id = (SELECT config_id FROM config WHERE compiler = '%s' AND flags = '%s' AND arch_id = @arch_id);\n", config->compiler, config->flags);
   return pos;
 }
 
