@@ -29,7 +29,7 @@ int insert_config(query_t * query, config_t * config){
 int insert_code(query_t * query, code_info_t * cinfo){
 
   int pos = 0;
-  pos += sprintf(query, "INSERT INTO code (code_raw) VALUES (0x");
+  pos += sprintf(query, "INSERT INTO code (code_raw) VALUES ('");
   
   int i = 0;
   for(i = 0; i < cinfo->code_size; i++){
@@ -37,7 +37,7 @@ int insert_code(query_t * query, code_info_t * cinfo){
   } 
   //pos += sprintf(query + pos, "-%d", cinfo->code_size);
 
-  pos += sprintf(query + pos, ");\n");
+  pos += sprintf(query + pos, "');\n");
   return pos;
 
 }
