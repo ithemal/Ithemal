@@ -73,9 +73,31 @@ bool dump_bb(void * drcontext, code_embedding_t embedding_func, code_info_t * ci
   DR_ASSERT(sz <= MAX_QUERY_SIZE);
   write_to_file(bk->static_file,query,sz);
 
+
   return true;
 
 } 
+
+bool dump_disasm(void * drcontext, code_embedding_t embedding_func, code_info_t * cinfo, instrlist_t * bb, bookkeep_t * bk, query_t * query, uint32_t type){
+  
+  int sz = -1;
+
+  embedding_func(drcontext, cinfo, bb);
+
+  if(cinfo->code_size == -1)
+    return false;
+  
+  sz = insert_disassembly(query, cinfo, type);
+  if(sz == -1)
+    return false;
+  DR_ASSERT(sz <= MAX_QUERY_SIZE);
+  write_to_file(bk->static_file, query, sz);
+
+  return true;
+  
+
+
+}
 
 //bb analysis routines
 bool populate_bb_info(void * drcontext, code_info_t * cinfo, instrlist_t * bb, bookkeep_t * bk, query_t * query){
@@ -92,6 +114,12 @@ bool populate_bb_info(void * drcontext, code_info_t * cinfo, instrlist_t * bb, b
   if(!dump_bb(drcontext, raw_bits, cinfo, bb, bk, query)){
     return false;
   }  
+
+  disassemble_set_syntax(DR_DISASM_INTEL);
+  if(!dump_disasm(drcontext, text_intel, cinfo, bb, bk, query, CODE_INTEL)){
+    return false;
+  }
+
   return true;
 
 }
