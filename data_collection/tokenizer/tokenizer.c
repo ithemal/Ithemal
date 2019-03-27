@@ -27,12 +27,13 @@ void debug_print(void * drcontext, instrlist_t * bb){
 }
 
 
-bool tokenize(void * drcontext, instrlist_t * bb){
+bool tokenize(void * drcontext, instrlist_t * bb, bool debug){
 
 
   //create the dump related data structures
   code_info_t cinfo;
-  debug_print(drcontext, bb);
+  if(debug)
+    debug_print(drcontext, bb);
   if(!text_token(drcontext, &cinfo, bb)){
     return false;
   }
@@ -96,12 +97,17 @@ main(int argc, char *argv[])
   void *drcontext = dr_standalone_init();
   char hex[65536];
 
-  if (argc != 2) {
-    dr_fprintf(STDERR, "Usage: %s <hex_string>\n", argv[0]);
+  if (argc < 2) {
+    dr_fprintf(STDERR, "Usage: %s <hex_string> <debug>\n", argv[0]);
     return 1;
   }
   else{
       strcpy(hex, argv[1]);
+  }
+
+  bool debug = false;
+  if(argc == 3 && strcmp(argv[2],"1") == 0){
+    debug = true;
   }
 
   int len = strlen(hex);
@@ -110,7 +116,7 @@ main(int argc, char *argv[])
   hex_to_byte_array(hex, b, len/2);
   instrlist_t * bb = decode_instrs(drcontext, b, len/2);
   if(bb != NULL){
-    tokenize(drcontext, bb);
+    tokenize(drcontext, bb, debug);
   }
 
   return 0;
