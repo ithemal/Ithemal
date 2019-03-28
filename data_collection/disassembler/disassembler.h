@@ -23,7 +23,7 @@
 #include <string>
 #include <memory>
 
-std::vector<uint8_t> hexToBinary(const std::string &hex);
+std::vector<uint8_t> hexToBinary(llvm::StringRef hex);
 
 class Disassembler {
   const llvm::Target *target;
