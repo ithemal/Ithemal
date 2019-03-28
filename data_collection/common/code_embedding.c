@@ -3,8 +3,10 @@
 #include <string.h>
 
 //delimiter token types
-#define DELIMITER -1
-#define MEM_TAG   -2
+#define SRC_DEM   -1
+#define DST_DEM   -2
+#define END_DEM   -3
+#define MEM_TAG   -4
 
 
 //tokenizing code
@@ -151,7 +153,7 @@ bool raw_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     }
 
     //delimiter
-    cpos[pos++] = DELIMITER;
+    cpos[pos++] = END_DEM;
     
   }
 
@@ -250,7 +252,7 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
     if(filter_instr(instr)) continue;
 
-    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), DELIMITER);
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), SRC_DEM);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return false; }
   
@@ -262,7 +264,7 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
       else { cinfo->code_size = -1; return false; }
     }
 
-    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DELIMITER);
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DST_DEM);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return false; }
    
@@ -273,7 +275,7 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
       else { cinfo->code_size = -1; return false; }
     }
 
-    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DELIMITER);
+    ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", END_DEM);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return false; }
     

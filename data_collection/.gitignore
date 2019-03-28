@@ -85,3 +85,4 @@ out.txt
 old/
 *.o
 elfs/
+sqlfiles/
