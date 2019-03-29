@@ -24,6 +24,8 @@
 
 #define SHM_FD 42
 
+#define INIT_VALUE 0x23240
+
 #define CTX_SWTCH_FD 100
 
 #define ITERS 16
@@ -90,6 +92,7 @@ struct perf_event_attr icache_attr = {
 struct perf_event_attr ctx_swtch_attr = {
   .type = PERF_TYPE_SOFTWARE,
   .config = PERF_COUNT_SW_CONTEXT_SWITCHES,
+  .exclude_idle = 0
 };
 
 char x;
@@ -228,12 +231,12 @@ struct pmc_counters *measure(
       void *fault_addr = sinfo.si_addr;
       void *restart_addr = &map_and_restart;
       if (sinfo.si_signo == 5)
-        fault_addr = (void *)0x2324000;
+        fault_addr = (void *)INIT_VALUE;
 
       // before we restart, we initialize child_mem for consistency
       int i;
       for (i = 0; i < 512; i++) {
-        ((unsigned long *)child_mem)[i] = 0x2324000;
+        ((unsigned long *)child_mem)[i] = INIT_VALUE;
       }
       restart_child(pid, restart_addr, fault_addr, shm_fd);
     }
