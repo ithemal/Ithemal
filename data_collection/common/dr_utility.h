@@ -14,5 +14,6 @@ void close_memory_map_file(mmap_file_t * file_map, size_t size);
 
 void create_raw_file(void * drcontext, const char * folder, const char * type, mmap_file_t * file);
 void write_to_file(mmap_file_t * file, void * values, uint32_t size);
+void close_raw_file(mmap_file_t * file);
 
 #endif

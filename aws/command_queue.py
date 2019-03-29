@@ -9,7 +9,10 @@ import os
 import start_instance
 import subprocess
 import sys
-import urlparse
+try:
+    import urlparse
+except ImportError:
+    import urrlib.parse as urlparse
 from typing import Optional
 import tempfile
 from typing import Any, Dict, List
@@ -98,7 +101,7 @@ def send_messages(queue, com):
                 else:
                     com = input()
                 aws_utils.queue_process.send_message(url, com)
-        except EOFError, KeyboardInterrupt:
+        except (EOFError, KeyboardInterrupt):
             pass
 
 def kill_queue(queue):

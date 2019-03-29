@@ -163,6 +163,28 @@ def get_sym_dict():
 
     return sym_dict, offsets[4]
 
+_REGISTER_ALIASES = (
+    {'REG_RAX', 'REG_EAX', 'REG_AX', 'REG_AH', 'REG_AL'},
+    {'REG_RBX', 'REG_EBX', 'REG_BX', 'REG_BH', 'REG_BL'},
+    {'REG_RCX', 'REG_ECX', 'REG_CX', 'REG_CH', 'REG_CL'},
+    {'REG_RDX', 'REG_EDX', 'REG_DX', 'REG_DH', 'REG_DL'},
+    {'REG_RSP', 'REG_ESP', 'REG_SP'},
+    {'REG_RBP', 'REG_EBP', 'REG_BP'},
+    {'REG_RSI', 'REG_ESI', 'REG_SI'},
+    {'REG_RDI', 'REG_EDI', 'REG_DI'},
+    {'REG_R8', 'REG_R8D', 'REG_R8W', 'REG_8L'},
+    {'REG_R9', 'REG_R9D', 'REG_R9W', 'REG_9L'},
+    {'REG_R10', 'REG_R10D', 'REG_R10W', 'REG_10L'},
+    {'REG_R11', 'REG_R11D', 'REG_R11W', 'REG_11L'},
+    {'REG_R12', 'REG_R12D', 'REG_R12W', 'REG_12L'},
+    {'REG_R13', 'REG_R13D', 'REG_R13W', 'REG_13L'},
+    {'REG_R14', 'REG_R14D', 'REG_R14W', 'REG_14L'},
+    {'REG_R15', 'REG_R15D', 'REG_R15W', 'REG_15L'},
+)
+_REGISTER_ALIAS_MAP = {reg: regset for regset in _REGISTER_ALIASES for reg in regset}
+def _get_canonical_operand(op):
+    return _REGISTER_ALIAS_MAP.get(_global_sym_dict.get(op, None), op)
+
 _REGISTER_CLASSES = tuple(map(frozenset, (
     {'REG_RAX', 'REG_RCX', 'REG_RDX', 'REG_RBX', 'REG_RSP', 'REG_RBP', 'REG_RSI',
      'REG_RDI', 'REG_R8', 'REG_R9', 'REG_R10', 'REG_R11', 'REG_R12', 'REG_R13',
@@ -394,22 +416,22 @@ class BasicBlock:
     def find_uses(self, n):
 
         instr = self.instrs[n]
-        for dst in instr.dsts:
+        for dst in map(_get_canonical_operand, instr.dsts):
             for i in range(n + 1, len(self.instrs), 1):
                 dst_instr = self.instrs[i]
-                if dst in dst_instr.srcs:
+                if dst in map(_get_canonical_operand, dst_instr.srcs):
                     if not dst_instr in instr.children:
                         instr.children.append(dst_instr)
-                if dst in dst_instr.dsts: #value becomes dead here
+                if dst in map(_get_canonical_operand, dst_instr.dsts): #value becomes dead here
                     break
 
     def find_defs(self, n):
 
         instr = self.instrs[n]
-        for src in instr.srcs:
+        for src in map(_get_canonical_operand, instr.srcs):
             for i in range(n - 1, -1, -1):
                 src_instr = self.instrs[i]
-                if src in src_instr.dsts:
+                if src in map(_get_canonical_operand, src_instr.dsts):
                     if not src_instr in instr.parents:
                         instr.parents.append(src_instr)
                     break

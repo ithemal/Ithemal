@@ -7,11 +7,13 @@
 
 typedef bool (*code_embedding_t) (void *, code_info_t *, instrlist_t *);
 
-bool textual_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
-bool textual_embedding_with_size(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+bool raw_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 
-bool token_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
-bool token_text_embedding(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+bool text_intel(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
+
+bool raw_bits(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 
 
 
