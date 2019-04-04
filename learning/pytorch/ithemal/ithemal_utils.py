@@ -142,6 +142,6 @@ def load_model(params, data):
                            nonlinear_before_max=params.dag_nonlinear_before_max,
         )
 
-    model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)
+    model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.hot_idx_to_token) + 1)
 
     return model

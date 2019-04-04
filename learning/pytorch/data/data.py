@@ -18,28 +18,9 @@ class Data(object):
     """
 
 
-    def __init__(self, data=None): #copy constructor
-
+    def __init__(self): #copy constructor
         self.percentage = 80
         self.costs = dict()
-
-        if data != None:
-            self.sym_dict = data.sym_dict
-            self.offsets = data.offsets
-
-            self.opcode_start = data.opcode_start
-            self.operand_start = data.operand_start
-            self.int_immed = data.int_immed
-            self.float_immed = data.float_immed
-            self.mem_start = data.mem_start
-
-            self.costs = data.costs
-            self.raw_data = data.raw_data
-
-            self.final_embeddings = data.final_embeddings
-            self.word2id = data.word2id
-            self.fields = data.fields
-
 
     def extract_data(self, cnx, format, fields):
         print 'extracting data'

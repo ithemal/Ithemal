@@ -1,6 +1,5 @@
 import numpy as np
 import random
-import word2vec.word2vec as w2v
 import torch.nn as nn
 import torch.autograd as autograd
 import torch.optim as optim
@@ -10,6 +9,7 @@ from .data import Data
 import matplotlib.pyplot as plt
 import statistics
 import pandas as pd
+import xml.etree.ElementTree as ET
 
 import sys
 sys.path.append('..')
@@ -19,294 +19,79 @@ import common_libs.utilities as ut
 
 class DataItem:
 
-    def __init__(self, x, y, block):
+    def __init__(self, x, y, block, code_id):
         self.x = x
         self.y = y
         self.block = block
-        self.code_id = None
+        self.code_id = code_id
 
-
-class DataCost(Data):
-
-    def __init__(self, data=None):
-        super(DataCost, self).__init__(data)
-        self.time_percentage = 10
-        self.threshold = 30
-
-        self.min_count_threshold = 1
-        self.min_time_threshold = 44
-        self.max_time_threshold = 10000
-
-
-    def get_time_mode(self, times):
-
-        self.mode_count = 0
-        self.mode_time = 0
-
-        self.times = []
-        for row in times:
-            if row[0] <= self.min_time_threshold or row[0] > self.max_time_threshold:
-                continue
-            inserted = False
-            try:
-                for i,time in enumerate(self.times):
-                    if (abs(row[0] - time[0]) * 100) / time[0] < self.time_percentage:
-                        new_time = (time[0] * time[1] + row[0] * row[1]) / (time[1] + row[1])
-                        new_count = time[1] + row[1]
-                        self.times[i] = [new_time, new_count]
-                        inserted = True
-                        break
-                if not inserted:
-                    self.times.append([row[0],row[1]])
-            except:
-                print 'error'
-                print self.times
-
-        self.count = 0
-        for time in self.times:
-            self.count += time[1]
-
-        if self.count >= self.min_count_threshold:
-            for time in self.times:
-                if time[1] >= self.mode_count:
-                    self.mode_time = time[0]
-                    self.mode_count = time[1]
-
-            self.mode_count = self.mode_count * 100.0 / self.count
-
-        if self.count > 0 and (self.mode_count >= self.threshold):
-            return self.mode_time, self.mode_count
-        else:
-            return None, None
-
-    def update_times(self, cnx):
-
-        sql = 'SELECT code_id FROM code'
-        rows = ut.execute_query(cnx, sql, True)
-
-        row_count = 0
-        for row in tqdm(rows):
-            sql = 'UPDATE code SET time=NULL WHERE code_id=' + str(row[0])
-            ut.execute_query(cnx, sql, False)
-        cnx.commit()
-
-        mode_dist = dict()
-        for row in tqdm(rows):
-            sql = 'SELECT time, count FROM times WHERE code_id = ' + str(row[0])
-            times = ut.execute_query(cnx, sql, True)
-            mode, count = self.get_time_mode(times)
-
-            if mode != None:
-                if mode in mode_dist:
-                    mode_dist[mode] += 1
-                else:
-                    mode_dist[mode] = 1
-
-                row_count += 1
-                sql = 'UPDATE code SET time=' + str(mode) + ' WHERE code_id=' + str(row[0])
-                ut.execute_query(cnx, sql, False)
-                sql = 'SELECT time from code WHERE code_id=' + str(row[0])
-                res = ut.execute_query(cnx, sql, True)
-                assert res[0][0] == mode
-
-        print len(rows)
-        print row_count
-        print mode_dist
-
-        cnx.commit()
-
-    def print_times(self, f, text, time):
-
-        for t in text:
-             f.write('%s,' % t)
-        f.write(' %d\n' % time)
-
-    def clean_data(self):
-        #remove skew of data
-        temp_data = []
-        per_region_count = dict()
-        max_per_region = 4000
-        region_size = 10
-
-        self.max_time = min(1000, self.max_time)
-
-        omitted = 0
-        for item in self.data:
-            y = item.y
-            if y > self.max_time:
-                omitted += 1
-                continue
-
-            region = y // region_size
-            if region in per_region_count:
-                per_region_count[region] += 1
-            else:
-                per_region_count[region] = 1
-
-            if per_region_count[region] <= max_per_region:
-                temp_data.append(item)
-
-        print 'omitted ' + str(omitted)
-
-        self.data = temp_data
-
-        print 'after removing skew...'
-        print len(self.data)
-
-        #randomize
-        shuffled = range(len(self.data))
-        random.shuffle(shuffled)
-
-        temp_data = []
-        for i in shuffled:
-            temp_data.append(self.data[i])
-
-        self.data = temp_data
-
-        self.plot_histogram(self.data)
-
-
-    def count_cost_dist(self,data):
-        costs = dict()
-        for item in data:
-            if item.y in costs:
-                costs[item.y] += 1
-            else:
-                costs[item.y] = 1
-
-        for key in sorted(costs.iterkeys()):
-            sys.stdout.write("%d: %d, " % (key, costs[key]))
-        sys.stdout.write('\n')
-
-
-    def prepare_for_classification(self):
-
-        for item in self.data:
-            one_hot = [0] * self.max_time
-            one_hot[item.y - 1] = 1
-            item.y = one_hot
-
-        return self.max_time
-
-
-    def get_timing_data(self, cnx, arch):
-
-        data = []
-
-        sql = 'SELECT code_id, AVG(time) as time FROM times WHERE arch={} AND kind="actual" GROUP BY code_id'.format(arch)
-        times = pd.read_sql(sql, cnx).set_index('code_id')
-
-        #assumes code_token and code_id
-        for row in tqdm(self.raw_data):
-
-            if len(row[0]) == 0:
-                continue
-
-            try:
-                avg_time = times.loc[row[1]]['time']
-            except KeyError:
-                continue
-
-            data.append((row[0],avg_time,row[2],row[1]))
-
-
-
-        self.raw_data = data
-
-        print 'timing values registered for ' + str(len(data)) + ' items'
-
-
-class DataTokenEmbedding(DataCost):
-
-    def __init__(self, data=None):
-        super(DataTokenEmbedding, self).__init__(data)
-
-    def prepare_data(self):
-
-        self.data = []
-        times = dict()
-
-        for row in tqdm(self.raw_data):
-            if len(row[0]) > 0 and row[1] != None:
-                code = []
-                for token in row[0]:
-                    code.append(self.word2id.get(token,0))
-
-                mode = row[1]
-
-                if mode <= 20 or mode > 10000:
-                    continue
-
-                if mode in times:
-                    times[mode] += 1
-                else:
-                    times[mode] = 1
-
-                item = DataItem(code, mode, None)
-
-                if len(row) > 3:
-                    item.code_id = row[3]
-
-                self.data.append(item)
-
-        self.max_time = max(times)
-        print len(self.raw_data), len(self.data)
-
-
-class DataInstructionEmbedding(DataCost):
+class DataInstructionEmbedding(Data):
 
     def __init__(self, data=None):
         super(DataInstructionEmbedding, self).__init__(data)
 
-
     def prepare_data(self):
+        self.token_to_hot_idx = {}
+        self.hot_idx_to_token = {}
+
+        def hot_idxify(elem):
+            if elem not in self.token_to_hot_idx:
+                self.token_to_hot_idx[elem] = len(self.token_to_hot_idx)
+                self.hot_idx_to_token[self.token_to_hot_idx[elem]] = elem
+            return self.token_to_hot_idx[elem]
 
         self.data = []
-        times = dict()
 
-        for row in tqdm(self.raw_data):
-            if len(row[0]) > 0 and row[1] != None:
-                code = []
-                ins = []
-                for token in row[0]:
-                    if token >= self.opcode_start and token < self.mem_start:
-                        if len(ins) != 0:
-                            code.append(ins)
-                            ins = []
-                    ins.append(self.word2id.get(token,0))
-                if len(ins) != 0:
-                    code.append(ins)
-                    ins = []
+        for (code_id, timing, code_intel, code_xml) in tqdm(self.raw_data):
+            block_root = ET.fromstring(code_xml)
+            instrs = []
+            raw_instrs = []
+            curr_mem = self.mem_start
+            for (instr, m_code_intel) in zip(block_root, code_intel.split('\n')):
+                raw_instr = []
+                opcode = int(instr.find('opcode').text)
+                raw_instr.extend([opcode, '<SRCS>'])
+                srcs = []
+                for src in instr.find('srcs'):
+                    if src.find('mem') is not None:
+                        raw_instr.append('<MEM>')
+                        for mem_op in src.find('mem'):
+                            raw_instr.append(int(mem_op.text))
+                            srcs.append(int(mem_op.text))
+                        raw_instr.append('</MEM>')
+                        srcs.append(curr_mem)
+                        curr_mem += 1
+                    else:
+                        raw_instr.append(int(src.text))
+                        srcs.append(int(src.text))
 
+                raw_instr.append('<DSTS>')
+                dsts = []
+                for dst in instr.find('dsts'):
+                    if dst.find('mem') is not None:
+                        raw_instr.append('<MEM>')
+                        for mem_op in dst.find('mem'):
+                            raw_instr.append(int(mem_op.text))
+                            # operands used to calculate dst mem ops are sources
+                            srcs.append(int(mem_op.text))
+                        raw_instr.append('</MEM>')
+                        dsts.append(curr_mem)
+                        curr_mem += 1
+                    else:
+                        raw_instr.append(int(dst.text))
+                        dsts.append(int(dst.text))
 
-                mode = row[1]
+                raw_instr.append('<END>')
+                raw_instrs.append(list(map(hot_idxify, raw_instr)))
+                instrs.append(ut.Instruction(opcode, srcs, dsts, len(instrs)))
+                instrs[-1].intel = m_code_intel
 
-                if mode <= 20 or mode > 10000:
-                    continue
+            block = ut.BasicBlock(instrs)
+            block.create_dependencies()
+            datum = DataItem(raw_instrs, timing, block, code_id)
+            self.data.append(datum)
 
-                block = ut.create_basicblock(row[0])
-                block.create_dependencies()
-                for (instr, intel) in zip(block.instrs, row[2].split('\n')):
-                    instr.intel = intel
-
-
-                if mode in times:
-                    times[mode] += 1
-                else:
-                    times[mode] = 1
-
-                item = DataItem(code, mode, block)
-
-                if len(row) > 3:
-                    item.code_id = row[3]
-
-                self.data.append(item)
-
-        self.max_time = max(times)
-        print len(self.raw_data), len(self.data)
-
-
-def load_dataset(embed_file, data_savefile=None, arch=None, format='text'):
+def load_dataset(data_savefile=None, arch=None, format='text'):
     data = DataInstructionEmbedding()
 
     if data_savefile is None:
@@ -319,7 +104,6 @@ def load_dataset(embed_file, data_savefile=None, arch=None, format='text'):
     else:
         data.raw_data = torch.load(data_savefile)
 
-    data.set_embedding(embed_file)
     data.read_meta_data()
     data.prepare_data()
     data.generate_datasets()
