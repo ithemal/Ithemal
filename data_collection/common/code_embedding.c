@@ -25,7 +25,7 @@ static void print_opnds(instr_t * instr){
 
   int num_srcs = instr_num_srcs(instr);
   int i = 0;
-  
+
   dr_printf("srcs:");
   for(i = 0; i < num_srcs; i++){
     opnd_t op = instr_get_src(instr,i);
@@ -36,7 +36,7 @@ static void print_opnds(instr_t * instr){
 
   int num_dsts = instr_num_dsts(instr);
   i = 0;
-  
+
   dr_printf("dsts:");
   for(i = 0; i < num_dsts; i++){
     opnd_t op = instr_get_dst(instr,i);
@@ -44,7 +44,7 @@ static void print_opnds(instr_t * instr){
     dr_printf("%s,",temp);
   }
   dr_printf("\n");
-  
+
 }
 
 
@@ -92,7 +92,7 @@ bool raw_bits(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
 
 void raw_token_operand(void * drcontext, uint16_t * cpos, opnd_t op, uint32_t * mem){
-  
+
   uint16_t value = 0;
 
   //dr_printf("%d,%d,%d,%d\n",opnd_is_reg(op),opnd_is_immed_int(op),opnd_is_immed_float(op),opnd_is_memory_reference(op));
@@ -120,7 +120,7 @@ void raw_token_operand(void * drcontext, uint16_t * cpos, opnd_t op, uint32_t * 
 
   DR_ASSERT(value); //should have a non-zero value
   DR_ASSERT(!opnd_is_pc(op)); //we do not consider branch instructions
-  
+
   *cpos = value;
 
 }
@@ -130,14 +130,14 @@ bool raw_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   instr_t * instr;
   int pos = 0;
   int i = 0;
-  
+
   uint16_t * cpos = cinfo->code;
 
   uint32_t mem = 0;
 
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
 
-    uint16_t opcode = instr_get_opcode(instr);   
+    uint16_t opcode = instr_get_opcode(instr);
     cpos[pos++] = OPCODE_START + opcode;
 
     opnd_t op;
@@ -154,13 +154,21 @@ bool raw_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
     //delimiter
     cpos[pos++] = END_DEM;
-    
+
   }
 
   cinfo->code_size = sizeof(uint16_t) * pos;
   return true;
 }
 
+void op_error(void* drcontext, opnd_t op, instr_t* instr) {
+  fprintf(stderr, "Illegal (or unknown) operand:\n");
+  opnd_disassemble(drcontext, op, STDERR);
+  fprintf(stderr, "\nIn instruction:\n");
+  instr_disassemble(drcontext, instr, STDERR);
+  fprintf(stderr, "\n");
+  exit(-1);
+}
 
 int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, instr_t * instr){
   
@@ -219,7 +227,7 @@ int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, i
 
   DR_ASSERT(num_tokens > 0); //should have at least one token
   DR_ASSERT(!opnd_is_pc(op)); //we do not consider branch instructions
-  
+
   int i;
   int written = 0;
   int ret = 0;
@@ -372,8 +380,87 @@ bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
   cinfo->code_size = pos;
   return true;
-  
- 
-
 }
 
+uint32_t text_xml_operand(void * drcontext, char * buf, uint32_t bufidx, opnd_t op, instr_t * instr) {
+  bufidx += sprintf(&buf[bufidx], "<operand>");
+
+  int tokens[256];
+  uint32_t num_tokens = 0;
+
+  if(opnd_is_reg(op)) {
+    bufidx += sprintf(&buf[bufidx], "%d", REG_START + opnd_get_reg(op));
+  } else if(opnd_is_immed_int(op) || opnd_is_immed_int64(op)){
+    bufidx += sprintf(&buf[bufidx], "%d", INT_IMMED);
+  } else if(opnd_is_immed_float(op)){
+    bufidx += sprintf(&buf[bufidx], "%d", FLOAT_IMMED);
+  } else if(opnd_is_memory_reference(op)) {
+    bufidx += sprintf(&buf[bufidx], "<mem>");
+    if(opnd_is_base_disp(op)) {
+      reg_id_t base = opnd_get_base(op);
+      reg_id_t index = opnd_get_index(op);
+      int disp = opnd_get_disp(op);
+
+      if (base != REG_NULL) {
+        bufidx += sprintf(&buf[bufidx], "%d", REG_START + opnd_get_base(op));
+      }
+      if (index != REG_NULL) {
+        bufidx += sprintf(&buf[bufidx], "%d", REG_START + opnd_get_index(op));
+      }
+      if (disp != 0) {
+        bufidx += sprintf(&buf[bufidx], "%d", INT_IMMED);
+      }
+    } else if (opnd_is_abs_addr(op)) {
+      bufidx += sprintf(&buf[bufidx], "%d", INT_IMMED);
+    } else if (opnd_is_rel_addr(op)) {
+      bufidx += sprintf(&buf[bufidx], "%d", INT_IMMED);
+    } else {
+      op_error(drcontext, op, instr);
+    }
+    bufidx += sprintf(&buf[bufidx], "</mem>");
+  } else {
+    op_error(drcontext, op, instr);
+  }
+
+  bufidx += sprintf(&buf[bufidx], "</operand>");
+
+  return bufidx;
+}
+
+
+bool text_xml(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
+  char* buf = cinfo->code;
+  uint32_t bufidx = 0;
+  bufidx += sprintf(&buf[bufidx], "<block>");
+
+  instr_t* instr;
+  for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)) {
+    if(filter_instr(instr)) {
+      continue;
+    }
+
+    bufidx += sprintf(&buf[bufidx], "<instr>");
+    bufidx += sprintf(&buf[bufidx], "<opcode>%d</opcode>", OPCODE_START + instr_get_opcode(instr));
+    bufidx += sprintf(&buf[bufidx], "<srcs>");
+
+    int i;
+    for(i = 0; i < instr_num_srcs(instr); i++) {
+      opnd_t op = instr_get_src(instr, i);
+      bufidx = text_xml_operand(drcontext, buf, bufidx, op, instr);
+    }
+
+    bufidx += sprintf(&buf[bufidx], "</srcs><dsts>");
+
+    for(i = 0; i < instr_num_dsts(instr); i++){
+      opnd_t op = instr_get_dst(instr,i);
+      bufidx = text_xml_operand(drcontext, buf, bufidx, op, instr);
+    }
+
+    bufidx += sprintf(&buf[bufidx], "</dsts>");
+    bufidx += sprintf(&buf[bufidx], "</instr>");
+  }
+
+
+  bufidx += sprintf(&buf[bufidx], "</block>");
+  cinfo->code_size = bufidx;
+}
