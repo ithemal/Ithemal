@@ -4,7 +4,6 @@
 import numpy as np
 import common_libs.utilities as ut
 import random
-import word2vec.word2vec as w2v
 import torch.nn as nn
 import torch.autograd as autograd
 import torch.optim as optim

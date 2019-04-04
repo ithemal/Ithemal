@@ -3,7 +3,6 @@
 import numpy as np
 import common_libs.utilities as ut
 import random
-import word2vec.word2vec as w2v
 import torch.nn as nn
 import torch.autograd as autograd
 import torch.optim as optim
@@ -22,7 +21,6 @@ class Data(object):
     def __init__(self, data=None): #copy constructor
 
         self.percentage = 80
-        self.embedder = w2v.Word2Vec(num_steps = 2500)
         self.costs = dict()
 
         if data != None:
@@ -41,35 +39,6 @@ class Data(object):
             self.final_embeddings = data.final_embeddings
             self.word2id = data.word2id
             self.fields = data.fields
-
-
-    def set_embedding(self, embedding_file):
-
-        """
-        Optionally runs word2vec if an embedding file is not given or loads from file.
-
-        """
-
-        print 'getting the embedding...'
-        if embedding_file == None:
-            print 'running word2vec....'
-            token_data = list()
-            for row in self.raw_data:
-                token_data.extend(row[0])
-            print len(token_data)
-
-            data = self.embedder.generate_dataset(token_data,self.sym_dict,self.mem_start)
-            self.embedder.train(data,self.sym_dict,self.mem_start)
-            self.final_embeddings = self.embedder.get_embedding()
-
-            #create variable length per basic block instruction stream
-            self.word2id = self.embedder.data.word2id
-            self.id2word = self.embedder.data.id2word
-
-        else:
-            print 'reading from file....'
-            with open(embedding_file,'r') as f:
-                (self.final_embeddings,self.word2id,self.id2word) = torch.load(f)
 
 
     def extract_data(self, cnx, format, fields):
