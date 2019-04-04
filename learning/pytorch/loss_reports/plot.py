@@ -29,7 +29,7 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _TRAIN = 'Train'
 _TEST = 'Test'
 
-def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, raw_x, save, names, norm_epoch, min_y, max_y):
+def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, raw_x, save, norm_epoch, min_y, max_y):
     # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool, bool, Optional[str]) -> None
 
     def get_times_and_losses(measurement, blur):
@@ -65,10 +65,7 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
 
     for idx, (train_measurement, test_measurement, finished) in enumerate(zip(train_measurements, test_measurements, has_finished)):
         color = 'C{}'.format(idx)
-        if names:
-            name = names[idx]
-        else:
-            name = test_measurement.experiment_name
+        name = test_measurement.experiment_name
         train_times, train_losses = get_times_and_losses(train_measurement, train_blur)
         test_times, test_losses = get_times_and_losses(test_measurement, test_blur)
 
@@ -102,8 +99,8 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
                 loss_ax.plot([x,x], [y - 0.005, y + 0.005], color=color)
 
         loss_ax.plot(train_times, train_losses, label='{} train loss'.format(name), color=color)
-        loss_ax.plot(test_times, test_losses, linestyle='--', label='{} test loss'.format(name), color=color)
-
+        if len(test_times) > 0:
+            loss_ax.plot(test_times, test_losses, linestyle='--', label='{} test loss'.format(name), color=color)
 
         if finished:
             loss_ax.scatter(train_times[-1:], train_losses[-1:], marker='x', color=color)
@@ -163,7 +160,7 @@ def synchronize_experiment_files(experiment_name):
 
     return experiment_name, experiment_times, has_finished
 
-def extract_train_measurement(experiment_name, experiment_time):
+def extract_train_measurement(experiment_name, user_provided_name, experiment_time):
     # type: (str, str) -> TrainMeasurement
 
     fname = os.path.join(_DIRNAME, 'data', experiment_name, experiment_time, 'loss_report.log')
@@ -183,14 +180,14 @@ def extract_train_measurement(experiment_name, experiment_time):
             trainers.append(int(split[3]))
 
     return TrainMeasurement(
-        experiment_name,
+        user_provided_name,
         np.array(epochs),
         np.array(times),
         np.array(losses),
         np.array(trainers),
     )
 
-def extract_test_measurement(experiment_name, experiment_time):
+def extract_test_measurement(experiment_name, user_provided_name, experiment_time):
     # type: (str, str) -> TestMeasurement
 
     checkpoint_fname_pat = re.compile('(?P<time>\d+\.\d+).report')
@@ -221,21 +218,26 @@ def extract_test_measurement(experiment_name, experiment_time):
     times = times[sorted_idxs]
     losses = losses[sorted_idxs]
 
-    return TestMeasurement(experiment_name, times, losses)
+    return TestMeasurement(user_provided_name, times, losses)
 
-def get_measurements(experiments):
-    # type: (List[str]) -> Tuple[List[TrainMeasurement], List[TestMeasurement], List[bool]]
+def get_measurements(experiments, names):
+    # type: (List[str], List[str]) -> Tuple[List[TrainMeasurement], List[TestMeasurement], List[bool]]
 
     train_measurements = [] # type: List[TrainMeasurement]
     test_measurements = [] # type: List[TestMeasurement]
     has_finished = [] # type: List[bool]
 
-    for experiment_name in experiments:
+    if not names:
+        names = experiments
+
+    assert len(names) == len(experiments)
+
+    for experiment_name, user_name in zip(experiments, names):
         name, experiment_times, finished = synchronize_experiment_files(experiment_name)
         has_finished.extend(finished)
         for experiment_time in experiment_times:
-            train_measurements.append(extract_train_measurement(name, experiment_time))
-            test_measurements.append(extract_test_measurement(name, experiment_time))
+            train_measurements.append(extract_train_measurement(name, user_name, experiment_time))
+            test_measurements.append(extract_test_measurement(name, user_name, experiment_time))
 
     return train_measurements, test_measurements, has_finished
 
@@ -258,23 +260,18 @@ def main():
 
     args = parser.parse_args()
 
-    train_measurements, test_measurements, has_finished = get_measurements(args.experiments)
+    train_measurements, test_measurements, has_finished = get_measurements(args.experiments, args.names)
 
     if args.no_test:
         test_measurements = list(TestMeasurement(m.experiment_name, [], []) for m in test_measurements)
 
-    names = args.names
-
     if args.sort:
-        idxs = np.argsort([-np.mean(m.losses) for m in train_measurements])
+        idxs = np.argsort([-np.mean(m.losses[len(m.losses)//2:]) for m in train_measurements])
         train_measurements = [train_measurements[i] for i in idxs]
         test_measurements = [test_measurements[i] for i in idxs]
         has_finished = [has_finished[i] for i in idxs]
 
-        if names:
-            names = [names[i] for i in idxs]
-
-    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, names, args.norm_epoch, args.min_y, args.max_y)
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, args.norm_epoch, args.min_y, args.max_y)
 
 if __name__ == '__main__':
     main()
