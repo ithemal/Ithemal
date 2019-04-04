@@ -171,7 +171,7 @@ void op_error(void* drcontext, opnd_t op, instr_t* instr) {
 }
 
 int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, instr_t * instr){
-  
+
 #define MAX_TOKENS 10
 
   int tokens[MAX_TOKENS];
@@ -192,8 +192,8 @@ int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, i
   else if(opnd_is_memory_reference(op)){
 
     tokens[num_tokens++] = MEM_TAG;
-    if(opnd_is_base_disp(op)){ 
-      
+    if(opnd_is_base_disp(op)){
+
       reg_id_t base = opnd_get_base(op);
       reg_id_t index = opnd_get_index(op);
       int disp = opnd_get_disp(op);
@@ -205,7 +205,7 @@ int text_token_operand(void * drcontext, char * cpos, uint32_t pos, opnd_t op, i
       if(disp != 0)
 	tokens[num_tokens++] = INT_IMMED;
     }
-    else if(opnd_is_abs_addr(op)){ 
+    else if(opnd_is_abs_addr(op)){
       tokens[num_tokens++] = INT_IMMED;
     }
     else if(opnd_is_rel_addr(op)){
@@ -251,7 +251,7 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   int pos = 0;
   int i = 0;
   int ret = 0;
-  
+
   char * cpos = cinfo->code;
 
   uint32_t mem = 0;
@@ -263,7 +263,7 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos ,"%d,%d,", OPCODE_START + instr_get_opcode(instr), SRC_DEM);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return false; }
-  
+
     opnd_t op;
     for(i = 0; i < instr_num_srcs(instr); i++){
       op = instr_get_src(instr,i);
@@ -275,7 +275,7 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", DST_DEM);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return false; }
-   
+
     for(i = 0; i < instr_num_dsts(instr); i++){
       op = instr_get_dst(instr,i);
       ret = text_token_operand(drcontext, cpos, pos, op, instr);
@@ -286,12 +286,12 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     ret = dr_snprintf(cpos + pos, MAX_CODE_SIZE - pos, "%d,", END_DEM);
     if(ret != -1) pos += ret;
     else { cinfo->code_size = -1; return false; }
-    
+
   }
 
   cinfo->code_size = pos;
   return true;
-  
+
 }
 
 
@@ -302,7 +302,7 @@ bool text_intel(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
 
     if(filter_instr(instr)) continue;
-    
+
     pos += instr_disassemble_to_buffer(drcontext,instr,cinfo->code + pos, MAX_CODE_SIZE - 1 -  pos);
     cinfo->code[pos++] = '\n';
 
@@ -324,11 +324,11 @@ bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
   instr_t * instr;
   int pos = 0;
- 
+
   char disasm[BUFFER_SIZE];
 
   ins_t ins;
-  
+
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
     if(filter_instr(instr)) continue;
 
@@ -352,7 +352,7 @@ bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos, "%s ", ins.name);
     DR_ASSERT(w > 0);
     pos += w;
-    
+
     for(j = 0; j < ins.num_ops; j++){
       w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos, "%s", ins.operands[j].name);
       DR_ASSERT(w > 0);
@@ -363,7 +363,7 @@ bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 	pos += w;
       }
     }
-    w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos,  "\n"); 
+    w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos,  "\n");
     DR_ASSERT(w > 0);
     pos += w;
 

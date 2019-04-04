@@ -21,12 +21,12 @@ typedef struct{
 typedef struct{
   uint32_t control;
   char module[MAX_MODULE_SIZE];
-  void * module_start; 
+  void * module_start;
   char function[MAX_MODULE_SIZE];
   uint32_t code_type;
   unsigned char code[MAX_CODE_SIZE];
   int32_t code_size;
-  uint32_t rel_addr; 
+  uint32_t rel_addr;
   uint32_t num_instr;
   uint32_t span;
 } code_info_t;
