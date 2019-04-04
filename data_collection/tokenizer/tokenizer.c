@@ -37,8 +37,14 @@ bool tokenize(void * drcontext, instrlist_t * bb, bool debug){
   if(!text_token(drcontext, &cinfo, bb)){
     return false;
   }
+  if(debug){
+    dr_printf("\ncode_size-%d(%d)\n",cinfo.code_size, MAX_CODE_SIZE);
+  }
 
-  dr_printf("%s",cinfo.code);
+  int i = 0;
+  for(i = 0;i < cinfo.code_size; i++){
+    dr_printf("%c",cinfo.code[i]);
+  }
   return true;
 
 }
