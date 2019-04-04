@@ -402,13 +402,13 @@ uint32_t text_xml_operand(void * drcontext, char * buf, uint32_t bufidx, opnd_t 
       int disp = opnd_get_disp(op);
 
       if (base != REG_NULL) {
-        bufidx += sprintf(&buf[bufidx], "%d", REG_START + opnd_get_base(op));
+        bufidx += sprintf(&buf[bufidx], "<base>%d</base>", REG_START + base);
       }
       if (index != REG_NULL) {
-        bufidx += sprintf(&buf[bufidx], "%d", REG_START + opnd_get_index(op));
+        bufidx += sprintf(&buf[bufidx], "<index>%d</index>", REG_START + index);
       }
       if (disp != 0) {
-        bufidx += sprintf(&buf[bufidx], "%d", INT_IMMED);
+        bufidx += sprintf(&buf[bufidx], "<disp>%d</disp>", INT_IMMED);
       }
     } else if (opnd_is_abs_addr(op)) {
       bufidx += sprintf(&buf[bufidx], "%d", INT_IMMED);
