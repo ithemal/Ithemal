@@ -119,7 +119,13 @@ def main():
     parser.add_argument('--rnn-learn-init', action='store_true', default=False)
     parser.add_argument('--rnn-connect-tokens', action='store_true', default=False)
 
-    parser.add_argument('--dag-nonlinear', action='store_true', default=False)
+    dag_nonlinearity_group = parser.add_mutually_exclusive_group()
+    dag_nonlinearity_group.add_argument('--dag-relu-nonlinearity', action='store_const', const=md.NonlinearityType.RELU, dest='dag_nonlinearity')
+    dag_nonlinearity_group.add_argument('--dag-tanh-nonlinearity', action='store_const', const=md.NonlinearityType.TANH, dest='dag_nonlinearity')
+    dag_nonlinearity_group.add_argument('--dag-sigmoid-nonlinearity', action='store_const', const=md.NonlinearityType.SIGMOID, dest='dag_nonlinearity')
+    parser.set_defaults(dag_nonlinearity=None)
+    parser.add_argument('--dag-nonlinearity-width', help='The width of the final nonlinearity (default: 128)', default=128, type=int)
+    parser.add_argument('--dag-nonlinear-before-max', action='store_true', default=False)
 
     data_dependency_group = parser.add_mutually_exclusive_group()
     data_dependency_group.add_argument('--linear-dependencies', action='store_true', default=False)
@@ -128,6 +134,8 @@ def main():
     dag_reduction_group = parser.add_mutually_exclusive_group()
     dag_reduction_group.add_argument('--dag-add-reduction', action='store_const', const=md.ReductionType.ADD, dest='dag_reduction')
     dag_reduction_group.add_argument('--dag-max-reduction', action='store_const', const=md.ReductionType.MAX, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-mean-reduction', action='store_const', const=md.ReductionType.MEAN, dest='dag_reduction')
+    dag_reduction_group.add_argument('--dag-attention-reduction', action='store_const', const=md.ReductionType.ATTENTION, dest='dag_reduction')
     parser.set_defaults(dag_reduction=md.ReductionType.MAX)
 
     def add_edge_ablation(ablation):
@@ -207,7 +215,9 @@ def main():
         no_mem=args.no_mem,
         linear_dependencies=args.linear_dependencies,
         flat_dependencies=args.flat_dependencies,
-        dag_nonlinear=args.dag_nonlinear,
+        dag_nonlinearity=args.dag_nonlinearity,
+        dag_nonlinearity_width=args.dag_nonlinearity_width,
+        dag_nonlinear_before_max=args.dag_nonlinear_before_max,
     )
 
     if args.subparser == 'train':

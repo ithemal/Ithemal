@@ -39,7 +39,9 @@ BaseParameters = NamedTuple('BaseParameters', [
     ('no_mem', bool),
     ('linear_dependencies', bool),
     ('flat_dependencies', bool),
-    ('dag_nonlinear', bool),
+    ('dag_nonlinearity', md.NonlinearityType),
+    ('dag_nonlinearity_width', int),
+    ('dag_nonlinear_before_max', bool),
 ])
 
 TrainParameters = NamedTuple('TrainParameters', [
@@ -136,7 +138,8 @@ def load_model(params, data):
         model = md.GraphNN(embedding_size=params.embed_size, hidden_size=params.hidden_size, num_classes=1,
                            use_residual=not params.no_residual, linear_embed=params.linear_embeddings,
                            use_dag_rnn=not params.no_dag_rnn, reduction=params.dag_reduction,
-                           nonlinear=params.dag_nonlinear,
+                           nonlinear_type=params.dag_nonlinearity, nonlinear_width=params.dag_nonlinearity_width,
+                           nonlinear_before_max=params.dag_nonlinear_before_max,
         )
 
     model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.word2id) + 1, seed=data.final_embeddings)

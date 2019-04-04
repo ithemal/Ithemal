@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
-from enum import Enum
+from enum import Enum, unique
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -69,14 +69,23 @@ class AbstractGraphModule(nn.Module):
         # type: (dt.DataItem) -> None
         pass
 
+@unique
 class ReductionType(Enum):
     MAX = 0
     ADD = 1
+    MEAN = 2
+    ATTENTION = 3
+
+@unique
+class NonlinearityType(Enum):
+    RELU = 0
+    SIGMOID = 1
+    TANH = 2
 
 class GraphNN(AbstractGraphModule):
 
-    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True, reduction=ReductionType.MAX, nonlinear=False):
-        # type: (int, int, int, bool, bool, bool, ReductionType, bool) -> None
+    def __init__(self, embedding_size, hidden_size, num_classes, use_residual=True, linear_embed=False, use_dag_rnn=True, reduction=ReductionType.MAX, nonlinear_width=128, nonlinear_type=NonlinearityType.RELU, nonlinear_before_max=False):
+        # type: (int, int, int, bool, bool, bool, ReductionType, int, NonlinearityType, bool) -> None
         super(GraphNN, self).__init__(embedding_size, hidden_size, num_classes)
 
         assert use_residual or use_dag_rnn, 'Must use some type of predictor'
@@ -101,22 +110,68 @@ class GraphNN(AbstractGraphModule):
         #linear layer for final regression result
         self.linear = nn.Linear(self.hidden_size,self.num_classes)
 
-        self.nonlinear_1 = nn.Linear(self.hidden_size, self.hidden_size // 2)
-        self.nonlinear_2 = nn.Linear(self.hidden_size // 2, self.num_classes)
-        self.nonlinear = nonlinear
+        self.nonlinear_1 = nn.Linear(self.hidden_size, nonlinear_width)
+        self.nonlinear_2 = nn.Linear(nonlinear_width, self.num_classes)
 
         #lstm - for sequential model
         self.lstm_token_seq = nn.LSTM(self.embedding_size, self.hidden_size)
         self.lstm_ins_seq = nn.LSTM(self.hidden_size, self.hidden_size)
         self.linear_seq = nn.Linear(self.hidden_size, self.num_classes)
 
-        self.nonlinear_seq_1 = nn.Linear(self.hidden_size, self.hidden_size // 2)
-        self.nonlinear_seq_2 = nn.Linear(self.hidden_size // 2, self.num_classes)
+        self.reduction_typ = reduction
+        self.attention_1 = nn.Linear(self.hidden_size, self.hidden_size // 2)
+        self.attention_2 = nn.Linear(self.hidden_size // 2, 1)
 
-        if reduction == ReductionType.MAX:
-            self.reduction = torch.max
-        elif reduction == ReductionType.ADD:
-            self.reduction = torch.add
+        self.nonlinear_premax_1 = nn.Linear(self.hidden_size, self.hidden_size * 2)
+        self.nonlinear_premax_2 = nn.Linear(self.hidden_size * 2, self.hidden_size)
+
+        self.nonlinear_seq_1 = nn.Linear(self.hidden_size, nonlinear_width)
+        self.nonlinear_seq_2 = nn.Linear(nonlinear_width, self.num_classes)
+
+        self.use_nonlinear = nonlinear_type is not None
+
+        if nonlinear_type == NonlinearityType.RELU:
+            self.final_nonlinearity = torch.relu
+        elif nonlinear_type == NonlinearityType.SIGMOID:
+            self.final_nonlinearity = torch.sigmoid
+        elif nonlinear_type == NonlinearityType.TANH:
+            self.final_nonlinearity = torch.tanh
+
+        self.nonlinear_before_max = nonlinear_before_max
+
+    def reduction(self, items):
+        # type: (List[torch.tensor]) -> torch.tensor
+        if len(items) == 0:
+            return self.init_hidden()[0]
+        elif len(items) == 1:
+            return items[0]
+
+        def binary_reduction(reduction):
+            # type: (Callable[[torch.tensor, torch.tensor], torch.tensor]) -> torch.tensor
+            final = items[0]
+            for item in items[1:]:
+                final = reduction(final, item)
+            return final
+
+        stacked_items = torch.stack(items)
+
+        if self.reduction_typ == ReductionType.MAX:
+            return binary_reduction(torch.max)
+        elif self.reduction_typ == ReductionType.ADD:
+            return binary_reduction(torch.add)
+        elif self.reduction_typ == ReductionType.MEAN:
+            return binary_reduction(torch.add) / len(items)
+        elif self.reduction_typ == ReductionType.ATTENTION:
+            preds = torch.stack([self.attention_2(torch.relu(self.attention_1(item))) for item in items])
+            probs = F.softmax(preds, dim=0)
+            print('{}, {}, {}'.format(
+                probs.shape,
+                stacked_items.shape,
+                stacked_items * probs
+            ))
+            return (stacked_items * probs).sum(dim=0)
+        else:
+            raise ValueError()
 
     def remove_refs(self, item):
         # type: (dt.DataItem) -> None
@@ -151,12 +206,13 @@ class GraphNN(AbstractGraphModule):
             hidden = self.create_graphlstm_rec(leaf)
             leaf_hidden.append(hidden[0].squeeze())
 
-        final_hidden = leaf_hidden[0]
+        if self.nonlinear_before_max:
+            leaf_hidden = [
+                self.nonlinear_premax_2(torch.relu(self.nonlinear_premax_1(h)))
+                for h in leaf_hidden
+            ]
 
-        for hidden in leaf_hidden[1:]:
-            final_hidden = self.reduction(final_hidden, hidden)
-
-        return final_hidden
+        return self.reduction(leaf_hidden)
 
     def get_instruction_embedding_linear(self, instr, seq_model):
         # type: (ut.Instruction, bool) -> torch.tensor
@@ -211,13 +267,10 @@ class GraphNN(AbstractGraphModule):
             return instr.hidden
 
         parent_hidden = [self.create_graphlstm_rec(parent) for parent in instr.parents]
-        if parent_hidden:
-            (h, c) = parent_hidden[0]
-            for hidden in parent_hidden[1:]:
-                h = self.reduction(h, hidden[0])
-                c = self.reduction(c, hidden[1])
 
-            in_hidden_ins = (h,c)
+        if len(parent_hidden) > 0:
+            hs, cs = list(zip(*parent_hidden))
+            in_hidden_ins = (self.reduction(hs), self.reduction(cs))
         else:
             in_hidden_ins = self.init_hidden()
 
@@ -252,20 +305,21 @@ class GraphNN(AbstractGraphModule):
 
         if self.use_dag_rnn:
             graph = self.create_graphlstm(item.block)
-            if self.nonlinear:
-                final_pred += self.nonlinear_2(F.relu(self.nonlinear_1(graph))).squeeze()
+            if self.use_nonlinear and not self.nonlinear_before_max:
+                final_pred += self.nonlinear_2(self.final_nonlinearity(self.nonlinear_1(graph))).squeeze()
             else:
                 final_pred += self.linear(graph).squeeze()
 
         if self.use_residual:
             sequential = self.create_residual_lstm(item.block)
-            if self.nonlinear:
-                final_pred += self.nonlinear_seq_2(F.relu(self.nonlinear_seq_1(sequential))).squeeze()
+            if self.use_nonlinear:
+                final_pred += self.nonlinear_seq_2(self.final_nonlinearity(self.nonlinear_seq_1(sequential))).squeeze()
             else:
                 final_pred += self.linear(sequential).squeeze()
 
         return final_pred.squeeze()
 
+@unique
 class RnnHierarchyType(Enum):
     NONE = 0
     DENSE =  1
@@ -273,6 +327,7 @@ class RnnHierarchyType(Enum):
     LINEAR_MODEL = 3
     MOP_MODEL = 4
 
+@unique
 class RnnType(Enum):
     RNN = 0
     LSTM = 1
