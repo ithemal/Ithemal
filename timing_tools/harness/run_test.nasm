@@ -134,7 +134,7 @@ SECTION .text align = 4096
   mov r15, init_value
 
 %endmacro
-
+;
 %macro combine_rax_rdx 1
   mov %1, rdx
   shl %1, 32
@@ -258,18 +258,15 @@ icache_misses_a:
 
   cpuid ; serialize
 
-  read_time_stamp rcx
-  mov [r15 + tsc_offset], rcx
-
   read_perf_counter counter_core_cyc, rcx
   mov [r15 + core_cyc_offset], rcx
 
-  ; re-initialize clobbered registers
-  mov rax, init_value
-  mov rbx, init_value
-  mov rcx, init_value
-  mov rdx, init_value
-  mov r15, init_value
+; re-initialize clobbered registers
+  mov rax, r11
+  mov rbx, rax
+  mov rcx, rax
+  mov rdx, rax
+  mov r15, rax
 
   test_impl
 
@@ -283,8 +280,13 @@ icache_misses_a:
   ; l1_read = r13
   ; l1_write = r14,
   ; icache = r8)
-  read_time_stamp r11
   read_perf_counter counter_core_cyc, r12
+
+  ; prevent the processor from issuing insts
+  ; before we read core cyc
+  xor rax, rax
+  cpuid
+
 l1_read_misses_b:
   read_perf_counter 0, r13
 l1_write_misses_b:

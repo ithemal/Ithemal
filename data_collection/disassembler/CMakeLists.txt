@@ -19,11 +19,11 @@ add_definitions(-fno-rtti)
 add_definitions(-std=c++11)
 
 # Now build our tools
-add_executable(test_disasem test-disasm.cpp disassemble.cpp)
+add_executable(disassemble disassembler.cpp disassemble.cpp)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
 llvm_map_components_to_libnames(llvm_libs mc mcdisassembler mcparser support x86disassembler x86asmparser)
 
 # Link against LLVM libraries
-target_link_libraries(test_disasem ${llvm_libs})
+target_link_libraries(disassemble ${llvm_libs})
