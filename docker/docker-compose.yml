@@ -27,6 +27,7 @@ services:
          target: /home/ithemal/.aws
      image: ithemal:latest
      tty: true
+     command: bash -lc "jupyter notebook --ip 0.0.0.0 --port 8888 /home/ithemal/ithemal/learning/pytorch/notebooks --no-browser --NotebookApp.token='ithemal'"
      environment:
        MYSQL_HOST: db
        MYSQL_TCP_PORT: 3306

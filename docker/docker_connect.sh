@@ -21,6 +21,9 @@ function container_id() {
     sudo docker ps -q --filter 'name=ithemal$'
 }
 
+if ! sudo -S true < /dev/null 2> /dev/null; then
+    echo "sudo access required for docker:"
+fi
 
 CONTAINER="$(container_id)"
 
