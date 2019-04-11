@@ -67,6 +67,7 @@ void close_raw_file(mmap_file_t * file){
 
   int i = 0;
   char * data = file->data;
+
   for(i = file->filled; i < NUM_PAGES * page; i++){
     data[i] = ' ';
   }
@@ -74,6 +75,7 @@ void close_raw_file(mmap_file_t * file){
   dr_close_file(file->file);
   dr_unmap_file(file->data,NUM_PAGES * page);
   
+
 }
 
 
