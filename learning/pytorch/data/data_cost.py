@@ -27,8 +27,8 @@ class DataItem:
 
 class DataInstructionEmbedding(Data):
 
-    def __init__(self, data=None):
-        super(DataInstructionEmbedding, self).__init__(data)
+    def __init__(self):
+        super(DataInstructionEmbedding, self).__init__()
 
     def prepare_data(self):
         self.token_to_hot_idx = {}

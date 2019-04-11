@@ -98,7 +98,7 @@ def ablate_data(data, edge_ablation_types, random_edge_freq):
 
 def load_data(params):
     # type: (BaseParameters) -> dt.DataCost
-    data = dt.load_dataset(params.embed_file, data_savefile=params.data)
+    data = dt.load_dataset(params.data)
 
     def filter_data(filt):
         # type: (Callable[[dt.DataItem], bool]) -> None
