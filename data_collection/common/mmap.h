@@ -50,6 +50,7 @@ typedef struct{
   uint32_t num_bbs;
   uint32_t arch;
   mmap_file_t * static_file;
+  uint32_t exited;
 } bookkeep_t;
 
 

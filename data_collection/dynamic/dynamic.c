@@ -35,6 +35,7 @@ thread_init(void * drcontext){
 
   //processor model information
   bookkeep_t * bk = (bookkeep_t *)(data->data + START_BK_DATA);
+  bk->exited = 0;
   bk->arch = proc_get_model();    
   bk->static_file = dr_thread_alloc(drcontext, sizeof(mmap_file_t));
   create_raw_file(drcontext,client_args.data_folder,"static",bk->static_file);
@@ -105,11 +106,18 @@ bool populate_bb_info(void * drcontext, code_info_t * cinfo, instrlist_t * bb, b
   instr_t * first = instrlist_first(bb);
   app_pc first_pc = instr_get_app_pc(first);
   module_data_t * md = dr_lookup_module(first_pc);
-  uint32_t rel_addr = first_pc - md->start;
+
   
-  strcpy(cinfo->module,dr_module_preferred_name(md));
-  cinfo->module_start = md->start;
-  cinfo->rel_addr = rel_addr;
+  if(md){
+    strcpy(cinfo->module,dr_module_preferred_name(md));
+    cinfo->module_start = md->start;
+    cinfo->rel_addr = first_pc - md->start;
+  }
+  else{
+    strcpy(cinfo->module,"generated");
+    cinfo->module_start = 0;
+    cinfo->rel_addr = 0;
+  }
   
   if(!dump_bb(drcontext, raw_bits, cinfo, bb, bk, query)){
     return false;
@@ -155,9 +163,14 @@ bb_creation_event(void * drcontext, void * tag, instrlist_t * bb, bool for_trace
   /* thread exit event */
 static void
 thread_exit(void * drcontext){
-
+  
   mmap_file_t * file = dr_get_tls_field(drcontext);
   bookkeep_t * bk = (bookkeep_t *)(file->data + START_BK_DATA);  
+  
+  if(bk->exited) 
+    return;
+  bk->exited = 1;
+
   close_raw_file(bk->static_file);
   close_memory_map_file(file,TOTAL_SIZE);
  
