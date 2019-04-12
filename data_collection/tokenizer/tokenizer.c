@@ -11,37 +11,48 @@
 #include "client.h"
 #include "code_embedding.h"
 
-void debug_print(void * drcontext, instrlist_t * bb){
+#define DEFAULT 0
+#define TOKEN 1
+#define ATT 2
+#define INTEL 3
 
+void print_intel(void * drcontext, instrlist_t * bb){
   int i = 0;
   instr_t* instr;
   disassemble_set_syntax(DR_DISASM_INTEL);
 
-  dr_printf("------------\n");
-  for (instr = instrlist_first(bb); instr != NULL; instr = instr_get_next(instr)){
+  for (instr = instrlist_first(bb); instr_get_next(instr) != NULL; instr = instr_get_next(instr)){
     instr_disassemble(drcontext, instr, STDOUT);
     dr_printf("\n");
   }
-  dr_printf("-------------\n");
-
 }
 
 
-bool tokenize(void * drcontext, instrlist_t * bb, bool debug){
+void print_att(void * drcontext, instrlist_t * bb){
+  int i = 0;
+  instr_t* instr;
+  disassemble_set_syntax(DR_DISASM_ATT);
+
+  for (instr = instrlist_first(bb); instr_get_next(instr) != NULL; instr = instr_get_next(instr)){
+    instr_disassemble(drcontext, instr, STDOUT);
+    dr_printf("\n");
+  }
+}
+
+
+bool tokenize(void * drcontext, instrlist_t * bb, int output_typ) {
   //create the dump related data structures
-  code_info_t cinfo;
-  if (debug) {
-    debug_print(drcontext, bb);
+  if (output_typ == TOKEN) {
+    code_info_t cinfo;
+    if (!text_xml(drcontext, &cinfo, bb)) {
+      return false;
+    }
+    printf("%s\n", cinfo.code);
+  } else if (output_typ == ATT) {
+    print_att(drcontext, bb);
+  } else if (output_typ == INTEL) {
+    print_intel(drcontext, bb);
   }
-
-  if (!text_xml(drcontext, &cinfo, bb)) {
-    return false;
-  }
-
-  if (debug) {
-    dr_printf("\ncode_size-%d(%d)\n",cinfo.code_size, MAX_CODE_SIZE);
-  }
-  printf("%s\n", cinfo.code);
   return true;
 
 }
@@ -99,20 +110,41 @@ int main(int argc, char *argv[]) {
   char hex[65536];
 
   if (argc < 2) {
-    dr_fprintf(STDERR, "Usage: %s <hex_string> [<debug>]\n", argv[0]);
+    dr_fprintf(STDERR, "Usage: %s <hex_string> [(--att|--intel|--token)]\n", argv[0]);
     return 1;
   } else {
     strcpy(hex, argv[1]);
   }
 
-  bool debug = false;
-  if (argc >= 3) {
-    if (strcmp(argv[2], "1") == 0) {
-      debug = true;
+  int output_typ = DEFAULT;
+
+  int arg_idx;
+  for (arg_idx = 2; arg_idx < argc; arg_idx++) {
+    if (strcmp(argv[arg_idx], "--att") == 0) {
+      if (output_typ != DEFAULT) {
+        dr_fprintf(STDERR, "Can only provide one output type");
+        return 1;
+      }
+      output_typ = ATT;
+    } else if (strcmp(argv[arg_idx], "--intel") == 0) {
+      if (output_typ != DEFAULT) {
+        dr_fprintf(STDERR, "Can only provide one output type");
+        return 1;
+      }
+      output_typ = INTEL;
+    } else if (strcmp(argv[arg_idx], "--token") == 0) {
+      if (output_typ != DEFAULT) {
+        dr_fprintf(STDERR, "Can only provide one output type");
+        return 1;
+      }
+      output_typ = TOKEN;
     } else {
-      fprintf(stderr, "Unknown argument for debug: \"%s\"; expected \"1\" (or nothing)\n", argv[2]);
-      return 1;
+      dr_fprintf(STDERR, "Unknown argument %s", argv[arg_idx]);
     }
+  }
+
+  if (output_typ == DEFAULT) {
+    output_typ = TOKEN;
   }
 
   int len = strlen(hex);
@@ -134,7 +166,7 @@ int main(int argc, char *argv[]) {
     return 3;
   }
 
-  if (!tokenize(drcontext, bb, debug)) {
+  if (!tokenize(drcontext, bb, output_typ)) {
     fprintf(stderr, "Tokenize failed!\n");
     return 4;
   }
