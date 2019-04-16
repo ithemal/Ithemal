@@ -93,7 +93,7 @@ global run_test
 global map_and_restart
 %macro test_impl 0
   %rep reps
-  %include "bb.nasm"
+  incbin "bb.bin"
   %endrep
 %endmacro
 

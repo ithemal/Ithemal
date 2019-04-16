@@ -35,6 +35,8 @@ def fix_reg_names(line):
         line = line.replace(old, new)
     return line
 
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+
 def remove_unrecog_words(line):
 
     words = ['ptr', '<rel>']
@@ -67,18 +69,26 @@ def insert_col_values(cnx, cols, values, code_id, arch, ttable):
         valuestr = ''
 
         for j, col in enumerate(cols): 
-            if j != len(cols) - 1:
-                colstr += col + ', '
-                valuestr += str(values[j][i]) + ', '
-            else:
-                colstr += col
-                valuestr += str(values[j][i])
+          if j != len(cols) - 1:
+              colstr += col + ','
+              valuestr += str(values[j][i]) + ','
+          else:
+              colstr += col
+              valuestr += str(values[j][i])
+
+        #print valuestr
+        #fields = [code_id, arch, valuestr]
                 
 
         sql = 'INSERT INTO ' + ttable + ' (code_id, arch, kind,' + colstr + ')  VALUES(' + str(code_id) + ',' + str(arch) + ',\'actual\',' + valuestr + ')'
-        print sql
-        ut.execute_query(cnx, sql, False)
-        cnx.commit()
+        #print sql
+        print ','.join([str(code_id), str(arch), "'actual'", valuestr])
+        #print code_id, arch, "'actual'", valuestr
+
+        #print ','.join(fields)
+
+        #ut.execute_query(cnx, sql, False)
+        #cnx.commit()
 
 
 class PMCValue:
@@ -178,23 +188,29 @@ if __name__ == '__main__':
 
     #command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arch',action='store',type=int,required=True)
+    #parser.add_argument('--arch',action='store',type=int,required=True)
 
-    parser.add_argument('--database',action='store',type=str,required=True)
-    parser.add_argument('--user',action='store', type=str, required=True)
-    parser.add_argument('--password',action='store', type=str, required=True)
-    parser.add_argument('--port',action='store', type=int, required=True)
-    parser.add_argument('--ctable',action='store',type=str, required=True)
-    parser.add_argument('--ttable',action='store',type=str, required=True)
+    #parser.add_argument('--database',action='store',type=str,required=True)
+    #parser.add_argument('--user',action='store', type=str, required=True)
+    #parser.add_argument('--password',action='store', type=str, required=True)
+    #parser.add_argument('--port',action='store', type=int, required=True)
+    #parser.add_argument('--ctable',action='store',type=str, required=True)
+    #parser.add_argument('--ttable',action='store',type=str, required=True)
     parser.add_argument('--limit',action='store',type=int, default=None)
-    parser.add_argument('--tp',action='store',type=bool,default=False)
+    #parser.add_argument('--tp',action='store',type=bool,default=False)
 
     args = parser.parse_args(sys.argv[1:])
 
-    cnx = ut.create_connection(database=args.database, user=args.user, password=args.password, port=args.port)
-    sql = 'SELECT code_intel, code_id from ' + args.ctable
-    rows = ut.execute_query(cnx, sql, True)
-    print len(rows)
+    #cnx = ut.create_connection(database=args.database, user=args.user, password=args.password, port=args.port)
+    #sql = 'SELECT code_intel, code_id from ' + args.ctable
+    #rows = ut.execute_query(cnx, sql, True)
+    rows = []
+    with open('stuff.csv') as f:
+      for row in f:
+        code_id, code_intel, _ = row.split('|')
+        code_id = int(code_id)
+        rows.append((code_intel.strip(), code_id))
+    #print len(rows)
 
     harness_dir = os.environ['ITHEMAL_HOME'] + '/timing_tools/harness'
     os.chdir(harness_dir)
@@ -210,7 +226,7 @@ if __name__ == '__main__':
     total_bbs = 0
 
     # do a dry run to figure out measurement overhead
-    with open('bb.nasm', 'w') as f:
+    with open('bb.bin', 'w') as f:
       f.close()
     proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result = wait_timeout(proc, 10)
@@ -229,30 +245,26 @@ if __name__ == '__main__':
     assert counters is not None
     counters.set_modes()
     overhead = counters.get_mode('Core_cyc')
-    print 'OVERHEAD =', overhead
+    #print 'OVERHEAD =', overhead
 
     for row in rows:
 
         if row[0] == None:
             continue
 
-        splitted = row[0].split('\n')
-
-        written = 0
-        final_bb = []
-        for i, line in enumerate(splitted):
-            if line != '':
-                line = remove_unrecog_words(line + '\n')
-                line = fix_reg_names(line)
-                final_bb.append(line)
-                written += 1
+        code_hex = row[0]
 
 
-
-        if written > 0:
+        # FIXME: remove this if
+        if True:
             total += 1
-            with open('bb.nasm','w+') as f:
-                f.writelines(final_bb)
+            with open('bb.bin','w+') as f:
+              try:
+                code_bin = code_hex.decode('hex')
+              except:
+                print 'CODE_ID =', row[1]
+                exit(1)
+              f.write(code_bin)
             proc = subprocess.Popen('./a64-out.sh', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             start_time = time.time()
             result = wait_timeout(proc, 10)
@@ -260,13 +272,13 @@ if __name__ == '__main__':
 
             if result != None:
 
-                print final_bb
+                #print final_bb
 
                 try:
                     error_lines = False
                     for line in iter(proc.stderr.readline, ''):
                         if check_error(line):
-                            print 'error ' + line
+                            #print 'error ' + line
                             error_lines = True
                             break
 
@@ -275,7 +287,6 @@ if __name__ == '__main__':
                         startTimes = False
                         counters = None
                         for i, line in enumerate(iter(proc.stdout.readline, '')):
-                            print line
                             if 'Clock' in line and startTimes == False and startHeading == False: #still didn't start collecting the actual timing data
                                 startHeading = True
                             if startHeading == True:
@@ -302,34 +313,35 @@ if __name__ == '__main__':
                                     if name == 'Core_cyc':
                                         for j, v in enumerate(values[-1]):
                                             values[-1][j] -= overhead
-                            print aval_cols, values
+                            #print aval_cols, values
 
-                            if not args.tp:
-                                insert_col_values(cnx, aval_cols, values, row[1], args.arch, args.ttable)
+                            if True:
+                                cnx = None
+                                insert_col_values(cnx, aval_cols, values, row[1], 0, 'times')
                                     
                             total_time += end_time - start_time
                             total_bbs += 1
-                            print float(total_bbs)/total_time
+                            #print float(total_bbs)/total_time
                             success += 1
                     else:
-                        for line in final_bb:
-                            print line[:-1]
-                        errors += 1
+                      #for line in final_bb:
+                      #      print line[:-1]
+                      errors += 1
                 except Exception as e:
-                    print e
-                    print 'exception occurred'
+                    #print e
+                    #print 'exception occurred'
                     except_errors += 1
 
             else:
-                print 'error not completed'
+                #print 'error not completed'
                 not_finished += 1
 
         if args.limit != None:
             if success == args.limit:
                 break
 
-        print total, success, errors, not_finished, except_errors
+        #print total, success, errors, not_finished, except_errors
 
 
-    print overhead
-    cnx.close()
+    #print overhead
+    #cnx.close()

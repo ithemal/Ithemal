@@ -18,7 +18,7 @@ rdpmc.o: rdpmc.c
 
 test.o: test.c
 
-run_test.o: run_test.nasm bb.nasm
+run_test.o: run_test.nasm bb.bin
 	nasm -f elf64 -o $@ $< $(DEBUG_FLAG)
 
 clean:
