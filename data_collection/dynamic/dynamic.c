@@ -111,7 +111,10 @@ bool populate_bb_info(void * drcontext, code_info_t * cinfo, instrlist_t * bb, b
   if(md){
     strcpy(cinfo->module,dr_module_preferred_name(md));
     cinfo->module_start = md->start;
-    cinfo->rel_addr = first_pc - md->start;
+    if(client_args.abs_addr == 0)
+      cinfo->rel_addr = first_pc - md->start;
+    else
+      cinfo->rel_addr = first_pc;
   }
   else{
     strcpy(cinfo->module,"generated");
@@ -192,13 +195,14 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
   dr_register_thread_exit_event(thread_exit);
   dr_register_exit_event(event_exit);
   
-  DR_ASSERT(argc == 6);
+  DR_ASSERT(argc == 7);
   strncpy(config.compiler,argv[1], MAX_STRING_SIZE);
   strncpy(config.flags,argv[2], MAX_STRING_SIZE);
   strncpy(config.name, argv[3], MAX_STRING_SIZE);
   strncpy(config.vendor, argv[4], MAX_STRING_SIZE);
   strncpy(client_args.data_folder,argv[5], MAX_STRING_SIZE);
-  
+  client_args.abs_addr = (uint32_t)atoi(argv[6]);
+
   mutex = dr_mutex_create();
   
 }

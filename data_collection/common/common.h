@@ -26,7 +26,7 @@ typedef struct{
   uint32_t code_type;
   unsigned char code[MAX_CODE_SIZE];
   int32_t code_size;
-  uint32_t rel_addr;
+  uint64_t rel_addr;
   uint32_t num_instr;
   uint32_t span;
 } code_info_t;

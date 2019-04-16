@@ -60,7 +60,7 @@ int insert_disassembly(query_t * query, code_info_t * cinfo, uint32_t type){
 int insert_code_metadata(query_t * query, code_info_t * cinfo){
 
   int pos;
-  pos = sprintf(query, "INSERT INTO code_metadata (config_id, code_id, module, rel_addr) VALUES (@config_id, LAST_INSERT_ID(), '%s',%d);\n",cinfo->module, cinfo->rel_addr);
+  pos = sprintf(query, "INSERT INTO code_metadata (config_id, code_id, module, rel_addr) VALUES (@config_id, LAST_INSERT_ID(), '%s',%llu);\n",cinfo->module, cinfo->rel_addr);
   if(strlen(cinfo->function) > 0){
     pos += sprintf(query + pos, "UPDATE code_metadata SET function='%s' WHERE metadata_id=LAST_INSERT_ID();\n", cinfo->function); 
   }
