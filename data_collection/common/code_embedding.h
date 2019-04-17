@@ -10,6 +10,7 @@ typedef bool (*code_embedding_t) (void *, code_info_t *, instrlist_t *);
 bool raw_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 
+bool text_xml(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 bool text_intel(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb);
 

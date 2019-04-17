@@ -322,6 +322,8 @@ bool text_intel(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
 bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
+  disassemble_set_syntax(DR_DISASM_ATT);
+
   instr_t * instr;
   int pos = 0;
 
@@ -342,7 +344,7 @@ bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
     //dr_printf("before:");
     //print_instr(&ins);
 
-    correct_disasm_att(&ins, instr);
+    correct_disasm_att(drcontext, &ins, instr);
     //dr_printf("after:");
     //print_instr(&ins);
 
@@ -355,6 +357,7 @@ bool text_att(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
     for(j = 0; j < ins.num_ops; j++){
       w = dr_snprintf(cinfo->code + pos, MAX_CODE_SIZE - pos, "%s", ins.operands[j].name);
+
       DR_ASSERT(w > 0);
       pos += w;
       if(j != ins.num_ops - 1){

@@ -42,19 +42,25 @@ void print_att(void * drcontext, instrlist_t * bb){
 
 bool tokenize(void * drcontext, instrlist_t * bb, int output_typ) {
   //create the dump related data structures
-  if (output_typ == TOKEN) {
-    code_info_t cinfo;
-    if (!text_xml(drcontext, &cinfo, bb)) {
-      return false;
-    }
-    printf("%s\n", cinfo.code);
-  } else if (output_typ == ATT) {
-    print_att(drcontext, bb);
-  } else if (output_typ == INTEL) {
-    print_intel(drcontext, bb);
-  }
-  return true;
+  code_info_t cinfo;
+  bool success = false;
 
+  switch (output_typ) {
+  case TOKEN:
+    success = text_xml(drcontext, &cinfo, bb);
+    break;
+  case ATT:
+    success = text_att(drcontext, &cinfo, bb);
+    break;
+  case INTEL:
+    success = text_intel(drcontext, &cinfo, bb);
+    break;
+  }
+
+  if (!success) return false;
+
+  printf("%s\n", cinfo.code);
+  return true;
 }
 
 instrlist_t * decode_instrs(void * drcontext, byte * raw, int len){

@@ -26,7 +26,7 @@ typedef struct {
 
 
 bool parse_instr_att(char * buffer, int length, ins_t * instr);
-void correct_disasm_att(ins_t * ins, instr_t * instr);
+void correct_disasm_att(void *drcontext, ins_t * ins, instr_t * instr);
 
 
 
