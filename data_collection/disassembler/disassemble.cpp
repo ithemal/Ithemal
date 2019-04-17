@@ -5,12 +5,18 @@
 
 #include "assert.h"
 
+
 using namespace llvm;
 
-static cl::opt<std::string>
-inputFileName(cl::Positional, cl::desc("<input file>"), cl::init("-"));
+static cl::opt<std::string> inputFileName(cl::Positional, cl::desc("<input file>"), cl::init("-"));
+
+static cl::opt<Disassembler::AsmSyntax> syntaxType(cl::desc("Choose output syntax type:"),
+                                                   cl::values(clEnumValN(Disassembler::Intel, "intel", "Output Intel syntax (default)"),
+                                                              clEnumValN(Disassembler::ATT, "att" , "Output AT&T ayntax")));
 
 int main(int argc, char **argv) {
+  cl::ParseCommandLineOptions(argc, argv);
+
   ErrorOr<std::unique_ptr<MemoryBuffer>> bufferPtr =
       MemoryBuffer::getFileOrSTDIN(inputFileName);
 
@@ -21,7 +27,7 @@ int main(int argc, char **argv) {
 
   StringRef buffer = bufferPtr->get()->getBuffer();
 
-  Disassembler disassembler(Disassembler::Intel);
+  Disassembler disassembler(syntaxType);
 
   StringRef hex = buffer.trim();
   auto y = hexToBinary(hex);
