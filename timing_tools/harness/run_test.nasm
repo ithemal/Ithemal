@@ -97,6 +97,14 @@ global map_and_restart
   %endrep
 %endmacro
 
+%macro align_stack 1
+  ; ask ajay why we are doing this
+  shr %1, 5
+  shl %1, 5
+  sub %1, 0x10
+%endmacro
+
+
 global l1_read_misses_a
 global l1_read_misses_b
 global l1_write_misses_a
@@ -117,6 +125,8 @@ SECTION .text align = 4096
   mov rbp, rax
   add rbp, 2048
   mov rsp, rbp
+
+  align_stack rbp
   
   mov rax, init_value
   mov rbx, init_value 

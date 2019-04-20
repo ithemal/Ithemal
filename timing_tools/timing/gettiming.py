@@ -1,8 +1,6 @@
 from os import listdir
 from os.path import isfile, join
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
 import sys
 import common_libs.utilities as ut
 from tqdm import tqdm
@@ -185,6 +183,9 @@ def check_error(line):
 
 if __name__ == '__main__':
 
+    print >>sys.stderr, "NICE ME PLZ"
+    raw_input()
+
 
     #command line arguments
     parser = argparse.ArgumentParser()
@@ -199,15 +200,15 @@ if __name__ == '__main__':
     parser.add_argument('--limit',action='store',type=int, default=None)
     #parser.add_argument('--tp',action='store',type=bool,default=False)
 
-    args = parser.parse_args(sys.argv[1:])
+    #args = parser.parse_args(sys.argv[1:])
 
     #cnx = ut.create_connection(database=args.database, user=args.user, password=args.password, port=args.port)
     #sql = 'SELECT code_intel, code_id from ' + args.ctable
     #rows = ut.execute_query(cnx, sql, True)
     rows = []
-    with open('stuff.csv') as f:
+    with open(sys.argv[1]) as f:
       for row in f:
-        code_id, code_intel, _ = row.split('|')
+        code_id, code_intel = row.split('|')[:2]
         code_id = int(code_id)
         rows.append((code_intel.strip(), code_id))
     #print len(rows)
@@ -336,9 +337,9 @@ if __name__ == '__main__':
                 #print 'error not completed'
                 not_finished += 1
 
-        if args.limit != None:
-            if success == args.limit:
-                break
+        #if args.limit != None:
+        #    if success == args.limit:
+        #        break
 
         #print total, success, errors, not_finished, except_errors
 
