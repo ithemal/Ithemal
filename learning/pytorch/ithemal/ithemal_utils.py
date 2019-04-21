@@ -4,7 +4,7 @@ sys.path.append(os.path.join(os.environ['ITHEMAL_HOME'], 'learning', 'pytorch'))
 
 from enum import Enum
 import torch
-from typing import Callable, List, Optional, Iterator, Tuple, NamedTuple, Union
+from typing import Any, Callable, List, Optional, Iterator, Tuple, NamedTuple, Union
 
 import data.data_cost as dt
 import models.graph_models as md
@@ -70,6 +70,12 @@ BenchmarkParameters = NamedTuple('BenchmarkParameters', [
     ('threads', int),
     ('examples', int),
 ])
+
+PredictorDump = NamedTuple('PredictorDump', [
+    ('model', md.AbstractGraphModule),
+    ('dataset_params', Any),
+])
+
 
 def ablate_data(data, edge_ablation_types, random_edge_freq):
     # type: (dt.DataCost, List[EdgeAblationType], float) -> None
@@ -142,6 +148,21 @@ def load_model(params, data):
                            nonlinear_before_max=params.dag_nonlinear_before_max,
         )
 
-    model.set_learnable_embedding(mode=params.embed_mode, dictsize=max(data.hot_idx_to_token) + 1)
+    model.set_learnable_embedding(mode=params.embed_mode, dictsize=628 or max(data.hot_idx_to_token) + 1)
 
     return model
+
+def dump_model_and_data(model, data, fname):
+    # type: (md.AbstractGraphMode, dt.DataCost, str) -> None
+    torch.save(PredictorDump(
+        model=model,
+        dataset_params=data.dump_dataset_params(),
+    ), fname)
+
+def load_model_and_data(fname):
+    # type: (str) -> (md.AbstractGraphMode, dt.DataCost)
+    dump = torch.load(fname)
+    data = dt.DataInstructionEmbedding()
+    data.read_meta_data()
+    data.load_dataset_params(dump.dataset_params)
+    return (dump.model, data)

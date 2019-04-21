@@ -80,6 +80,12 @@ def graph_model_validate(base_params, model_file, iaca_only):
     resultfile = os.environ['ITHEMAL_HOME'] + '/learning/pytorch/results/realtime_results.txt'
     (actual, predicted) = train.validate(resultfile=resultfile, loadfile=model_file)
 
+def graph_model_dump(base_params, model_file):
+    # type: (BaseParameters, str) -> None
+    data = load_data(base_params)
+    model = load_model(base_params, data)
+    dump_model_and_data(model, data, model_file)
+
 def main():
     # type: () -> None
     parser = argparse.ArgumentParser()
@@ -191,6 +197,9 @@ def main():
     validate.add_argument('--load-file', help='File to load the model from')
     validate.add_argument('--iaca-only', help='Only report accuracy on IACA datapoints', action='store_true', default=False)
 
+    dump = sp.add_parser('dump', help='Dump the dataset to a file')
+    dump.add_argument('--dump-file', help='File to dump the model to', required=True)
+
     args = parser.parse_args()
 
     base_params = BaseParameters(
@@ -249,6 +258,9 @@ def main():
 
     elif args.subparser == 'validate':
         graph_model_validate(base_params, args.load_file, args.iaca_only)
+
+    elif args.subparser == 'dump':
+        graph_model_dump(base_params, args.dump_file)
 
     elif args.subparser == 'benchmark':
         benchmark_params = BenchmarkParameters(
