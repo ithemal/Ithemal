@@ -39,7 +39,7 @@ class DataInstructionEmbedding(Data):
     def load_dataset_params(self, params):
         (self.token_to_hot_idx, self.hot_idx_to_token) = params
 
-    def prepare_data(self, fixed=False):
+    def prepare_data(self, progress=True, fixed=False):
         def hot_idxify(elem):
             if elem not in self.token_to_hot_idx:
                 if fixed:
@@ -49,7 +49,12 @@ class DataInstructionEmbedding(Data):
                 self.hot_idx_to_token[self.token_to_hot_idx[elem]] = elem
             return self.token_to_hot_idx[elem]
 
-        for (code_id, timing, code_intel, code_xml) in tqdm(self.raw_data):
+        if progress:
+            iterator = tqdm(self.raw_data)
+        else:
+            iterator = self.raw_data
+
+        for (code_id, timing, code_intel, code_xml) in iterator:
             block_root = ET.fromstring(code_xml)
             instrs = []
             raw_instrs = []
