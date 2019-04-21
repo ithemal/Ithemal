@@ -29,18 +29,25 @@ class DataInstructionEmbedding(Data):
 
     def __init__(self):
         super(DataInstructionEmbedding, self).__init__()
-
-    def prepare_data(self):
         self.token_to_hot_idx = {}
         self.hot_idx_to_token = {}
+        self.data = []
 
+    def dump_dataset_params(self):
+        return (self.token_to_hot_idx, self.hot_idx_to_token)
+
+    def load_dataset_params(self, params):
+        (self.token_to_hot_idx, self.hot_idx_to_token) = params
+
+    def prepare_data(self, fixed=False):
         def hot_idxify(elem):
             if elem not in self.token_to_hot_idx:
+                if fixed:
+                    # TODO: this would be a good place to implement UNK tokens
+                    raise ValueError('Ithemal does not yet support UNK tokens!')
                 self.token_to_hot_idx[elem] = len(self.token_to_hot_idx)
                 self.hot_idx_to_token[self.token_to_hot_idx[elem]] = elem
             return self.token_to_hot_idx[elem]
-
-        self.data = []
 
         for (code_id, timing, code_intel, code_xml) in tqdm(self.raw_data):
             block_root = ET.fromstring(code_xml)
