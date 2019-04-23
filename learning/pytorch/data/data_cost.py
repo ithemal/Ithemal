@@ -59,44 +59,45 @@ class DataInstructionEmbedding(Data):
             instrs = []
             raw_instrs = []
             curr_mem = self.mem_start
-            for (instr, m_code_intel) in zip(block_root, code_intel.split('\n')):
-                raw_instr = []
-                opcode = int(instr.find('opcode').text)
-                raw_instr.extend([opcode, '<SRCS>'])
-                srcs = []
-                for src in instr.find('srcs'):
-                    if src.find('mem') is not None:
-                        raw_instr.append('<MEM>')
-                        for mem_op in src.find('mem'):
-                            raw_instr.append(int(mem_op.text))
-                            srcs.append(int(mem_op.text))
-                        raw_instr.append('</MEM>')
-                        srcs.append(curr_mem)
-                        curr_mem += 1
-                    else:
-                        raw_instr.append(int(src.text))
-                        srcs.append(int(src.text))
+            for _ in range(1): # repeat for duplicated blocks
+                for (instr, m_code_intel) in zip(block_root, code_intel.split('\n')):
+                    raw_instr = []
+                    opcode = int(instr.find('opcode').text)
+                    raw_instr.extend([opcode, '<SRCS>'])
+                    srcs = []
+                    for src in instr.find('srcs'):
+                        if src.find('mem') is not None:
+                            raw_instr.append('<MEM>')
+                            for mem_op in src.find('mem'):
+                                raw_instr.append(int(mem_op.text))
+                                srcs.append(int(mem_op.text))
+                            raw_instr.append('</MEM>')
+                            srcs.append(curr_mem)
+                            curr_mem += 1
+                        else:
+                            raw_instr.append(int(src.text))
+                            srcs.append(int(src.text))
 
-                raw_instr.append('<DSTS>')
-                dsts = []
-                for dst in instr.find('dsts'):
-                    if dst.find('mem') is not None:
-                        raw_instr.append('<MEM>')
-                        for mem_op in dst.find('mem'):
-                            raw_instr.append(int(mem_op.text))
-                            # operands used to calculate dst mem ops are sources
-                            srcs.append(int(mem_op.text))
-                        raw_instr.append('</MEM>')
-                        dsts.append(curr_mem)
-                        curr_mem += 1
-                    else:
-                        raw_instr.append(int(dst.text))
-                        dsts.append(int(dst.text))
+                    raw_instr.append('<DSTS>')
+                    dsts = []
+                    for dst in instr.find('dsts'):
+                        if dst.find('mem') is not None:
+                            raw_instr.append('<MEM>')
+                            for mem_op in dst.find('mem'):
+                                raw_instr.append(int(mem_op.text))
+                                # operands used to calculate dst mem ops are sources
+                                srcs.append(int(mem_op.text))
+                            raw_instr.append('</MEM>')
+                            dsts.append(curr_mem)
+                            curr_mem += 1
+                        else:
+                            raw_instr.append(int(dst.text))
+                            dsts.append(int(dst.text))
 
-                raw_instr.append('<END>')
-                raw_instrs.append(list(map(hot_idxify, raw_instr)))
-                instrs.append(ut.Instruction(opcode, srcs, dsts, len(instrs)))
-                instrs[-1].intel = m_code_intel
+                    raw_instr.append('<END>')
+                    raw_instrs.append(list(map(hot_idxify, raw_instr)))
+                    instrs.append(ut.Instruction(opcode, srcs, dsts, len(instrs)))
+                    instrs[-1].intel = m_code_intel
 
             block = ut.BasicBlock(instrs)
             block.create_dependencies()
