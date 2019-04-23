@@ -15,6 +15,7 @@
 #define TOKEN 1
 #define ATT 2
 #define INTEL 3
+#define RAW 4
 
 void print_intel(void * drcontext, instrlist_t * bb){
   int i = 0;
@@ -84,6 +85,28 @@ instrlist_t * decode_instrs(void * drcontext, byte * raw, int len){
   return current_list;
 }
 
+
+bool print_instr_bytes(void * drcontext, byte * raw, int len){
+  unsigned char* start_pc = raw;
+  unsigned char* end_pc = start_pc + len;
+
+  while(start_pc < end_pc){
+    instr_t * instr = instr_create(drcontext);
+    unsigned char *prev_start = start_pc;
+    start_pc = decode(drcontext, start_pc, instr);
+    if (!start_pc) {
+      return false;
+    }
+    for (unsigned char* i = prev_start; i < start_pc && i < end_pc; i++) {
+      printf("%02x", *i);
+    }
+    printf("\n");
+  }
+
+  return true;
+}
+
+
 bool hex_to_byte(char hex, byte* ret){
   if (hex >= '0' && hex <= '9'){
     *ret += hex - '0';
@@ -116,7 +139,7 @@ int main(int argc, char *argv[]) {
   char hex[65536];
 
   if (argc < 2) {
-    dr_fprintf(STDERR, "Usage: %s <hex_string> [(--att|--intel|--token)]\n", argv[0]);
+    dr_fprintf(STDERR, "Usage: %s <hex_string> [(--att|--intel|--token|--raw)]\n", argv[0]);
     return 1;
   } else {
     strcpy(hex, argv[1]);
@@ -144,6 +167,12 @@ int main(int argc, char *argv[]) {
         return 1;
       }
       output_typ = TOKEN;
+    } else if (strcmp(argv[arg_idx], "--raw") == 0) {
+      if (output_typ != DEFAULT) {
+        dr_fprintf(STDERR, "Can only provide one output type");
+        return 1;
+      }
+      output_typ = RAW;
     } else {
       dr_fprintf(STDERR, "Unknown argument %s", argv[arg_idx]);
     }
@@ -164,6 +193,10 @@ int main(int argc, char *argv[]) {
   if (!hex_to_byte_array(hex, b, len/2)) {
     fprintf(stderr, "Decode hex failed!\n");
     return 2;
+  }
+
+  if (output_typ == RAW) {
+    return print_instr_bytes(drcontext, b, len/2) != NULL;
   }
 
   instrlist_t * bb = decode_instrs(drcontext, b, len/2);
