@@ -463,3 +463,26 @@ class RNN(AbstractGraphModule):
             return torch.max(preds)
 
         return self.pred_of_instr_chain(instr_chain)
+
+class Fasthemal(md.AbstractGraphModule):
+    def __init__(self, embedding_size, hidden_size, num_classes):
+        # type: (int, int, int) -> None
+        super(Fasthemal, self).__init__(embedding_size, hidden_size, num_classes)
+        self.token_rnn = nn.LSTM(self.embedding_size, self.hidden_size)
+        self.instr_rnn = nn.LSTM(self.hidden_size, self.hidden_size)
+        self.linear = nn.Linear(self.hidden_size, self.num_classes)
+
+    def forward(self, item):
+        # type: (dt.DataItem) -> torch.tensor
+
+        embeds = []
+
+        for token_inputs in item.x:
+            tokens = self.final_embeddings(torch.LongTensor(token_inputs)).unsqueeze(1)
+            _, (token_state, _) = self.token_rnn(tokens)
+            embeds.append(token_state.squeeze(1))
+
+        z = torch.stack(embeds)
+        _, instr_state = self.instr_rnn(z)
+
+        return self.linear(instr_state[0].squeeze()).squeeze()
