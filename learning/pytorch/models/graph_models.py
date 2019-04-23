@@ -374,8 +374,9 @@ class RNN(AbstractGraphModule):
         # type: () -> Union[Tuple[nn.Parameter, nn.Parameter], nn.Parameter]
 
         hidden = self.init_hidden()
-        for h in hidden:
-            torch.nn.init.kaiming_uniform_(h)
+
+        # for h in hidden:
+        #     torch.nn.init.kaiming_uniform_(h)
 
         if self.params.rnn_type == RnnType.LSTM:
             return hidden
