@@ -9,8 +9,8 @@ import subprocess
 import torch
 import ithemal_utils
 
-START_MARKER = b'\xab\xa6\x58'
-END_MARKER = b'\x9e\x87\x0f'
+START_MARKER = 'bb6f000000646790'.decode('hex')
+END_MARKER = 'bbde000000646790'.decode('hex')
 
 _TOKENIZER = os.path.join(os.environ['ITHEMAL_HOME'], 'data_collection', 'build', 'bin', 'tokenizer')
 
