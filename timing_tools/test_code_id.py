@@ -57,7 +57,7 @@ def time_code_ids(code_ids, timer):
     return {code_id: jobs[code_id].value for code_id in jobs}
 
 iaca_kind = (2, time_iaca, {'haswell': 'HSW', 'broadwell': 'BDW', 'skylake': 'SKL'})
-llvm_kind = (3, time_llvm, {'haswell': 'haswell', 'broadwell': 'broadwell', 'skylake': 'skylake'})
+llvm_kind = (3, time_llvm, {'haswell': 'haswell', 'broadwell': 'broadwell', 'skylake': 'skylake', 'nehalem': 'nehalem'})
 
 _kind_map = {
     'iaca': iaca_kind,
