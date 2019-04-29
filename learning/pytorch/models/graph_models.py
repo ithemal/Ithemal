@@ -464,7 +464,7 @@ class RNN(AbstractGraphModule):
 
         return self.pred_of_instr_chain(instr_chain)
 
-class Fasthemal(md.AbstractGraphModule):
+class Fasthemal(AbstractGraphModule):
     def __init__(self, embedding_size, hidden_size, num_classes):
         # type: (int, int, int) -> None
         super(Fasthemal, self).__init__(embedding_size, hidden_size, num_classes)
