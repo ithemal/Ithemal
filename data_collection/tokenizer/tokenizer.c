@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (output_typ == RAW) {
-    return print_instr_bytes(drcontext, b, len/2) != NULL;
+    return !print_instr_bytes(drcontext, b, len/2);
   }
 
   instrlist_t * bb = decode_instrs(drcontext, b, len/2);
