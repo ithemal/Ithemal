@@ -297,6 +297,8 @@ bool text_token(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
 bool text_intel(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
+  disassemble_set_syntax(DR_DISASM_INTEL);
+
   instr_t * instr;
   int pos = 0;
   for(instr = instrlist_first(bb); instr != instrlist_last(bb); instr = instr_get_next(instr)){
