@@ -33,9 +33,9 @@ def time_llvm(arch, code):
         f.write(_LLVM_BODY.format(output))
         f.flush()
         output = subprocess.check_output([_LLVM, '-march=x86', '-mcpu={}'.format(arch), f.name])
-        total_cycles_line = output.split('\n')[5]
+        total_cycles_line = output.split('\n')[11]
         cycles = total_cycles_line.split()[2]
-        return float(cycles)
+        return float(cycles) * 100
 
 def time_iaca(arch, code):
     with tempfile.NamedTemporaryFile() as f:
@@ -47,13 +47,11 @@ def time_iaca(arch, code):
         return float(txput) * 100
 
 def time_code_ids(code_ids, timer):
-    print('START counting {}'.format(len(code_ids)))
     # get code
     mysql = subprocess.Popen(['mysql', '-N'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    (out, _) = mysql.communicate('SELECT code_raw FROM code WHERE code_id IN ({});\n'.format(','.join(map(str, code_ids))))
-    jobs = {code_id: gevent.spawn(timer, code_raw) for (code_id, code_raw) in zip(code_ids, out.split('\n'))}
+    (out, _) = mysql.communicate('SELECT code_id, code_raw FROM code WHERE code_id IN ({});\n'.format(','.join(map(str, code_ids))))
+    jobs = {int(code_id): gevent.spawn(timer, code_raw) for (code_id, code_raw) in map(str.split, out.rstrip().split('\n'))}
     gevent.joinall(jobs.values(), timeout=240)
-    print('END counting {}'.format(len(code_ids)))
     return {code_id: jobs[code_id].value for code_id in jobs}
 
 iaca_kind = (2, time_iaca, {'haswell': 'HSW', 'broadwell': 'BDW', 'skylake': 'SKL'})
@@ -87,6 +85,7 @@ def main():
 
     mysql = subprocess.Popen(['mysql'], stdin=subprocess.PIPE)
     values = ','.join(map(str, ((code_id, arch_id, kind_id, speed) for (code_id, speed) in times.items() if speed is not None)))
+    print('Inserting {}'.format(len(times)))
     mysql.communicate('INSERT INTO time (code_id, arch_id, kind_id, cycle_count) VALUES {};\n'.format(values))
 
 
