@@ -468,4 +468,5 @@ bool text_xml(void * drcontext, code_info_t * cinfo, instrlist_t * bb){
 
   bufidx += sprintf(&buf[bufidx], "</block>");
   cinfo->code_size = bufidx;
+  return true;
 }
