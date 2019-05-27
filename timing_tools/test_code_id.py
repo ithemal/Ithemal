@@ -26,22 +26,36 @@ _LLVM = os.path.join(os.environ['ITHEMAL_HOME'], 'timing_tools', 'llvm-build', '
 _DISASSMBLER = os.path.join(os.environ['ITHEMAL_HOME'], 'data_collection', 'disassembler', 'build', 'disassemble')
 
 
-def time_llvm(arch, code):
+def time_llvm_base(arch, verbose, code):
     with tempfile.NamedTemporaryFile() as f:
         disassembler = subprocess.Popen([_DISASSMBLER, '-att'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         (output, _) = disassembler.communicate(code)
         f.write(_LLVM_BODY.format(output))
         f.flush()
         output = subprocess.check_output([_LLVM, '-march=x86', '-mcpu={}'.format(arch), f.name])
-        total_cycles_line = output.split('\n')[11]
-        cycles = total_cycles_line.split()[2]
-        return float(cycles) * 100
+        if verbose:
+            print(output)
+        return output
 
-def time_iaca(arch, code):
+def time_llvm_cycles(arch, verbose, code):
+    output = time_llvm_base(arch, verbose, code)
+    total_cycles_line = output.split('\n')[5]
+    cycles = total_cycles_line.split()[2]
+    return float(cycles)
+
+def time_llvm_rthroughput(arch, verbose, code):
+    output = time_llvm_base(arch, verbose, code)
+    total_cycles_line = output.split('\n')[11]
+    cycles = total_cycles_line.split()[2]
+    return float(cycles) * 100
+
+def time_iaca(arch, verbose, code):
     with tempfile.NamedTemporaryFile() as f:
         f.write('{}{}{}'.format(_IACA_HEADER, code, _IACA_TAIL).decode('hex'))
         f.flush()
         output = subprocess.check_output([_IACA, '-arch', arch, '-reduceout', f.name])
+        if verbose:
+            print(output)
         txput_line = output.split('\n')[3]
         txput = txput_line.split()[2]
         return float(txput) * 100
@@ -55,18 +69,21 @@ def time_code_ids(code_ids, timer):
     return {code_id: jobs[code_id].value for code_id in jobs}
 
 iaca_kind = (2, time_iaca, {'haswell': 'HSW', 'broadwell': 'BDW', 'skylake': 'SKL'})
-llvm_kind = (3, time_llvm, {'haswell': 'haswell', 'broadwell': 'broadwell', 'skylake': 'skylake', 'nehalem': 'nehalem'})
+llvm_kind_cycles = (3, time_llvm_cycles, {'haswell': 'haswell', 'broadwell': 'broadwell', 'skylake': 'skylake', 'nehalem': 'nehalem', 'ivybridge': 'ivybridge'})
+llvm_kind_rthroughput = (5, time_llvm_rthroughput, {'haswell': 'haswell', 'broadwell': 'broadwell', 'skylake': 'skylake', 'nehalem': 'nehalem', 'ivybridge': 'ivybridge'})
 
 _kind_map = {
     'iaca': iaca_kind,
-    'llvm': llvm_kind,
+    'llvm-cycles': llvm_kind_cycles,
+    'llvm-rthroughput': llvm_kind_rthroughput,
 }
 
 _arch_map = {
     'haswell': 1,
     'skylake': 2,
     'broadwell': 3,
-    'nehalem': 4
+    'nehalem': 4,
+    'ivybridge': 5,
 }
 
 
@@ -74,19 +91,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('arch', type=str)
     parser.add_argument('kind')
+    parser.add_argument('--insert', action='store_true', default=False)
+    parser.add_argument('--verbose', action='store_true', default=False)
     parser.add_argument('code_id', type=int, nargs='+')
     args = parser.parse_args()
 
     (kind_id, timer_func, arch_dict) = _kind_map[args.kind]
     arch_id = _arch_map[args.arch]
-    timer = functools.partial(timer_func, arch_dict[args.arch])
-
+    timer = functools.partial(timer_func, arch_dict[args.arch], args.verbose)
     times = time_code_ids(args.code_id, timer)
 
     mysql = subprocess.Popen(['mysql'], stdin=subprocess.PIPE)
     values = ','.join(map(str, ((code_id, arch_id, kind_id, speed) for (code_id, speed) in times.items() if speed is not None)))
-    print('Inserting {}'.format(len(times)))
-    mysql.communicate('INSERT INTO time (code_id, arch_id, kind_id, cycle_count) VALUES {};\n'.format(values))
+    if args.insert:
+        print('Inserting {}'.format(len(times)))
+        mysql.communicate('INSERT INTO time (code_id, arch_id, kind_id, cycle_count) VALUES {};\n'.format(values))
+    else:
+        print(times)
 
 
 if __name__ == '__main__':
