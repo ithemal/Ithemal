@@ -572,6 +572,49 @@ class BasicBlock:
             [i for i in self.instrs if i.has_mem()],
         )
 
+    def sample_reordering(self):
+        # TODO: THIS VIOLATES FALSE DEPENDENCIES
+        prefix = []
+        enabled = []
+        enabled_mem = []
+        some_mem_enabled = False
+
+        def is_enabled(i):
+            return all(p in prefix for p in instr.parents)
+
+        for instr in self.instrs:
+            if len(instr.parents) == 0:
+                if instr.has_mem():
+                    if not some_mem_enabled:
+                        enabled.append(instr)
+                        some_mem_enabled = True
+                    else:
+                        enabled_mem.append(instr)
+                else:
+                    enabled.append(instr)
+
+        while enabled or enabled_mem:
+            to_schedule = random.randrange(len(enabled))
+            instr = enabled.pop(to_schedule)
+            prefix.append(instr)
+            if instr.has_mem():
+                if enabled_mem:
+                    enabled.append(enabled_mem.pop(0))
+                else:
+                    some_mem_enabled = False
+            for ch in instr.children:
+                if is_enabled(ch):
+                    if ch.has_mem():
+                        if some_mem_enabled:
+                            enabled_mem.append(ch)
+                        else:
+                            enabled.append(ch)
+                            some_mem_enabled = True
+                    else:
+                        enabled.append(ch)
+
+        return prefix
+
     def paths_of_block(self):
         # type: () -> List[List[ut.Instruction]]
         def paths_of_instr(i, parents):
