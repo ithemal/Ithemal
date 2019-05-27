@@ -34,11 +34,11 @@ if [[ -z "${CONTAINER}" ]]; then
 
     # try to start the local X server if possible
     if [ ! -d "/tmp/.X11-unix" ]; then
-	open -a XQuartz || :
+	open -a XQuartz 2>/dev/null | :
     fi
 
     # allow local connections to X server (i.e. from Docker)
-    xhost + "${HOSTNAME}" || :
+    xhost + "${HOSTNAME}" 2>/dev/null || :
 
     FAKE_X_SERVER=
     if [ ! -d "/tmp/.X11-unix" ]; then
@@ -46,9 +46,21 @@ if [[ -z "${CONTAINER}" ]]; then
 	mkdir /tmp/.X11-unix
     fi
 
+    FAKE_AWS_DIR=
+    AWS_DIR="$(sudo bash -c 'echo ${HOME}/.aws')"
+    if [ ! -d "${AWS_DIR}" ]; then
+        FAKE_AWS_DIR="yep"
+        sudo mkdir -p "${AWS_DIR}"
+    fi
+
     docker_compose up -d --force-recreate
 
     CONTAINER="$(container_id)"
+
+    if [[ "${FAKE_AWS_DIR}" == "yep" ]]; then
+	# hide the evidence
+	sudo rmdir "${AWS_DIR}"
+    fi
 
     if [[ "${FAKE_X_SERVER}" == "yep" ]]; then
 	# hide the evidence
