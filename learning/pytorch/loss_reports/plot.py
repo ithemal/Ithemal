@@ -9,6 +9,8 @@ import re
 import scipy.ndimage.filters
 import subprocess
 import time
+import matplotlib
+matplotlib.rcParams.update({'font.size': 20})
 
 TrainMeasurement = NamedTuple('TrainMeasurement', [
     ('experiment_name', str),
@@ -29,8 +31,8 @@ _DIRNAME = os.path.abspath(os.path.dirname(__file__))
 _TRAIN = 'Train'
 _TEST = 'Test'
 
-def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, raw_x, save, norm_epoch, min_y, max_y):
-    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool, bool, Optional[str]) -> None
+def plot_measurements(train_measurements, test_measurements, has_finished, train_blur, test_blur, plot_trainers, raw_x, save, norm_epoch, min_y, max_y, validation):
+    # type: (List[TrainMeasurement], List[TestMeasurement], List[bool], float, float, bool, bool, Optional[str], bool) -> None
 
     def get_times_and_losses(measurement, blur):
         # type: (Union[TrainMeasurement, TestMeasurement], float) -> Tuple[np.array, np.array]
@@ -100,9 +102,9 @@ def plot_measurements(train_measurements, test_measurements, has_finished, train
 
         loss_ax.plot(train_times, train_losses, label='{} train loss'.format(name), color=color)
         if len(test_times) > 0:
-            loss_ax.plot(test_times, test_losses, linestyle='--', label='{} test loss'.format(name), color=color)
+            loss_ax.plot(test_times, test_losses, linestyle='--', label='{} {} loss'.format(name, 'validation' if validation else 'test'), color=color)
 
-        if finished:
+        if finished: # or True:
             loss_ax.scatter(train_times[-1:], train_losses[-1:], marker='x', color=color)
 
         if trainer_ax is not None:
@@ -255,7 +257,9 @@ def main():
     parser.add_argument('--no-test', default=False, action='store_true')
     parser.add_argument('--raw-x', default=False, action='store_true')
     parser.add_argument('--sort', default=False, action='store_true')
+    parser.add_argument('--validation', default=False, action='store_true')
     parser.add_argument('--norm-epoch', default=False, action='store_true')
+    parser.add_argument('--shortest-trainer', default=False, action='store_true')
     parser.add_argument('--save')
 
     args = parser.parse_args()
@@ -271,7 +275,36 @@ def main():
         test_measurements = [test_measurements[i] for i in idxs]
         has_finished = [has_finished[i] for i in idxs]
 
-    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, args.norm_epoch, args.min_y, args.max_y)
+    if args.shortest_trainer:
+        shortest_epoch = min(measurement.epochs[-1] for measurement in train_measurements)
+        for tridx, (tr, te) in enumerate(zip(train_measurements, test_measurements)):
+            try:
+                cut_idx = next(i for (i, e) in enumerate(tr.epochs) if e > shortest_epoch)
+            except StopIteration:
+                continue
+
+            train_measurements[tridx] = TrainMeasurement(
+                tr.experiment_name,
+                tr.epochs[:cut_idx],
+                tr.times[:cut_idx],
+                tr.losses[:cut_idx],
+                tr.trainers[:cut_idx],
+            )
+
+            cut_time = train_measurements[tridx].times[-1]
+
+            try:
+                cut_idx = next(i for (i, t) in enumerate(te.times) if t > cut_time)
+            except StopIteration:
+                continue
+
+            test_measurements[tridx] = TestMeasurement(
+                te.experiment_name,
+                te.times[:cut_idx],
+                te.losses[:cut_idx],
+            )
+
+    plot_measurements(train_measurements, test_measurements, has_finished, args.train_blur, args.test_blur, args.trainers, args.raw_x, args.save, args.norm_epoch, args.min_y, args.max_y, args.validation)
 
 if __name__ == '__main__':
     main()
