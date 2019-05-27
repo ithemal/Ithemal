@@ -9,7 +9,6 @@ from typing import Optional
 
 WEBHOOK_URL = 'https://hooks.slack.com/services/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'
 SLACK_USERNAME = 'AWS'
-SLACK_CHANNEL = 'aws-notifications'
 SLACK_ICON = 'https://raw.githubusercontent.com/quintessence/slack-icons/e9e141f0a119759ca4d59e0b788fc9375c9b2678/images/amazon-web-services-slack-icon.png'
 
 # map from IAM key to Slack user ID
@@ -45,11 +44,9 @@ def send_message(message):
         'text': message,
         'username': SLACK_USERNAME,
         'icon_url': SLACK_ICON,
-        'channel': SLACK_CHANNEL,
     }
 
-    request = urllib2.Request(WEBHOOK_URL, json.dumps(payload))
-    urllib2.urlopen(request)
+    urllib2.urlopen(urllib2.Request(WEBHOOK_URL, json.dumps(payload)))
 
 def main():
     # type: () -> None
