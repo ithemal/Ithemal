@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import statistics
 import pandas as pd
 import xml.etree.ElementTree as ET
+import itertools
 
 import sys
 sys.path.append('..')
@@ -60,7 +61,9 @@ class DataInstructionEmbedding(Data):
             raw_instrs = []
             curr_mem = self.mem_start
             for _ in range(1): # repeat for duplicated blocks
-                for (instr, m_code_intel) in zip(block_root, code_intel.split('\n')):
+                # handle missing or incomplete code_intel
+                split_code_intel = itertools.chain((code_intel or '').split('\n'), itertools.repeat(''))
+                for (instr, m_code_intel) in zip(block_root, split_code_intel):
                     raw_instr = []
                     opcode = int(instr.find('opcode').text)
                     raw_instr.extend([opcode, '<SRCS>'])
