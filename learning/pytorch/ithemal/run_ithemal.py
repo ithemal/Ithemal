@@ -167,12 +167,12 @@ def main():
     train.add_argument('--threads', type=int,  default=4, help='Total number of PyTorch threads to create per trainer')
     train.add_argument('--decay-trainers', action='store_true', default=False, help='Decay the number of trainers at the end of each epoch')
     train.add_argument('--weight-decay', type=float, default=0, help='Coefficient of weight decay (L2 regularization) on model')
-    train.add_argument('--initial-lr', type=float, default=0.0001, help='Initial learning rate')
+    train.add_argument('--initial-lr', type=float, default=0.1, help='Initial learning rate')
     train.add_argument('--decay-lr', action='store_true', default=False, help='Decay the learning rate at the end of each epoch')
     train.add_argument('--momentum', type=float, default=0.9, help='Momentum parameter for SGD')
     train.add_argument('--nesterov', action='store_true', default=False, help='Use Nesterov momentum')
     train.add_argument('--weird-lr', action='store_true', default=False, help='Use unusual LR schedule')
-    train.add_argument('--lr-decay-rate', default=10.0, help='LR division rate', type=float)
+    train.add_argument('--lr-decay-rate', default=1.2, help='LR division rate', type=float)
 
     split_group = train.add_mutually_exclusive_group()
     split_group.add_argument(
