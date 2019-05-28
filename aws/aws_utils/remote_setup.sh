@@ -24,6 +24,8 @@ sudo docker run -dit \
      -v /home/ec2-user/ithemal:/home/ithemal/ithemal \
      -e ITHEMAL_HOME=/home/ithemal/ithemal \
      -p 8888:8888 \
+     -p 80:80 \
+     -p 443:443 \
      "${IMAGE_ID}"
 
 sudo docker exec -u ithemal ithemal bash -lc '/home/ithemal/ithemal/build_all.sh'
