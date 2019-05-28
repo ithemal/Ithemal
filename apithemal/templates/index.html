@@ -22,7 +22,7 @@ cmp    byte ptr [rsp+0xa0], 0x01
     {{ code_html | safe }}
     <br/><br/>
     {% if prediction %}
-    <b>Prediction:</b> {{ prediction / 100 }} cycles per iteration
+    <b>Prediction:</b> {{ prediction }} cycles per iteration
     {% else %}
     <b>Could not generate a prediction: </b> {{ error }}
     {% endif %}

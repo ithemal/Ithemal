@@ -45,13 +45,13 @@ def get_prediction_of_code(code):
         raise ValueError('Could not assemble code')
 
     try:
-        return float(subprocess.check_output([
+        return '{:.3f}'.format(float(subprocess.check_output([
             'python',
             '/home/ithemal/ithemal/learning/pytorch/ithemal/predict.py',
              '--model', '/home/ithemal/ithemal/learning/pytorch/saved/predictor.dump',
             '--model-data', '/home/ithemal/ithemal/learning/pytorch/saved/trained.mdl',
             '--files', fname
-        ]).strip())
+        ]).strip()) / 100)
     except:
         if os.path.exists(fname):
             os.unlink(fname)
