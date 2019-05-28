@@ -1,0 +1,31 @@
+<html>
+  <body>
+    <h1>Ithemal</h1>
+    <form action="predict" method="post">
+      <textarea autofocus="true" cols="80" rows="20" required="true" name="code" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off">
+{% if code_text %}
+{{ code_text }}
+{% else %}
+cmp    byte ptr [rsp+0x38], 0x01
+sbb    rax, rax
+and    eax, 0x00000640
+add    rax, 0x00024d00
+cmp    byte ptr [rsp+0xa0], 0x01
+{% endif %}
+</textarea>
+      <br/>
+      <input type="submit" value="Predict!"/>
+    </form>
+
+    {% if code_html %}
+    <h2>Last Run</h2>
+    {{ code_html | safe }}
+    <br/><br/>
+    {% if prediction %}
+    <b>Prediction:</b> {{ prediction / 100 }} cycles per iteration
+    {% else %}
+    <b>Could not generate a prediction: </b> {{ error }}
+    {% endif %}
+    {% endif %}
+  </body>
+</html>
