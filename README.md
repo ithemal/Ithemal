@@ -16,7 +16,7 @@ No user interaction is required during the build, despite the various prompts se
 
 Once the docker environment is built, connect to it with `docker/docker_connect.sh`.
 This will drop you into a tmux shell in the container.
-It will also start a Jupyter notebook exposed on port 8888; nothing depends on this except for your own convenience, so feel free to disable exposing the notebook by removing the port forwarding on lines 37 and 38 in `docker/docker-compose.yml`.
+It will also start a Jupyter notebook exposed on port 8888 with the password `ithemal`; nothing depends on this except for your own convenience, so feel free to disable exposing the notebook by removing the port forwarding on lines 37 and 38 in `docker/docker-compose.yml`.
 The file system in the container is mounted from the local file system, so changes to the file system on the host will propagate to the docker instance, and vice versa.
 The container will continue running in the background, even if you exit.
 The container can be stopped with `docker/docker_stop.sh` from the host machine.
@@ -34,12 +34,12 @@ The versions of the model reported in the paper are:
 
 ### Command Line
 
-Ithemal can be used as a drop-in replacement for the throughput prediction capabilities of `IACA` or `llvm-mca` via the `ithemal/learning/pytorch/ithemal/predict.py` script.
-Ithemal uses the same convention as `IACA` to denote what code should be predicted; this can be achieved with any of the files in `ithemal/learning/pytorch/examples`, or by consulting [the IACA documentation](https://software.intel.com/en-us/articles/intel-architecture-code-analyzer).
+Ithemal can be used as a drop-in replacement for the throughput prediction capabilities of `IACA` or `llvm-mca` via the `learning/pytorch/ithemal/predict.py` script.
+Ithemal uses the same convention as `IACA` to denote what code should be predicted; this can be achieved with any of the files in `learning/pytorch/examples`, or by consulting [the IACA documentation](https://software.intel.com/en-us/articles/intel-architecture-code-analyzer).
 
 Once you have downloaded one of the models from the previous section, and you have compiled a piece of code to some file, you can generate prediction for this code with something like:
 ```
-python ithemal/learning/pytorch/ithemal/predict.py --verbose --model predictor.dump --model-data trained.mdl --file a.out
+python learning/pytorch/ithemal/predict.py --verbose --model predictor.dump --model-data trained.mdl --file a.out
 ```
 
 ## Training
@@ -67,10 +67,10 @@ which will output an XML representation of the basic block, with all implicit op
 
 To train a model, pick a suitable `EXPERIMENT_NAME` and `EXPERIMENT_TIME`, and run the following command:
 ```
-python ithemal/learning/pytorch/ithemal/run_ithemal.py --data {DATA_FILE} --use-rnn train --experiment-name {EXPERIMENT_NAME} --experiment-time {EXPERIMENT_TIME} --sgd --threads 4 --trainers 6 --weird-lr --decay-lr --epochs 100
+python learning/pytorch/ithemal/run_ithemal.py --data {DATA_FILE} --use-rnn train --experiment-name {EXPERIMENT_NAME} --experiment-time {EXPERIMENT_TIME} --sgd --threads 4 --trainers 6 --weird-lr --decay-lr --epochs 100
 ```
 which will train a model with the parameters reported in the paper.
-The results of this are saved into `ithemal/learning/pytorch/saved/EXPERIMENT_NAME/EXPERIMENT_TIME/`, which we will refer to as `RESULT_DIR` from now on.
+The results of this are saved into `learning/pytorch/saved/EXPERIMENT_NAME/EXPERIMENT_TIME/`, which we will refer to as `RESULT_DIR` from now on.
 The training loss is printed live as the model is trained, and also saved into `RESULT_DIR/loss_report.log`, which is a tab-separated list of `epoch, elapsed time, training loss, number of active parallel trainers`.
 The results of the trained model on the test set are stored in `RESULT_DIR/validation_results.txt`, which consists of a list of of the `predicted,actual` value of each item in the test set, followed by the overall loss of the trained model on the test set at the end.
 Finally, the resulting trained models and predictor dumps (for use in the command line API above) are saved in `RESULT_DIR/trained.mdl` and `RESULT_DIR/predictor.dump` respectively.
