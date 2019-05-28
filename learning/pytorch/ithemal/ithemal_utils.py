@@ -154,6 +154,10 @@ def load_model(params, data):
 
 def dump_model_and_data(model, data, fname):
     # type: (md.AbstractGraphMode, dt.DataCost, str) -> None
+    try:
+        os.makedirs(os.path.dirname(fname))
+    except OSError:
+        pass
     torch.save(PredictorDump(
         model=model,
         dataset_params=data.dump_dataset_params(),
