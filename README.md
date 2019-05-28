@@ -48,6 +48,13 @@ TODO: Notebook showing how to generate predictions (essentially copy/paste of pr
 
 ### Data
 
+#### Representation
+
+Raw data is represented as a list of tuples containing `(code_id, timing, code_intel, code_xml)`, where `code_id` is a unique identifier for the code, `timing` is the float representing the timing of the block, `code_intel` is the newline-separated human-readable block string (tis is only for debugging and can be empty or `None`), and `code_xml` is the result of the tokenizer on that block (detailed in the [Canonicalization section](#canonicalization)).
+To store datasets, we `torch.save` and `torch.load` this list of tuples.
+The first 80% of a dataset is loaded as the train set, and the last 20% is the test set.
+For an example of one of these datasets, look at [a small sample of our training data](https://github.com/psg-mit/Ithemal-models/blob/master/paper/data/haswell_sample1000.data).
+
 #### Canonicalization
 
 To canonicalize a basic block so that it can be used as input for Ithemal, first get the hex representation of the basic block you want to predict (i.e. via `xxd`, `objdump`, or equivalent).
@@ -56,15 +63,7 @@ Next, run the tokenizer as follows:
 ```
 data_collection/build/bin/tokenizer {HEX_CODE} --token
 ```
-which will output an XML representation of the basic block, with all implicit operands expanded.
-This is necessary to store in the dataset.
-
-#### Representation
-
-Raw data is represented as a list of tuples containing `(code_id, timing, code_intel, code_xml)`, where `code_id` is a unique identifier for the code, `timing` is the float representing the timing of the block, `code_intel` is the human-readable block string (this gets split on newlines and attached to instructions in the block. This is only for debugging and can be empty or `None`), and `code_xml` is the result of the tokenizer on that block.
-To store datasets, we `torch.save` and `torch.load` this list of tuples.
-The first 80% of a dataset is loaded as the train set, and the last 20% is the test set.
-For an example of one of these datasets, look at [a small sample of our training data](https://github.com/psg-mit/Ithemal-models/blob/master/paper/data/haswell_sample1000.data).
+which will output an XML representation of the basic block, with all implicit operands enumerated.
 
 ### Model Training
 
