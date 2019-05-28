@@ -1,4 +1,0 @@
-python ithemal/run_ithemal.py --mode train --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 1 --savefile saved/old_normal_no_resid.mdl
-
-Test Loss: 0.11700501780636434
-Test Acc: 151903/174519 = 0.87

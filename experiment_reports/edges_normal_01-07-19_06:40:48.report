@@ -1,4 +1,0 @@
-python ithemal/run_ithemal.py --embmode none --embedfile inputs/embeddings/code_delim.emb --savedatafile saved/time_skylake_1217.data --arch 1 --epochs 5 --batch-size 4 --mode train --savefile saved/edges_normal_01-07-19_06:40:48.mdl --loss-report-file loss_reports/edges_normal_01-07-19_06:40:48.log --mode train --trainers 4 --threads 4 --no-residual
-
-Test Loss: 0.1346
-Test Acc: 146056/174519 = 0.837
