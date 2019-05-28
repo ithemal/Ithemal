@@ -57,6 +57,15 @@ class AbstractGraphModule(nn.Module):
         # type: (Dict[str, Any]) -> None
         model_utils.load_shared_params(self, params)
 
+    def load_checkpoint_file(self, fname):
+        self.load_state_dict(torch.load(fname)['model'])
+
+    def load_state_dict(self, state_dict):
+        model_dict = self.state_dict()
+        new_model_dict = {k: v for (k, v) in state_dict.items() if k in model_dict}
+        model_dict.update(new_model_dict)
+        super(AbstractGraphModule, self).load_state_dict(model_dict)
+
     def init_hidden(self):
         # type: () -> Tuple[nn.Parameter, nn.Parameter]
 
