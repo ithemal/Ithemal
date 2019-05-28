@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import torch
+import warnings
 
 START_MARKER = 'bb6f000000646790'.decode('hex')
 END_MARKER = 'bbde000000646790'.decode('hex')
@@ -22,7 +23,9 @@ END_MARKER = 'bbde000000646790'.decode('hex')
 _TOKENIZER = os.path.join(os.environ['ITHEMAL_HOME'], 'data_collection', 'build', 'bin', 'tokenizer')
 
 def load_model_and_data(model_file, model_data_file):
-    (model, data) = ithemal_utils.load_model_and_data(model_file)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', torch.serialization.SourceChangeWarning)
+        (model, data) = ithemal_utils.load_model_and_data(model_file)
 
     state_dict = torch.load(model_data_file)
     model_dict = model.state_dict()
@@ -65,6 +68,7 @@ def predict(model, data, fname, verbose):
     if verbose:
         print('='*40)
         print('\n'.join(i.intel for i in datum.block.instrs))
+        print('='*40)
     print(model(datum).item())
     model.remove_refs(datum)
 
@@ -126,7 +130,7 @@ def main():
     parser.add_argument('--parallel', help='How many parallel threads to run', type=int, default=1)
 
     input_group = parser.add_mutually_exclusive_group()
-    input_group.add_argument('--raw-stdin', help='Whether to be verbose', action='store_true', default=False)
+    input_group.add_argument('--raw-stdin', help='Whether to read newline-separated raw hex from stdin', action='store_true', default=False)
     input_group.add_argument(
         '--files',
         help='Binary files to analyze. Relevant basic block must be started by 0x{} and terminated by 0x{}'.format(
