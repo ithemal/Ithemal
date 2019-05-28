@@ -6,7 +6,7 @@ More details about Ithemal's approach can be found in our [paper](https://arxiv.
 
 # Usage
 
-## Environment
+## Environment Setup
 
 You first need to install [docker](https://github.com/docker/docker-install) and [docker-compose](https://docs.docker.com/compose/install/).
 
@@ -64,7 +64,7 @@ This is necessary to store in the dataset.
 Raw data is represented as a list of tuples containing `(code_id, timing, code_intel, code_xml)`, where `code_id` is a unique identifier for the code, `timing` is the float representing the timing of the block, `code_intel` is the human-readable block string (this gets split on newlines and attached to instructions in the block. This is only for debugging and can be empty or `None`), and `code_xml` is the result of the tokenizer on that block.
 To store datasets, we `torch.save` and `torch.load` this list of tuples.
 The first 80% of a dataset is loaded as the train set, and the last 20% is the test set.
-For an example of one of these datasets, look at [a small sample of our training data](TODO THIS IS BROKEN).
+For an example of one of these datasets, look at [a small sample of our training data](https://github.com/psg-mit/Ithemal-models/blob/master/paper/data/haswell_sample1000.data).
 
 ### Model Training
 
