@@ -267,6 +267,9 @@ def run_training_coordinator(base_params, train_params):
 
     data = load_data(base_params)
     model = load_model(base_params, data)
+
+    dump_model_and_data(model, data, os.path.join(expt.experiment_root_path(), 'predictor.dump'))
+
     trainer = load_trainer(base_params, train_params, model, data)
 
     while not all_in_state(TrainerState.READY_FOR_EPOCH):
