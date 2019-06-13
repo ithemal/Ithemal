@@ -32,6 +32,9 @@ def predict():
 
 
 def get_prediction_of_code(code):
+    with open('/home/ithemal/apithemal_log', 'a') as f:
+        f.write('='*80+'\n'+code+'\n'+'='*80+'\n')
+
     _, fname = tempfile.mkstemp()
     assemble_success = (
         intel_compile(code, fname) or

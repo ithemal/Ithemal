@@ -1,6 +1,11 @@
 <html>
   <body>
     <h1>Ithemal (Skylake model)</h1>
+    <p>
+      Enter a code sequence below. Note that we cannot currently parse comments or any sort of jump commands, and will not generate predictions for sequences using exotic instructions that were not in the training set.
+      <br/>
+      Please check out our code at: <a href="https://github.com/psg-mit/Ithemal">https://github.com/psg-mit/Ithemal</a>
+    </p>
     <form action="predict" method="post">
       <textarea autofocus="true" cols="80" rows="20" required="true" name="code" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off">
 {% if code_text %}
