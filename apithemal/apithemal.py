@@ -9,12 +9,18 @@ app = Flask(__name__)
 def index():
     return render_template('index.html', code_text=None, code_hteml=None, prediction=None, error=None)
 
+def strip_comment(line):
+    if ';' in line:
+        return line[:line.index(';')]
+    return line
+
 @app.route('/predict', methods=['GET', 'POST'])
 def predict():
     if request.method == 'GET':
         return index()
 
-    code = '\n'.join(map(str.strip, request.form['code'].encode('utf-8').strip().split('\n')))
+    code = '\n'.join(map(strip_comment, map(str.strip, request.form['code'].encode('utf-8').strip().split('\n'))))
+
     try:
         prediction = get_prediction_of_code(code)
         error = None
@@ -27,7 +33,7 @@ def predict():
         code_text=code,
         code_html=code.replace('\n', '<br>'),
         prediction=prediction,
-        error=error,
+        error=(error and error.replace('\n', '<br>')),
     )
 
 
@@ -36,16 +42,20 @@ def get_prediction_of_code(code):
         f.write('='*80+'\n'+code+'\n'+'='*80+'\n')
 
     _, fname = tempfile.mkstemp()
-    assemble_success = (
-        intel_compile(code, fname) or
-        att_compile(code, fname) or
-        nasm_compile(code, fname)
-    )
+    success, as_intel_output = intel_compile(code, fname)
+    if not success:
+        success, as_att_output = att_compile(code, fname)
+    if not success:
+        success, nasm_output = nasm_compile(code, fname)
 
-    if not assemble_success:
+    if not success:
         if os.path.exists(fname):
             os.unlink(fname)
-        raise ValueError('Could not assemble code')
+        raise ValueError('Could not assemble code.\nAssembler outputs:\n\n{}'.format('\n\n'.join([
+            'as (Intel syntax): {}'.format(as_intel_output[1]),
+            'as (AT&T syntax): {}'.format(as_att_output[1]),
+            'nasm: {}'.format(nasm_output[1]),
+        ])))
 
     try:
         return '{:.3f}'.format(float(subprocess.check_output([
@@ -62,7 +72,7 @@ def get_prediction_of_code(code):
 
 
 def intel_compile(code, output):
-    p = subprocess.Popen(['as', '-o', output], stdin=subprocess.PIPE)
+    p = subprocess.Popen(['as', '-o', output], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     c = '''
         .text
         .global main
@@ -77,12 +87,12 @@ def intel_compile(code, output):
         mov ebx, 222
         .byte 0x64, 0x67, 0x90
     '''.format(code)
-    p.communicate(c)
+    output = p.communicate(c)
     p.wait()
-    return p.returncode == 0
+    return p.returncode == 0, output
 
 def att_compile(code, output):
-    p = subprocess.Popen(['as', '-o', output], stdin=subprocess.PIPE)
+    p = subprocess.Popen(['as', '-o', output], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     c = '''
         .text
         .global main
@@ -96,9 +106,9 @@ def att_compile(code, output):
         mov $222, %ebx
         .byte 0x64, 0x67, 0x90
     '''.format(code)
-    p.communicate(c)
+    output = p.communicate(c)
     p.wait()
-    return p.returncode == 0
+    return p.returncode == 0, output
 
 def nasm_compile(code, output):
     tmp = tempfile.NamedTemporaryFile()
@@ -117,7 +127,8 @@ def nasm_compile(code, output):
         db 0x64, 0x67, 0x90
         '''.format(code))
 
-    p = subprocess.Popen(['nasm', '-o', output, tmp.name], stdin=subprocess.PIPE)
+    p = subprocess.Popen(['nasm', '-o', output, tmp.name], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = p.communicate()
     p.wait()
     tmp.close()
-    return p.returncode == 0
+    return p.returncode == 0, output

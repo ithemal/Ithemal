@@ -2,7 +2,7 @@
   <body>
     <h1>Ithemal (Skylake model)</h1>
     <p>
-      Enter a code sequence below. Note that we cannot currently parse comments or any sort of jump commands, and will not generate predictions for sequences using exotic instructions that were not in the training set.
+      Enter a code sequence below, and Ithemal will predict the throughput of that sequence (the number of cycles to execute it in the body of a loop, assuming that all data is in cache). Note that we cannot currently any sort of jump commands, and will not generate predictions for sequences using exotic instructions that were not in the training set.
       <br/>
       Please check out our code at: <a href="https://github.com/psg-mit/Ithemal">https://github.com/psg-mit/Ithemal</a>
     </p>
@@ -29,7 +29,7 @@ cmp    byte ptr [rsp+0xa0], 0x01
     {% if prediction %}
     <b>Prediction:</b> {{ prediction }} cycles per iteration
     {% else %}
-    <b>Could not generate a prediction: </b> {{ error }}
+    <b>Could not generate a prediction: </b> {{ error | safe }}
     {% endif %}
     {% endif %}
   </body>
