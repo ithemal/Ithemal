@@ -6,12 +6,9 @@ Ithemal is a data driven model for predicting throughput of a basic block of x86
 More details about Ithemal's approach can be found in our paper.
 
 * [Ithemal: Accurate, Portable and Fast Basic Block Throughput Estimation using Deep Neural Networks](https://arxiv.org/abs/1808.07412)
-
-  Charith Mendis, Alex Renda, Saman Amarasinghe, Michael Carbin
-  
-  Proceedings of the 36th International Conference on Machine Learning (ICML) 2019.
-  
-  [Bibtex](http://groups.csail.mit.edu/commit/bibtex.cgi?key=ithemal-icml)
+ Charith Mendis, Alex Renda, Saman Amarasinghe, Michael Carbin
+ Proceedings of the 36th International Conference on Machine Learning (ICML) 2019.
+ [Bibtex](http://groups.csail.mit.edu/commit/bibtex.cgi?key=ithemal-icml)
 
 A demo of Ithemal's Skylake model can be found [here](http://3.18.198.23/predict).
 It takes in a basic block in any standard syntax, and generates a prediction for the throughput of that block.
