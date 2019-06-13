@@ -2,7 +2,8 @@
 # Overview
 
 Ithemal is a data driven model for predicting throughput of a basic block of x86-64 instructions.
-More details about Ithemal's approach can be found in our [paper](https://arxiv.org/abs/1808.07412).
+
+**More details about Ithemal's approach can be found in our [paper](https://arxiv.org/abs/1808.07412).**
 
 A demo of Ithemal's Skylake model can be found [here](http://3.18.198.23/predict).
 It takes in a basic block in any standard syntax, and generates a prediction for the throughput of that block.
