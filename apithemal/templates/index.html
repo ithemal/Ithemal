@@ -2,7 +2,10 @@
   <body>
     <h1>Ithemal (Skylake model)</h1>
     <p>
-      Enter a code sequence below, and Ithemal will predict the throughput of that sequence (the number of cycles to execute it in the body of a loop, assuming that all data is in cache). Note that we cannot currently any sort of jump commands, and will not generate predictions for sequences using exotic instructions that were not in the training set.
+      Enter a code sequence below, and Ithemal will predict the throughput of that sequence (the number of cycles to execute it in the body of a loop, assuming that all data is in cache).
+      <br/>
+      Ithemal only operates on basic blocks, so you cannot include any sort of jump commands.
+      Ithemal will also not generate predictions for sequences using exotic instructions that were not in the training set (e.g. instructions like <a href="https://www.felixcloutier.com/x86/aeskeygenassist"><code>aeskeygenassist</code></a> stump Ithemal).
       <br/>
       Please check out our code at: <a href="https://github.com/psg-mit/Ithemal">https://github.com/psg-mit/Ithemal</a>
     </p>
