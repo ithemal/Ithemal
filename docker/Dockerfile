@@ -29,7 +29,7 @@ RUN wget -O /tmp/RPM-GPG-KEY-mysql https://repo.mysql.com/RPM-GPG-KEY-mysql && \
 
 COPY docker_my.cnf /etc/my.cnf
 
-RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh && \
+RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Miniconda2-4.6.14-Linux-x86_64.sh && \
         sh /tmp/install_conda.sh -b -p /opt/conda && \
         rm /tmp/install_conda.sh
 
