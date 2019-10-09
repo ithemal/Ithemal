@@ -1,24 +1,26 @@
 FROM debian:stretch
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        libsqlite3-dev              \
-        locales                     \
         build-essential             \
         cmake                       \
         coreutils                   \
         curl                        \
         git                         \
         gnupg                       \
+        libsqlite3-dev              \
+        locales                     \
         man                         \
         nasm                        \
-        python-dev                  \
         pv                          \
+        python-dev                  \
         qt5-default                 \
         sqlite3                     \
         sudo                        \
         tmux                        \
+        unzip                       \
         vim                         \
-        wget
+        wget                        \
+        zip
 
 # install mysql
 RUN wget -O /tmp/RPM-GPG-KEY-mysql https://repo.mysql.com/RPM-GPG-KEY-mysql && \
