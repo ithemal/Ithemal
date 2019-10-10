@@ -1,6 +1,6 @@
 <html>
   <body>
-    <h1>Ithemal (Skylake model)</h1>
+    <h1>Ithemal</h1>
     <p>
       Enter a code sequence below, and Ithemal will predict the throughput of that sequence (the number of cycles to execute it in the body of a loop, assuming that all data is in cache).
       <br/>
@@ -22,11 +22,16 @@ cmp    byte ptr [rsp+0xa0], 0x01
 {% endif %}
 </textarea>
       <br/>
+      <select name="model">
+        <option value="hsw">Haswell</option>
+        <option value="skl">Skylake</option>
+        <option value="ivb">Ivy Bridge</option>
+      </select>
       <input type="submit" value="Predict!"/>
     </form>
 
     {% if code_html %}
-    <h2>Last Run</h2>
+    <h2>Last Run: {{ last_model }}</h2>
     {{ code_html | safe }}
     <br/><br/>
     {% if prediction %}

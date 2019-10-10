@@ -1,9 +1,48 @@
-from flask import Flask, request, send_from_directory, render_template
+from flask import Flask, request, send_from_directory, render_template, has_request_context
+from flask.logging import default_handler
+from logging.config import dictConfig
 import tempfile
 import subprocess
 import os
+import logging
+import sys
+
+dictConfig({
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    }},
+    'handlers': {'file': {
+        'class': 'logging.FileHandler',
+        'filename': os.path.join(os.path.expanduser('~'), 'apithemal_logs'),
+        'formatter': 'default'
+    }, 'console': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://sys.stderr',
+        'formatter': 'default'
+    }},
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ['file']
+    }
+})
 
 app = Flask(__name__)
+
+@app.before_request
+def log_request_info():
+    app.logger.debug('Remote: %s', request.remote_addr)
+    app.logger.debug('Url: %s', request.url)
+    app.logger.debug('Headers: %s', request.headers)
+
+    try:
+        code = '\n'.join(map(strip_comment, map(str.strip, request.form['code'].encode('utf-8').strip().split('\n'))))
+        model = request.form['model'].encode('utf-8').strip()
+
+        app.logger.debug('Code: %s', code)
+        app.logger.debug('Model: %s', model)
+    except:
+        pass
 
 @app.route('/')
 def index():
@@ -20,9 +59,10 @@ def predict():
         return index()
 
     code = '\n'.join(map(strip_comment, map(str.strip, request.form['code'].encode('utf-8').strip().split('\n'))))
+    model = request.form['model'].encode('utf-8').strip()
 
     try:
-        prediction = get_prediction_of_code(code)
+        prediction = get_prediction_of_code(code, model)
         error = None
     except ValueError as v:
         prediction = None
@@ -34,13 +74,11 @@ def predict():
         code_html=code.replace('\n', '<br>'),
         prediction=prediction,
         error=(error and error.replace('\n', '<br>')),
+        last_model=model,
     )
 
 
-def get_prediction_of_code(code):
-    with open('/home/ithemal/apithemal_log', 'a') as f:
-        f.write('='*80+'\n'+code+'\n'+'='*80+'\n')
-
+def get_prediction_of_code(code, model):
     _, fname = tempfile.mkstemp()
     success, as_intel_output = intel_compile(code, fname)
     if not success:
@@ -61,8 +99,8 @@ def get_prediction_of_code(code):
         return '{:.3f}'.format(float(subprocess.check_output([
             'python',
             '/home/ithemal/ithemal/learning/pytorch/ithemal/predict.py',
-             '--model', '/home/ithemal/ithemal/learning/pytorch/saved/predictor.dump',
-            '--model-data', '/home/ithemal/ithemal/learning/pytorch/saved/trained.mdl',
+             '--model', '/home/ithemal/ithemal/learning/pytorch/saved/{}.dump'.format(model),
+            '--model-data', '/home/ithemal/ithemal/learning/pytorch/saved/{}.mdl'.format(model),
             '--files', fname
         ]).strip()) / 100)
     except:

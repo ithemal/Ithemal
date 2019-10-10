@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
 mkdir -p "${ITHEMAL_HOME}"/learning/pytorch/saved
-aws s3 cp s3://ithemal-experiments/043019_lstm_initial-lr-0.1-decay-1.2-weird-lr/2019-04-30T15:53:04.407209/trained.mdl "${ITHEMAL_HOME}"/learning/pytorch/saved/trained.mdl
-aws s3 cp s3://ithemal-predictors/skylake_predictor.dump "${ITHEMAL_HOME}"/learning/pytorch/saved/predictor.dump
+
+
+pushd "${ITHEMAL_HOME}/learning/pytorch/saved"
+wget https://www.dropbox.com/sh/5or5t3vfgz70p8n/AADD0rH-bfoDVepLnpg4JBmka -O "models.zip"
+unzip -o models.zip
+popd
 
 pip install --user flask gunicorn
 ~/.local/bin/gunicorn apithemal:app -w 16 -b 0.0.0.0:5000
