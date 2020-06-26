@@ -35,31 +35,8 @@ RUN wget --quiet -O /tmp/install_conda.sh https://repo.continuum.io/miniconda/Mi
         sh /tmp/install_conda.sh -b -p /opt/conda && \
         rm /tmp/install_conda.sh
 
-RUN /opt/conda/bin/conda create --name ithemal python=2.7
-RUN /opt/conda/bin/conda install -q -n ithemal -c pytorch pytorch=1.1.0
-RUN /opt/conda/bin/conda install -q -n ithemal \
-        cython=0.29 \
-        graphviz=2.40.1 \
-        ipython=5.8.0 \
-        ipython-notebook=4.0.4 \
-        matplotlib=2.2.3 \
-        mysql-connector-python=2 \
-        numpy=1.15 \
-        pandas=0.23.4 \
-        psutil=5.4.7 \
-        pyqt=5.9.2 \
-        pytest=3.8.1 \
-        python-graphviz=0.8.4 \
-        requests=2.21.0 \
-        scikit-learn=0.19 \
-        scipy=1.1.0 \
-        seaborn=0.9.0 \
-        statistics=1.0.3.5 \
-        tqdm=4.28.1 \
-        typing=3.6.6 \
-        zeromq=4.2.5
-
-RUN /opt/conda/bin/conda install -q -n ithemal -c conda-forge awscli
+COPY env /tmp/docker_env
+RUN /opt/conda/bin/conda create --name ithemal --file /tmp/docker_env
 
 RUN curl -sL https://github.com/DynamoRIO/dynamorio/releases/download/release_7_0_0_rc1/DynamoRIO-Linux-7.0.0-RC1.tar.gz | tar xz -C /opt
 ENV DYNAMORIO_HOME "/opt/DynamoRIO-Linux-7.0.0-RC1"
